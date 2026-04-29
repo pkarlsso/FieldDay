@@ -1,0 +1,16 @@
+name: Enforce Source Branch for `main`
+on:
+  pull_request:
+    branches: [ main ]
+jobs:
+  enforce-dev-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check source branch
+        run: |
+          SOURCE_BRANCH="${{ github.head_ref }}"
+          ALLOWED_SOURCE_BRANCH="dev"
+          if [ "$SOURCE_BRANCH" != "$ALLOWED_SOURCE_BRANCH" ]; then
+            echo "::error::Merging from '$SOURCE_BRANCH' into 'main' is not allowed. Only merges from '$ALLOWED_SOURCE_BRANCH' are permitted."
+            exit 1
+          fi
