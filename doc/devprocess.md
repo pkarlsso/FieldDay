@@ -7,6 +7,7 @@ As we finish each 2 week cycle, we will hold a meeting where we go over the task
 ```text
 FieldDay/
 ├── .github/
+│   ├── pull_request_template.md
 │   ├── PULL_REQUEST_TEMPLATE/
 │   │   └── release.md
 │   └── workflows/
@@ -107,6 +108,12 @@ Local validation:
 These are team review and merge rules. An owner or repository admin must configure required approvals, required status checks, and branch rules to enforce them in GitHub. The existing source-branch workflow checks that PRs into `main` come from `dev`; it is not a substitute for tests or required review settings.
 
 Reference: [GitHub — Linking a pull request to an issue](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue).
+
+### Default feature PR template
+
+`.github/pull_request_template.md` provides the default description for PRs into `dev`, including feature, fix, documentation, and maintenance changes. It prompts for a summary, existing issue references, local validation results, and review checks. Mention dependency or configuration changes in the summary when applicable.
+
+GitHub uses templates from the default branch, so automatic prefilling becomes available after this file reaches `main`. Until then, copy the file into the PR description. A template supplies editable text; it does not enforce checks or choose the destination branch. Authors must select `dev` as the base. For a release into `main`, explicitly select or copy the release template below.
 
 ### Release PR template
 
