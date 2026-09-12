@@ -1,0 +1,14 @@
+{
+  "name": "FieldDay",
+  "private": true,
+  "workspaces": ["backend", "frontend"],
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "devDependencies": {
+    "eslint": "^10.10.0",
+    "@eslint/js": "^10.10.0",
+    "globals": "^15.0.0"
+  }
+}
