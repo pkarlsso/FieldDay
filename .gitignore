@@ -5,3 +5,8 @@ node_modules/
 .DS_Store
 assets/
 package-lock.json
+
+# Track assets and reproducible installs for the mobile prototype.
+!frontend/assets/
+!frontend/assets/**
+!frontend/package-lock.json
