@@ -1,6 +1,7 @@
 {
   "name": "FieldDay",
   "private": true,
+  "type": "module",
   "workspaces": [
     "backend",
     "frontend"
