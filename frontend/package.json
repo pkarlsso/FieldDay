@@ -6,7 +6,9 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "demo": "EXPO_PUBLIC_PROTOTYPE_MODE=true expo start",
+    "demo:web": "EXPO_PUBLIC_PROTOTYPE_MODE=true expo start --web"
   },
   "dependencies": {
     "@apollo/client": "^4.1.7",
