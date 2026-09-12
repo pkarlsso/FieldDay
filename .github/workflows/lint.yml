@@ -1,6 +1,9 @@
 # .github/workflows/lint.yml
 name: JS Code Linter
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [ main, dev ]
