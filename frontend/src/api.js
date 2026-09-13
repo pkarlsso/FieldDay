@@ -1,4 +1,6 @@
-const API_URL = 'http://192.168.4.205:4000/graphql';
+import { API_URL } from './config';
+
+export { CURRENT_USER_ID } from './config';
 
 export async function graphql(query, variables = {}) {
   const res = await fetch(API_URL, {
@@ -10,5 +12,3 @@ export async function graphql(query, variables = {}) {
   if (json.errors) throw new Error(json.errors[0].message);
   return json.data;
 }
-
-export const CURRENT_USER_ID = '69db4924fa3cb80a64df2953';
