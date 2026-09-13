@@ -2,6 +2,34 @@ import js from "@eslint/js";
 import globals from "globals";
 import react from "eslint-plugin-react";
 
+const reactNativeGlobals = {
+  __DEV__: "readonly",
+  global: "readonly",
+  fetch: "readonly",
+  WebSocket: "readonly",
+  XMLHttpRequest: "readonly",
+  FormData: "readonly",
+  Blob: "readonly",
+  File: "readonly",
+  FileReader: "readonly",
+  URL: "readonly",
+  URLSearchParams: "readonly",
+  AbortController: "readonly",
+  AbortSignal: "readonly",
+  TextEncoder: "readonly",
+  TextDecoder: "readonly",
+  queueMicrotask: "readonly",
+  process: "readonly",
+  Buffer: "readonly",
+  console: "readonly",
+  setTimeout: "readonly",
+  clearTimeout: "readonly",
+  setInterval: "readonly",
+  clearInterval: "readonly",
+  requestAnimationFrame: "readonly",
+  cancelAnimationFrame: "readonly",
+};
+
 export default [
   js.configs.recommended,
   {
@@ -15,13 +43,16 @@ export default [
   },
   {
     files: ["frontend/**/*.{js,jsx}"],
+      ...react.configs.flat.recommended,
       languageOptions: {
-      globals: { ...globals.browser },
+      globals: {
+        ...globals.browser,
+        ...reactNativeGlobals
+      },
       parserOptions: {
         ecmaFeatures: { jsx: true },
       },
     },
-    ...react.configs.flat.recommended,
     settings: {
       react: { version: "detect" },
     },
