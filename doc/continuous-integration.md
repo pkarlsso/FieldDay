@@ -38,7 +38,7 @@ The workflow checks the whole repository: root ESLint covers tracked JavaScript,
 
 ## Build log
 
-The successful GitHub Actions run link will be recorded here after the first automated run completes.
+[Successful automated PR build](https://github.com/pkarlsso/FieldDay/actions/runs/34729710528) — triggered by PR #77 at commit `beec4918e35cbc5e9555d96c842e21941eb20a4c`. Dependency installation, ESLint, backend validation, all three Expo platform exports, and artifact upload passed. The run took approximately one minute. This evidence documents the tested workflow; the subsequent documentation update only adds this link.
 
 ## References
 
