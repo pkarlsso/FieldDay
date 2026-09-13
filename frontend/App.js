@@ -1,40 +1,25 @@
 import React from 'react';
-import { Text } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createStackNavigator } from '@react-navigation/stack';
 
-import HomeScreen from './src/screens/HomeScreen';
-import RateSessionScreen from './src/screens/RateSessionScreen';
-import SessionCompleteScreen from './src/screens/SessionCompleteScreen';
-import ProfileScreen from './src/screens/ProfileScreen';
+import MainTabs from './src/MainTabs';
+import SignUpEmailScreen from './src/screens/auth/SignUpEmailScreen';
+import SignUpPasswordScreen from './src/screens/auth/SignUpPasswordScreen';
+import LoginScreen from './src/screens/auth/LoginScreen';
+import TwoFactorScreen from './src/screens/auth/TwoFactorScreen';
 
-const Tab = createBottomTabNavigator();
+const Stack = createStackNavigator();
 
 export default function App() {
   return (
     <NavigationContainer>
-      <Tab.Navigator
-        screenOptions={({ route }) => ({
-          headerShown: false,
-          tabBarActiveTintColor: '#7C7EFF',
-          tabBarInactiveTintColor: '#999',
-          tabBarStyle: { paddingBottom: 8, paddingTop: 8, height: 65 },
-          tabBarLabelStyle: { fontSize: 12, fontWeight: '600' },
-          tabBarIcon: () => {
-            if (route.name === 'Home') return <Text style={{ fontSize: 22 }}>🏠</Text>;
-            if (route.name === 'Profile') return <Text style={{ fontSize: 22 }}>👤</Text>;
-            return null;
-          },
-          tabBarButton: ['RateSession', 'SessionComplete'].includes(route.name)
-            ? () => null
-            : undefined,
-        })}
-      >
-        <Tab.Screen name="Home" component={HomeScreen} />
-        <Tab.Screen name="Profile" component={ProfileScreen} />
-        <Tab.Screen name="RateSession" component={RateSessionScreen} options={{ tabBarButton: () => null }} />
-        <Tab.Screen name="SessionComplete" component={SessionCompleteScreen} options={{ tabBarButton: () => null }} />
-      </Tab.Navigator>
+      <Stack.Navigator initialRouteName="SignUpEmail" screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="SignUpEmail" component={SignUpEmailScreen} />
+        <Stack.Screen name="SignUpPassword" component={SignUpPasswordScreen} />
+        <Stack.Screen name="Login" component={LoginScreen} />
+        <Stack.Screen name="TwoFactor" component={TwoFactorScreen} />
+        <Stack.Screen name="Main" component={MainTabs} />
+      </Stack.Navigator>
     </NavigationContainer>
   );
 }

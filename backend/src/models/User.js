@@ -10,7 +10,13 @@ const userSchema = new mongoose.Schema({
   totalRatings: { type: Number, default: 0 },
   ratingSum: { type: Number, default: 0 },
   friends: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+
+  // Auth
+  passwordHash: { type: String, default: null },
+  twoFactorCodeHash: { type: String, default: null },
+  twoFactorCodeExpires: { type: Date, default: null },
+  twoFactorAttempts: { type: Number, default: 0 }
 });
 
 userSchema.methods.addRating = function (value) {
