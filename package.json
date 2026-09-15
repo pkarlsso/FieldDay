@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "build": "npm run build --workspace frontend",
-    "check:backend": "node scripts/check-backend.mjs"
+    "check:backend": "node scripts/check-backend.mjs",
+    "test:integration": "node scripts/integration-session.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
