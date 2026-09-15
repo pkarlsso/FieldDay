@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Platform, ScrollView, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Location from 'expo-location';
@@ -18,6 +18,7 @@ export default function CreateSessionScreen({ navigation }) {
   const [startsAt, setStartsAt] = useState(new Date(Date.now() + 86400000));
   const [location, setLocation] = useState('Station 21 West Lafayette');
   const [locationPoint, setLocationPoint] = useState({ longitude: -86.9147, latitude: 40.4259 });
+  const mapRef = useRef(null);
   const [suggestions, setSuggestions] = useState([]);
   const [geocoding, setGeocoding] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -43,6 +44,7 @@ export default function CreateSessionScreen({ navigation }) {
       if (!results.length) throw new Error('No matching location found');
       const { latitude, longitude } = results[0];
       setLocationPoint({ latitude, longitude });
+      mapRef.current?.animateToRegion({ latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 500);
     } catch (error) {
       Alert.alert('Location not found', error.message);
     } finally { setGeocoding(false); }
@@ -51,6 +53,7 @@ export default function CreateSessionScreen({ navigation }) {
   async function pickMapLocation(event) {
     const point = event.nativeEvent.coordinate;
     setLocationPoint(point);
+    mapRef.current?.animateToRegion({ ...point, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 500);
     try {
       const [result] = await Location.reverseGeocodeAsync(point);
       const label = [result?.name, result?.street, result?.city].filter(Boolean).join(', ');
@@ -64,6 +67,7 @@ export default function CreateSessionScreen({ navigation }) {
     const label = [result.name, result.street, result.city, result.region].filter(Boolean).join(', ');
     setLocation(label || location);
     setLocationPoint({ latitude: result.latitude, longitude: result.longitude });
+    mapRef.current?.animateToRegion({ latitude: result.latitude, longitude: result.longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 500);
     setSuggestions([]);
   }
 
@@ -107,7 +111,7 @@ export default function CreateSessionScreen({ navigation }) {
             {[result.name, result.street, result.city, result.region].filter(Boolean).join(', ')}
           </Text>)}
           <PrimaryButton label={geocoding ? 'Finding location...' : 'Find address'} onPress={findLocation} disabled={geocoding || !location.trim()} variant="secondary" />
-          <MapView style={styles.pickerMap} initialRegion={{ ...locationPoint, latitudeDelta: 0.02, longitudeDelta: 0.02 }} onPress={pickMapLocation}>
+          <MapView ref={mapRef} style={styles.pickerMap} initialRegion={{ ...locationPoint, latitudeDelta: 0.02, longitudeDelta: 0.02 }} onPress={pickMapLocation}>
             <Marker coordinate={locationPoint} />
           </MapView>
           <PrimaryButton label={loading ? 'Creating...' : 'Create Session'} onPress={create} disabled={loading} />
