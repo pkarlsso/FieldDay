@@ -11,6 +11,7 @@ import FriendsScreen from './src/screens/FriendsScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import NotificationsScreen from './src/screens/NotificationsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import MapScreen from './src/screens/MapScreen';
 import RateSessionScreen from './src/screens/RateSessionScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import SessionCompleteScreen from './src/screens/SessionCompleteScreen';
@@ -24,6 +25,7 @@ const Stack = createStackNavigator();
 const tabIcons = {
   HomeTab: 'home-variant-outline',
   Explore: 'map-search-outline',
+  Map: 'map-outline',
   Sessions: 'calendar-check-outline',
   Friends: 'account-group-outline',
   Profile: 'account-circle-outline',
@@ -56,6 +58,7 @@ function MainTabs() {
     >
       <Tab.Screen name="HomeTab" component={HomeScreen} options={{ title: 'Home' }} />
       <Tab.Screen name="Explore" component={ExploreScreen} />
+      <Tab.Screen name="Map" component={MapScreen} />
       <Tab.Screen name="Sessions" component={SessionsScreen} />
       <Tab.Screen name="Friends" component={FriendsScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
