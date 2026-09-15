@@ -16,13 +16,34 @@ const typeDefs = `#graphql
     sport: String!
     date: String!
     time: String!
+    startsAt: String!
     location: String!
+    locationPoint: GeoPoint!
     skillRange: String
     maxParticipants: Int
     participants: [User]
     host: User
     status: String
     rated: Boolean
+  }
+
+  type GeoPoint {
+    type: String!
+    coordinates: [Float!]!
+  }
+
+  input LocationPointInput {
+    longitude: Float!
+    latitude: Float!
+  }
+
+  input CreateSessionInput {
+    sport: String!
+    startsAt: String!
+    location: String!
+    locationPoint: LocationPointInput!
+    skillRange: String
+    maxParticipants: Int
   }
 
   type RatingResult {
@@ -47,6 +68,9 @@ const typeDefs = `#graphql
   }
 
   type Mutation {
+    createSession(hostId: ID!, input: CreateSessionInput!): Session
+    joinSession(sessionId: ID!, userId: ID!): Session
+    leaveSession(sessionId: ID!, userId: ID!): Session
     submitRatings(sessionId: ID!, raterId: ID!, ratings: [RatingInput!]!): RatingResult
     addFriend(userId: ID!, friendId: ID!): User
   }
