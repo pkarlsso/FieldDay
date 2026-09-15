@@ -62,6 +62,7 @@ const typeDefs = `#graphql
 
   type Query {
     getUser(id: ID!): User
+    getSession(id: ID!): Session
     getSessions(status: String): [Session]
     getCompletedSessions(userId: ID!): [Session]
     getFriends(userId: ID!): [User]

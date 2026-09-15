@@ -6,6 +6,7 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
 
 import ExploreScreen from './src/screens/ExploreScreen';
+import LiveExploreScreen from './src/screens/LiveExploreScreen';
 import ChatDetailScreen from './src/screens/ChatDetailScreen';
 import CreateSessionScreen from './src/screens/CreateSessionScreen';
 import FriendsScreen from './src/screens/FriendsScreen';
@@ -17,11 +18,13 @@ import RateSessionScreen from './src/screens/RateSessionScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import SessionCompleteScreen from './src/screens/SessionCompleteScreen';
 import SessionDetailsScreen from './src/screens/SessionDetailsScreen';
+import LiveSessionDetailsScreen from './src/screens/LiveSessionDetailsScreen';
 import SessionsScreen from './src/screens/SessionsScreen';
 import { colors } from './src/theme';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
+const useLiveData = process.env.EXPO_PUBLIC_LIVE_DATA === 'true';
 
 const tabIcons = {
   HomeTab: 'home-variant-outline',
@@ -59,7 +62,7 @@ function MainTabs() {
       })}
     >
       <Tab.Screen name="HomeTab" component={HomeScreen} options={{ title: 'Home' }} />
-      <Tab.Screen name="Explore" component={ExploreScreen} />
+      <Tab.Screen name="Explore" component={useLiveData ? LiveExploreScreen : ExploreScreen} />
       <Tab.Screen name="Map" component={MapScreen} />
       <Tab.Screen name="Sessions" component={SessionsScreen} />
       <Tab.Screen name="Friends" component={FriendsScreen} />
@@ -75,7 +78,7 @@ export default function App() {
       <StatusBar style="dark" />
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="MainTabs" component={MainTabs} />
-        <Stack.Screen name="SessionDetails" component={SessionDetailsScreen} />
+        <Stack.Screen name="SessionDetails" component={useLiveData ? LiveSessionDetailsScreen : SessionDetailsScreen} />
         <Stack.Screen name="RateSession" component={RateSessionScreen} />
         <Stack.Screen name="SessionComplete" component={SessionCompleteScreen} />
         <Stack.Screen name="ChatDetail" component={ChatDetailScreen} />
