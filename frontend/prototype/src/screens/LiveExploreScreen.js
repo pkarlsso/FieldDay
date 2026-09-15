@@ -25,7 +25,6 @@ export default function LiveExploreScreen({ navigation }) {
           <View style={{ flex: 1 }}>
             <Text style={{ color: colors.ink, fontWeight: '900', fontSize: 16 }}>{session.sport} at {session.location}</Text>
             <Text style={{ color: colors.muted, marginTop: 4 }}>{new Date(session.startsAt).toLocaleString()} • {session.participants.length}/{session.maxParticipants}</Text>
-            <Text style={{ color: colors.muted, marginTop: 3 }}>GeoJSON: {session.locationPoint.coordinates.join(', ')}</Text>
           </View>
         </Card>
       </TouchableOpacity>)}
