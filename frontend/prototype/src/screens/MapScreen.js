@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 import * as Location from 'expo-location';
 import MapView, { Callout, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { graphql } from '../../../src/api';
 
 const useGoogleMaps = process.env.EXPO_PUBLIC_MAP_PROVIDER === 'google';
 const DEFAULT_REGION = {
@@ -14,10 +15,13 @@ const DEMO_SESSIONS = [
   { id: 's1', title: 'Pickleball at Hildegard Park', latitude: 40.4237, longitude: -86.9212 },
   { id: 's2', title: 'Soccer at Central Field', latitude: 40.431, longitude: -86.915 },
 ];
+const LIVE_QUERY = `{ getSessions(status: "upcoming") { id sport location locationPoint { coordinates } } }`;
+const useLiveData = process.env.EXPO_PUBLIC_LIVE_DATA === 'true';
 
 export default function MapScreen() {
   const [region, setRegion] = useState(DEFAULT_REGION);
   const [loading, setLoading] = useState(true);
+  const [sessions, setSessions] = useState(DEMO_SESSIONS);
 
   useEffect(() => {
     let mounted = true;
@@ -35,6 +39,17 @@ export default function MapScreen() {
     return () => { mounted = false; };
   }, []);
 
+  useEffect(() => {
+    if (!useLiveData) return undefined;
+    graphql(LIVE_QUERY).then((data) => setSessions((data.getSessions || []).map((session) => ({
+      id: session.id,
+      title: `${session.sport} at ${session.location}`,
+      latitude: session.locationPoint.coordinates[1],
+      longitude: session.locationPoint.coordinates[0],
+    })))).catch(() => {});
+    return undefined;
+  }, []);
+
   return (
     <View style={styles.container}>
       <MapView
@@ -44,7 +59,7 @@ export default function MapScreen() {
         showsUserLocation
         showsMyLocationButton
       >
-        {DEMO_SESSIONS.map((session) => (
+        {sessions.map((session) => (
           <Marker key={session.id} coordinate={session}>
             <Callout><Text>{session.title}</Text></Callout>
           </Marker>
