@@ -1,4 +1,4 @@
-const API_URL = 'http://192.168.4.205:4000/graphql';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.4.205:4000/graphql';
 
 export async function graphql(query, variables = {}) {
   const res = await fetch(API_URL, {
@@ -11,4 +11,4 @@ export async function graphql(query, variables = {}) {
   return json.data;
 }
 
-export const CURRENT_USER_ID = '69db4924fa3cb80a64df2953';
+export const CURRENT_USER_ID = process.env.EXPO_PUBLIC_CURRENT_USER_ID || '69db4924fa3cb80a64df2953';
