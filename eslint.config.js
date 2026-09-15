@@ -27,6 +27,10 @@ export default [
   // ---------------------------------------------------------------
   js.configs.recommended,
   {
+    files: ["**/*.{js,jsx,mjs,cjs}"],
+    plugins: {
+      "@typescript-eslint": tseslint.plugin,
+    },
     rules: {
       "no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
     },
@@ -69,23 +73,27 @@ export default [
     },
   },
 
-    // TS baseline
-  ...tseslint.configs.recommended,
+  // ---------------------------------------------------------------
+  // 4. TS baseline - Scoped
+  // ---------------------------------------------------------------
+    ...tseslint.configs.recommended.map((c) => ({
+    ...c,
+    files: ["**/*.{ts,tsx}"],
+  })),
   {
-    files: ["backend/**/*.ts", "frontend/**/*.ts", "frontend/**/*.tsx"],
+    files: ["**/*.{ts,tsx}"],
     languageOptions: {
-      parser: tseslint.parser,
       parserOptions: { project: true },
     },
     rules: {
-      "no-undef": "off", // TS handles this
+      "no-undef": "off",
       "no-unused-vars": "off",
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
     },
   },
 
   // ---------------------------------------------------------------
-  // 4. Backend — Node, CommonJS
+  // 5. Backend — Node, CommonJS
   //    This is what your winston file needs.
   // ---------------------------------------------------------------
   {
@@ -93,6 +101,9 @@ export default [
       "backend/**/*.{js,cjs}",
       "backend/**/*.mjs",
     ],
+    plugins: {
+      "@typescript-eslint": tseslint.plugin,
+    },
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "commonjs", // treat .js as CJS by default here
@@ -107,7 +118,7 @@ export default [
   },
 
   // ---------------------------------------------------------------
-  // 4b. Backend ESM files (if any use import/export)
+  // 5b. Backend ESM files (if any use import/export)
   // ---------------------------------------------------------------
   {
     files: ["backend/**/*.mjs"],
@@ -118,29 +129,56 @@ export default [
   },
 
   // ---------------------------------------------------------------
-  // 5. Misc systems in root — scripts, tooling, config files
+  // 6a. Misc systems in root — scripts, tooling, config files
   // ---------------------------------------------------------------
   {
     files: [
-      "*.{js,cjs,mjs}",
-      "scripts/**/*.{js,cjs,mjs}",
-      "tools/**/*.{js,cjs,mjs}",
-      "config/**/*.{js,cjs,mjs}",
+      "*.{js,cjs}",
+      "scripts/**/*.{js,cjs}",
+      "tools/**/*.{js,cjs}",
+      "config/**/*.{js,cjs}",
     ],
     ignores: ["eslint.config.js"], // handled separately below
+    plugins: {
+      "@typescript-eslint": tseslint.plugin,
+    },
     languageOptions: {
       ecmaVersion: "latest",
       sourceType: "commonjs",
       globals: { ...globals.node },
     },
-        rules: {
+    rules: {
       "@typescript-eslint/no-require-imports": "warn", // delete this after import has been fixed to new syntax
       "no-redeclare": "warn", // remove once this is fixed
     },
   },
 
   // ---------------------------------------------------------------
-  // 6. The ESLint config itself (and other ESM config files)
+  // 6b. Misc systems in root — ESM
+  // ---------------------------------------------------------------
+  {
+    files: [
+      "*.mjs",
+      "scripts/**/*.mjs",
+      "tools/**/*.mjs",
+      "config/**/*.mjs",
+    ],
+    plugins: {
+      "@typescript-eslint": tseslint.plugin,
+    },
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "module",
+      globals: { ...globals.node },
+    },
+    rules: {
+      "@typescript-eslint/no-require-imports": "warn", // delete this after import has been fixed to new syntax
+      "no-redeclare": "warn", // remove once this is fixed
+    },
+  },
+
+  // ---------------------------------------------------------------
+  // 7. The ESLint config itself (and other ESM config files)
   // ---------------------------------------------------------------
   {
     files: ["eslint.config.js", "*.config.mjs"],
