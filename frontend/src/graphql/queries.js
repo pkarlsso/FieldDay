@@ -61,3 +61,31 @@ export const SUBMIT_RATINGS = gql`
     }
   }
 `;
+
+export const CREATE_SESSION = gql`
+  mutation CreateSession($hostId: ID!, $input: CreateSessionInput!) {
+    createSession(hostId: $hostId, input: $input) {
+      id sport startsAt location
+      locationPoint { type coordinates }
+      maxParticipants status
+      host { id name }
+      participants { id name }
+    }
+  }
+`;
+
+export const JOIN_SESSION = gql`
+  mutation JoinSession($sessionId: ID!, $userId: ID!) {
+    joinSession(sessionId: $sessionId, userId: $userId) {
+      id participants { id name }
+    }
+  }
+`;
+
+export const LEAVE_SESSION = gql`
+  mutation LeaveSession($sessionId: ID!, $userId: ID!) {
+    leaveSession(sessionId: $sessionId, userId: $userId) {
+      id participants { id name }
+    }
+  }
+`;
