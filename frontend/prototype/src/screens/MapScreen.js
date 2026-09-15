@@ -18,7 +18,7 @@ const DEMO_SESSIONS = [
 const LIVE_QUERY = `{ getSessions(status: "upcoming") { id sport location locationPoint { coordinates } } }`;
 const useLiveData = process.env.EXPO_PUBLIC_LIVE_DATA === 'true';
 
-export default function MapScreen() {
+export default function MapScreen({ navigation }) {
   const [region, setRegion] = useState(DEFAULT_REGION);
   const [loading, setLoading] = useState(true);
   const [sessions, setSessions] = useState(DEMO_SESSIONS);
@@ -61,7 +61,9 @@ export default function MapScreen() {
       >
         {sessions.map((session) => (
           <Marker key={session.id} coordinate={session}>
-            <Callout><Text>{session.title}</Text></Callout>
+            <Callout onPress={() => navigation?.navigate('SessionDetails', { sessionId: session.id })}>
+              <Text>{session.title}{useLiveData ? '\nTap to view and join' : ''}</Text>
+            </Callout>
           </Marker>
         ))}
       </MapView>

@@ -22,6 +22,10 @@ function populatedSessionQuery(id) {
 }
 
 const resolvers = {
+  Session: {
+    startsAt: (session) => new Date(session.startsAt).toISOString()
+  },
+
   Query: {
     getSession: async (_, { id }) => populatedSessionQuery(id),
     getUser: async (_, { id }) => {
