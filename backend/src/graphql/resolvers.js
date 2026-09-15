@@ -23,6 +23,7 @@ function populatedSessionQuery(id) {
 
 const resolvers = {
   Query: {
+    getSession: async (_, { id }) => populatedSessionQuery(id),
     getUser: async (_, { id }) => {
       return User.findById(id).populate('friends');
     },
