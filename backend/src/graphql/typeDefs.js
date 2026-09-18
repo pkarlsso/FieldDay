@@ -60,12 +60,25 @@ const typeDefs = `#graphql
     addFriend: Boolean
   }
 
+  type EmailCheckResult {
+    exists: Boolean!
+    message: String
+  }
+
+  type AuthResult {
+    success: Boolean!
+    message: String
+    userId: ID
+    requiresTwoFactor: Boolean
+  }
+
   type Query {
     getUser(id: ID!): User
     getSession(id: ID!): Session
     getSessions(status: String): [Session]
     getCompletedSessions(userId: ID!): [Session]
     getFriends(userId: ID!): [User]
+    checkEmailExists(email: String!): EmailCheckResult!
   }
 
   type Mutation {
@@ -74,6 +87,10 @@ const typeDefs = `#graphql
     leaveSession(sessionId: ID!, userId: ID!): Session
     submitRatings(sessionId: ID!, raterId: ID!, ratings: [RatingInput!]!): RatingResult
     addFriend(userId: ID!, friendId: ID!): User
+    signUp(email: String!, password: String!): AuthResult!
+    login(email: String!, password: String!): AuthResult!
+    resendTwoFactorCode(email: String!): AuthResult!
+    verifyTwoFactorCode(email: String!, code: String!): AuthResult!
   }
 `;
 
