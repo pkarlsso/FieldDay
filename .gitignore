@@ -4,5 +4,7 @@ node_modules/
 *.log
 .DS_Store
 assets/
-package-lock.json
-.claude/
+
+# Expo app configuration references these source assets.
+!frontend/assets/
+!frontend/assets/**

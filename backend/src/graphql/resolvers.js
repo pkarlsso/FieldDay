@@ -17,8 +17,33 @@ async function issueTwoFactorCode(user) {
   await sendTwoFactorEmail(user.email, code);
 }
 
+function formatSessionInput(input) {
+  const startsAt = new Date(input.startsAt);
+  if (Number.isNaN(startsAt.getTime())) throw new Error('startsAt must be a valid ISO date');
+  const { longitude, latitude } = input.locationPoint;
+  if (longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) {
+    throw new Error('locationPoint coordinates are out of range');
+  }
+  return {
+    ...input,
+    date: startsAt.toISOString().slice(0, 10),
+    time: startsAt.toISOString().slice(11, 16),
+    startsAt,
+    locationPoint: { type: 'Point', coordinates: [longitude, latitude] }
+  };
+}
+
+function populatedSessionQuery(id) {
+  return Session.findById(id).populate('participants').populate('host');
+}
+
 const resolvers = {
+  Session: {
+    startsAt: (session) => new Date(session.startsAt).toISOString()
+  },
+
   Query: {
+    getSession: async (_, { id }) => populatedSessionQuery(id),
     getUser: async (_, { id }) => {
       return User.findById(id).populate('friends');
     },
@@ -56,6 +81,38 @@ const resolvers = {
   },
 
   Mutation: {
+    createSession: async (_, { hostId, input }) => {
+      const host = await User.findById(hostId);
+      if (!host) throw new Error('Host not found');
+      const session = await Session.create({
+        ...formatSessionInput(input),
+        host: hostId,
+        participants: [hostId],
+        status: 'upcoming'
+      });
+      return populatedSessionQuery(session._id);
+    },
+
+    joinSession: async (_, { sessionId, userId }) => {
+      const [session, user] = await Promise.all([Session.findById(sessionId), User.findById(userId)]);
+      if (!session || !user) throw new Error('Session or user not found');
+      if (session.status !== 'upcoming') throw new Error('Only upcoming sessions can be joined');
+      if (session.participants.some((id) => id.equals(userId))) return populatedSessionQuery(sessionId);
+      if (session.participants.length >= session.maxParticipants) throw new Error('Session is full');
+      session.participants.push(userId);
+      await session.save();
+      return populatedSessionQuery(sessionId);
+    },
+
+    leaveSession: async (_, { sessionId, userId }) => {
+      const session = await Session.findById(sessionId);
+      if (!session) throw new Error('Session not found');
+      if (session.host && session.host.equals(userId)) throw new Error('The host cannot leave their session');
+      session.participants = session.participants.filter((id) => !id.equals(userId));
+      await session.save();
+      return populatedSessionQuery(sessionId);
+    },
+
     submitRatings: async (_, { sessionId, raterId, ratings }) => {
       const session = await Session.findById(sessionId);
       if (!session) throw new Error('Session not found');
