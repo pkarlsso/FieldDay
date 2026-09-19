@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, FlatList, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
-import { graphql, CURRENT_USER_ID } from '../api';
+import { graphql } from '../api';
+import { CURRENT_USER_ID } from '../config';
 
 const PURPLE = '#7C7EFF';
 const GOLD = '#FFB800';

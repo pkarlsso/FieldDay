@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
-import { graphql, CURRENT_USER_ID } from '../api';
+import { graphql } from '../api';
+import { CURRENT_USER_ID } from '../config';
 
 const PURPLE = '#7C7EFF';
 const GREEN = '#2DB55D';
