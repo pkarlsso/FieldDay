@@ -2,22 +2,20 @@ name: Zizmor
 on:
   push:
     branches: ["main", "dev"]
-    paths:
-      - '.github/workflows/**'
-      - '.github/actions/**'
+  # No paths filter: the ruleset requires zizmor results on every PR, so this
+  # must run even when a PR doesn't touch workflow files.
   pull_request:
-    paths:
-      - '.github/workflows/**'
-      - '.github/actions/**'
   workflow_dispatch: {}
 
-permissions:
-  security-events: write  # Required for SARIF upload
+permissions: {}
 
 jobs:
   zizmor:
     name: zizmor
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write  # Required for SARIF upload
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
