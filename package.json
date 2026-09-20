@@ -12,6 +12,7 @@
     "build": "npm run build --workspace frontend",
     "check:backend": "node scripts/check-backend.mjs",
     "test:integration": "node scripts/integration-session.mjs",
+    "test:accounts": "node scripts/integration-accounts.mjs",
     "seed:demo": "node scripts/seed-demo.mjs"
   },
   "devDependencies": {

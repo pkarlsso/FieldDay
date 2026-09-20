@@ -6,6 +6,7 @@ const mongoose = require('mongoose');
 const typeDefs = require('./graphql/typeDefs');
 const resolvers = require('./graphql/resolvers');
 const { getConfig } = require('./config');
+const { authenticateRequest } = require('./utils/authSession');
 
 async function startServer() {
   const app = express();
@@ -17,7 +18,11 @@ async function startServer() {
   const server = new ApolloServer({ typeDefs, resolvers });
   await server.start();
 
-  app.use('/graphql', cors(), express.json(), expressMiddleware(server));
+  app.use('/graphql', cors(), express.json(), expressMiddleware(server, {
+    // Makes the signed-in user (from the "Authorization: Bearer <token>" header)
+    // available to resolvers as context.currentUser.
+    context: async ({ req }) => ({ currentUser: await authenticateRequest(req) })
+  }));
 
   app.get('/health', (_, res) => res.json({ status: 'ok' }));
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { graphql } from '../../api';
-import { setCurrentUserId } from '../../config';
+import { startSession } from '../../session';
 
 const PURPLE = '#7C7EFF';
 
@@ -11,6 +11,7 @@ const VERIFY_MUTATION = `
       success
       message
       userId
+      token
     }
   }
 `;
@@ -46,7 +47,7 @@ export default function TwoFactorScreen({ route, navigation }) {
       if (!data.verifyTwoFactorCode.success) {
         setError(data.verifyTwoFactorCode.message);
       } else {
-        setCurrentUserId(data.verifyTwoFactorCode.userId);
+        await startSession(data.verifyTwoFactorCode);
         navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
       }
     } catch (err) {
