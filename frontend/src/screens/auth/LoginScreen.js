@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { graphql } from '../../api';
+import GoogleSignInButton from './GoogleSignInButton';
 
 const PURPLE = '#7C7EFF';
 
@@ -15,7 +16,9 @@ const MUTATION = `
   }
 `;
 
-export default function LoginScreen({ navigation }) {
+export default function LoginScreen({ route, navigation }) {
+  // Set after a password reset, so the user knows to log in with the new one.
+  const notice = route.params?.notice;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
@@ -49,6 +52,7 @@ export default function LoginScreen({ navigation }) {
         <Text style={styles.headerSubtitle}>Welcome back</Text>
       </View>
       <View style={styles.content}>
+        {notice && <Text style={styles.noticeText}>{notice}</Text>}
         <TextInput
           style={styles.input}
           placeholder="Email address"
@@ -72,7 +76,7 @@ export default function LoginScreen({ navigation }) {
         />
         <TouchableOpacity
           style={styles.forgotLink}
-          onPress={() => Alert.alert('Forgot Password', 'Password reset isn\'t available yet. Please contact support.')}
+          onPress={() => navigation.navigate('ForgotPassword', { email: email.trim() })}
         >
           <Text style={styles.forgotLinkText}>Forgot your password?</Text>
         </TouchableOpacity>
@@ -84,6 +88,7 @@ export default function LoginScreen({ navigation }) {
         >
           {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.continueBtnText}>Log In</Text>}
         </TouchableOpacity>
+        <GoogleSignInButton navigation={navigation} onError={setError} />
         <TouchableOpacity style={styles.signUpLink} onPress={() => navigation.navigate('SignUpEmail')}>
           <Text style={styles.signUpLinkText}>Don't have an account? <Text style={styles.signUpLinkBold}>Sign Up</Text></Text>
         </TouchableOpacity>
@@ -105,6 +110,7 @@ const styles = StyleSheet.create({
   forgotLink: { marginTop: 12, alignSelf: 'flex-end' },
   forgotLinkText: { color: PURPLE, fontSize: 13, fontWeight: '600' },
   errorText: { color: '#c00', fontSize: 13, marginTop: 10 },
+  noticeText: { color: '#2DB55D', fontSize: 14, fontWeight: '600' },
   continueBtn: { backgroundColor: PURPLE, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 20 },
   continueBtnDisabled: { opacity: 0.6 },
   continueBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },

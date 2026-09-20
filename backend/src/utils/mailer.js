@@ -15,20 +15,43 @@ function getTransporter() {
   });
 }
 
-async function sendTwoFactorEmail(toEmail, code) {
+async function sendCodeEmail({ toEmail, code, subject, text, purpose }) {
   const transporter = getTransporter();
   if (!transporter) {
     // No SMTP configured — fall back to logging so the flow is still
     // testable locally without real email credentials.
-    console.log(`[dev] 2FA code for ${toEmail}: ${code}`);
+    console.log(`[dev] ${purpose} code for ${toEmail}: ${code}`);
     return;
   }
   await transporter.sendMail({
     from: process.env.SMTP_FROM || process.env.SMTP_USER,
     to: toEmail,
+    subject,
+    text
+  });
+}
+
+function sendTwoFactorEmail(toEmail, code) {
+  return sendCodeEmail({
+    toEmail,
+    code,
+    purpose: '2FA',
     subject: 'Your FieldDay verification code',
     text: `Your verification code is ${code}. It expires in 10 minutes.`
   });
 }
 
-module.exports = { sendTwoFactorEmail };
+function sendPasswordResetEmail(toEmail, code) {
+  return sendCodeEmail({
+    toEmail,
+    code,
+    purpose: 'Password reset',
+    subject: 'Reset your FieldDay password',
+    text:
+      `Your FieldDay password reset code is ${code}. It expires in 15 minutes.\n\n` +
+      'Enter it in the app along with your new password. ' +
+      'If you did not request this, you can ignore this email — your password has not changed.'
+  });
+}
+
+module.exports = { sendTwoFactorEmail, sendPasswordResetEmail };

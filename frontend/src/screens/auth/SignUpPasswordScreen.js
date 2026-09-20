@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { graphql } from '../../api';
+import PasswordChecklist, { isStrongPassword } from '../../components/PasswordChecklist';
 
 const PURPLE = '#7C7EFF';
-const GREEN = '#2DB55D';
 
 const MUTATION = `
   mutation SignUp($email: String!, $password: String!) {
@@ -16,22 +16,13 @@ const MUTATION = `
   }
 `;
 
-const RULES = [
-  { key: 'length', label: 'At least 8 characters', test: (p) => p.length >= 8 },
-  { key: 'upper', label: 'An uppercase letter', test: (p) => /[A-Z]/.test(p) },
-  { key: 'lower', label: 'A lowercase letter', test: (p) => /[a-z]/.test(p) },
-  { key: 'number', label: 'A number', test: (p) => /[0-9]/.test(p) },
-  { key: 'special', label: 'A special character', test: (p) => /[^A-Za-z0-9]/.test(p) },
-];
-
 export default function SignUpPasswordScreen({ route, navigation }) {
   const { email } = route.params;
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const failedRules = RULES.filter((rule) => !rule.test(password));
-  const isStrongEnough = failedRules.length === 0;
+  const isStrongEnough = isStrongPassword(password);
 
   const handleSubmit = async () => {
     if (!isStrongEnough) {
@@ -72,16 +63,7 @@ export default function SignUpPasswordScreen({ route, navigation }) {
           autoCapitalize="none"
           autoCorrect={false}
         />
-        <View style={styles.rules}>
-          {RULES.map((rule) => {
-            const met = rule.test(password);
-            return (
-              <Text key={rule.key} style={[styles.ruleText, met && styles.ruleTextMet]}>
-                {met ? '✓' : '•'} {rule.label}
-              </Text>
-            );
-          })}
-        </View>
+        <PasswordChecklist password={password} />
         {error && <Text style={styles.errorText}>{error}</Text>}
         <TouchableOpacity
           style={[styles.continueBtn, (loading || !isStrongEnough) && styles.continueBtnDisabled]}
@@ -106,9 +88,6 @@ const styles = StyleSheet.create({
     fontSize: 16, borderWidth: 1, borderColor: '#E0E0E0', marginTop: 16,
   },
   inputDisabled: { color: '#888', backgroundColor: '#EEE' },
-  rules: { marginTop: 16, paddingHorizontal: 4 },
-  ruleText: { fontSize: 13, color: '#888', marginBottom: 4 },
-  ruleTextMet: { color: GREEN },
   errorText: { color: '#c00', fontSize: 13, marginTop: 10 },
   continueBtn: { backgroundColor: PURPLE, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 20 },
   continueBtnDisabled: { opacity: 0.6 },
