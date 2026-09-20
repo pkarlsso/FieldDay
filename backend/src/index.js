@@ -9,7 +9,7 @@ const { getConfig } = require('./config');
 
 async function startServer() {
   // False positive: the API uses no cookies or sessions, so it has no ambient credentials for CSRF to abuse.
-  // nosemgrep: javascript.express.security.audit.express-check-csrf-middleware-usage.express-check-csrf-middleware-usage
+  // nosemgrep: javascript.express.security.audit.express-check-csurf-middleware-usage.express-check-csurf-middleware-usage
   const app = express();
   const { mongoUri, port } = getConfig();
 
