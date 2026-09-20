@@ -1,8 +1,7 @@
 const mongoose = require('mongoose');
 const User = require('./models/User');
 const Session = require('./models/Session');
-
-require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
+const { getConfig } = require('./config');
 
 const users = [
   { name: 'Gabriel Ogbalor', email: 'gogbalor@purdue.edu', sports: ['Pickleball', 'Basketball'], skillLevel: 3.5, bio: 'Love pickup games!' },
@@ -18,7 +17,8 @@ const users = [
 ];
 
 async function seed() {
-  await mongoose.connect(process.env.MONGODB_URI);
+  const { mongoUri } = getConfig();
+  await mongoose.connect(mongoUri);
   console.log('Connected to MongoDB Atlas');
 
   await User.deleteMany({});
@@ -41,7 +41,9 @@ async function seed() {
       sport: 'Pickleball',
       date: 'Apr 12, 2026',
       time: '6:00 PM',
+      startsAt: '2026-04-12T18:00:00.000Z',
       location: 'Hildegard Park',
+      locationPoint: { type: 'Point', coordinates: [-86.914, 40.423] },
       skillRange: '3.0-4.0',
       maxParticipants: 4,
       participants: [gabriel._id, josh._id, jacob._id, sarah._id],
@@ -53,7 +55,9 @@ async function seed() {
       sport: 'Basketball',
       date: 'Apr 10, 2026',
       time: '4:00 PM',
+      startsAt: '2026-04-10T16:00:00.000Z',
       location: 'Co-Rec Courts',
+      locationPoint: { type: 'Point', coordinates: [-86.921, 40.428] },
       skillRange: '2.5-4.0',
       maxParticipants: 6,
       participants: [gabriel._id, alex._id, ethan._id, emma._id],
@@ -65,7 +69,9 @@ async function seed() {
       sport: 'Pickleball',
       date: 'Apr 8, 2026',
       time: '5:30 PM',
+      startsAt: '2026-04-08T17:30:00.000Z',
       location: 'Coyner Park',
+      locationPoint: { type: 'Point', coordinates: [-86.907, 40.417] },
       skillRange: '3.0-3.5',
       maxParticipants: 4,
       participants: [gabriel._id, jacob._id, sarah._id, emma._id],
@@ -77,7 +83,9 @@ async function seed() {
       sport: 'Soccer',
       date: 'Apr 15, 2026',
       time: '3:00 PM',
+      startsAt: '2026-04-15T15:00:00.000Z',
       location: 'Slayter Hill Fields',
+      locationPoint: { type: 'Point', coordinates: [-86.914, 40.426] },
       skillRange: '2.0-4.0',
       maxParticipants: 10,
       participants: [gabriel._id, alex._id, ethan._id, jacob._id],
