@@ -48,7 +48,8 @@ async function ok(query, variables, currentUser) {
 async function fails(query, variables, currentUser, expected) {
   const result = await run(query, variables, currentUser);
   assert.ok(result.errors, `expected an error containing "${expected}"`);
-  assert.match(result.errors[0].message, new RegExp(expected));
+  const message = result.errors[0].message;
+  assert.ok(message.includes(expected), `expected "${message}" to include "${expected}"`);
 }
 
 const AUTH_FIELDS = 'success message userId token requiresTwoFactor';
