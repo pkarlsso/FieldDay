@@ -15,7 +15,7 @@ const MUTATION = `
 
 export default function CreateSessionScreen({ navigation }) {
   const [sport, setSport] = useState('Pickleball');
-  const [startsAt, setStartsAt] = useState(new Date(Date.now() + 86400000));
+  const [startsAt, setStartsAt] = useState(() => new Date(Date.now() + 86400000));
   const [location, setLocation] = useState('Station 21 West Lafayette');
   const [locationPoint, setLocationPoint] = useState({ longitude: -86.9147, latitude: 40.4259 });
   const mapRef = useRef(null);
@@ -24,7 +24,10 @@ export default function CreateSessionScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (location.trim().length < 3) { setSuggestions([]); return undefined; }
+    if (location.trim().length < 3) {
+      const timer = setTimeout(() => setSuggestions([]), 0);
+      return () => clearTimeout(timer);
+    }
     let active = true;
     const timer = setTimeout(async () => {
       try {

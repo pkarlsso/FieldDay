@@ -55,8 +55,12 @@ export default function EditProfileScreen({ navigation }) {
   }, []);
 
   useEffect(() => {
-    load();
-    return navigation.addListener('focus', load);
+    const timer = setTimeout(load, 0);
+    const unsubscribe = navigation.addListener('focus', load);
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+    };
   }, [navigation, load]);
 
   const addSport = (sport) => {

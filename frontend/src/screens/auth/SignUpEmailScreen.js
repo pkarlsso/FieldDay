@@ -49,7 +49,7 @@ export default function SignUpEmailScreen({ navigation }) {
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Create Account</Text>
-        <Text style={styles.headerSubtitle}>What's your email?</Text>
+        <Text style={styles.headerSubtitle}>What&apos;s your email?</Text>
       </View>
       <View style={styles.content}>
         <TextInput
