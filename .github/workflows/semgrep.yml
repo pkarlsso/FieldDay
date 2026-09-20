@@ -25,7 +25,7 @@ jobs:
             persist-credentials: false
       - run: semgrep ci --config=auto --sarif > semgrep.sarif
       - name: Upload SARIF file
-        uses: github/codeql-action/upload-sarif@e60ea984bd3baa95954f2856bcf24f9eaba46637 # v3.37.5
+        uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # v4.38.0
         with:
           sarif_file: semgrep.sarif
         if: always()
