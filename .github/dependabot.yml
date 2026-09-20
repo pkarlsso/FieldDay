@@ -5,15 +5,21 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
     reviewers:
       - "pkarlsso"
     labels:
       - "dependencies"
       - "dependabot"
+    target-branch: "dev"
 
   # Enable version updates for GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    target-branch: "dev"
+    cooldown:
+      default-days: 7

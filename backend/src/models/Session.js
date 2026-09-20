@@ -27,6 +27,9 @@ const sessionSchema = new mongoose.Schema({
   participants: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   host: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   status: { type: String, enum: ['upcoming', 'in_progress', 'completed'], default: 'completed' },
+  // `ratedBy` tracks who has submitted ratings; `rated` flips to true once
+  // every participant has (and is also true on older, pre-ratedBy sessions).
+  ratedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   rated: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now }
 });
