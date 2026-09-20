@@ -5,6 +5,8 @@ import globals from "globals";
 import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
+import reactNative from "eslint-plugin-react-native";
+import reactNativeConfig from "@react-native/eslint-config/flat";
 
 export default [
   // ---------------------------------------------------------------
@@ -70,6 +72,78 @@ export default [
       ],
       "react/prop-types": "off", // turn on if you don't use TS/PropTypes
       "react-hooks/set-state-in-effect": "warn",   // remove once issue is fixed
+    },
+  },
+
+  // ---------------------------------------------------------------
+  // 3b. React Native — mobile environment
+  // ---------------------------------------------------------------
+  {
+    files: ["**/*.{js,jsx,ts,tsx}"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "module",
+      globals: {
+        ...globals.browser,
+                "__DEV__": "readonly",
+        "__dirname": "readonly",
+        "__fbBatchedBridgeConfig": "readonly",
+        "alert": "readonly",
+        "Buffer": "readonly",
+        "cancelAnimationFrame": "readonly",
+        "cancelIdleCallback": "readonly",
+        "clearImmediate": "writable",
+        "clearInterval": "readonly",
+        "clearTimeout": "readonly",
+        "console": "readonly",
+        "document": "readonly",
+        "escape": "readonly",
+        "Event": "readonly",
+        "EventTarget": "readonly",
+        "exports": "readonly",
+        "fetch": "readonly",
+        "FormData": "readonly",
+        "global": "readonly",
+        "Map": "writable",
+        "module": "readonly",
+        "navigator": "readonly",
+        "process": "readonly",
+        "Promise": "writable",
+        "requestAnimationFrame": "writable",
+        "requestIdleCallback": "writable",
+        "require": "readonly",
+        "Set": "writable",
+        "setImmediate": "writable",
+        "setInterval": "readonly",
+        "setTimeout": "readonly",
+        "window": "readonly",
+        "XMLHttpRequest": "readonly",
+      },
+      parserOptions: {
+        ecmaFeatures: { jsx: true },
+      },
+    },
+    settings: {
+      react: { version: "detect" },
+      "react-native/style-sheet-object-names": ["StyleSheet", "EStyleSheet"],
+    },
+    plugins: {
+      react,
+      "react-native": reactNative,
+      "react-hooks": reactHooks,
+    },
+    rules: {
+      ...reactNativeConfig[0].rules,
+      //"react-native/no-inline-styles": "warn",
+      //"react-native/no-unused-styles": "warn",
+      //"react-native/no-color-literals": "warn",
+      //"react-native/no-raw-text": "warn",
+      //"react-native/split-platform-components": "warn",
+      //"react-native/no-single-element-style-arrays": "warn",
+      ...react.configs.recommended.rules,
+      ...react.configs["jsx-runtime"].rules,
+      ...reactHooks.configs.recommended.rules,
+      "react/prop-types": "off", // Using TypeScript or prop-types
     },
   },
 
