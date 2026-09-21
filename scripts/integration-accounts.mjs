@@ -17,8 +17,10 @@ const googleAuth = require('../backend/src/utils/googleAuth.js');
 const { authenticateRequest } = require('../backend/src/utils/authSession.js');
 const User = require('../backend/src/models/User.js');
 const Session = require('../backend/src/models/Session.js');
+const SessionRegistration = (await import('../backend/src/models/SessionRegistration.mjs')).default;
 const Rating = require('../backend/src/models/Rating.js');
 const AuthSession = require('../backend/src/models/AuthSession.js');
+const { getParticipationTier, recordRegistration } = await import('../backend/src/utils/participationLimits.mjs');
 
 const tag = `accounts-${Date.now()}`;
 const emailFor = (name) => `${tag}-${name}@example.test`;
@@ -72,7 +74,7 @@ const sessionIds = [];
 
 try {
   await mongoose.connect(getConfig().mongoUri);
-  await Promise.all([User.init(), Rating.init(), AuthSession.init()]);
+  await Promise.all([User.init(), SessionRegistration.init(), Rating.init(), AuthSession.init()]);
 
   // ---- #104 persistent sign-in -------------------------------------------
   const alice = await signUpAndVerify('alice');
@@ -242,6 +244,48 @@ try {
   const ids = { host: String(host._id), guest: String(guest._id), third: String(third._id), outsider: String(outsider._id) };
   const rate = (raterId, ratings) => ({ s: sid, r: raterId, x: ratings });
 
+  // ---- rating-based participation limits -------------------------------
+  assert.equal(getParticipationTier(4.5).limit, null);
+  assert.deepEqual(getParticipationTier(4.0), { minimumRating: 4.0, limit: 5, windowDays: 7 });
+  assert.deepEqual(getParticipationTier(3.5), { minimumRating: 3.5, limit: 2, windowDays: 7 });
+  assert.deepEqual(getParticipationTier(3.0), { minimumRating: 3.0, limit: 1, windowDays: 7 });
+  assert.deepEqual(getParticipationTier(2.5), { minimumRating: 2.5, limit: 1, windowDays: 14 });
+  assert.deepEqual(getParticipationTier(1.9), { minimumRating: 0, limit: 1, windowDays: 30 });
+
+  const limitedCreate = await User.create({
+    name: 'Limited Creator', email: emailFor('limited-create'), socialRating: 3.0
+  });
+  createdEmails.push(emailFor('limited-create'));
+  const createSessionMutation = `mutation($hostId:ID!,$input:CreateSessionInput!){createSession(hostId:$hostId,input:$input){id}}`;
+  const createInput = {
+    sport: 'Tennis',
+    startsAt: '2026-11-01T22:00:00.000Z',
+    location: 'Test Court',
+    locationPoint: { longitude: -86.9, latitude: 40.4 }
+  };
+  const limitedCreated = await ok(createSessionMutation, {
+    hostId: String(limitedCreate._id), input: createInput
+  }, limitedCreate);
+  sessionIds.push(limitedCreated.createSession.id);
+  await fails(createSessionMutation, {
+    hostId: String(limitedCreate._id), input: { ...createInput, startsAt: '2026-11-02T22:00:00.000Z' }
+  }, limitedCreate, 'allows 1 new session registration per rolling 7 days');
+
+  const limitedJoin = await User.create({
+    name: 'Limited Joiner', email: emailFor('limited-join'), socialRating: 3.0
+  });
+  createdEmails.push(emailFor('limited-join'));
+  const joinTarget = await Session.create({
+    sport: 'Tennis', date: '2026-11-03', time: '22:00', startsAt: new Date('2026-11-03T22:00:00.000Z'),
+    location: 'Test Court', locationPoint: { type: 'Point', coordinates: [-86.9, 40.4] },
+    participants: [host._id], host: host._id, status: 'upcoming'
+  });
+  sessionIds.push(joinTarget._id);
+  await recordRegistration(joinTarget._id, limitedJoin._id);
+  const joinMutation = 'mutation($sessionId:ID!,$userId:ID!){joinSession(sessionId:$sessionId,userId:$userId){id}}';
+  await fails(joinMutation, { sessionId: String(joinTarget._id), userId: String(limitedJoin._id) }, limitedJoin, 'allows 1 new session registration per rolling 7 days');
+  await fails(joinMutation, { sessionId: String(joinTarget._id), userId: String(host._id) }, limitedJoin, 'only join a session for yourself');
+
   await fails(submit, rate(ids.host, [{ userId: ids.guest, rating: 6 }]), null, 'whole numbers from 1 to 5');
   await fails(submit, rate(ids.host, [{ userId: ids.guest, rating: 0 }]), null, 'whole numbers from 1 to 5');
   await fails(submit, rate(ids.host, [{ userId: ids.host, rating: 5 }]), null, 'cannot rate yourself');
@@ -290,6 +334,7 @@ try {
   const users = await User.find({ email: { $in: createdEmails } }, '_id');
   const userIds = users.map((user) => user._id);
   await Promise.all([
+    SessionRegistration.deleteMany({ session: { $in: sessionIds } }),
     Rating.deleteMany({ session: { $in: sessionIds } }),
     Session.deleteMany({ _id: { $in: sessionIds } }),
     AuthSession.deleteMany({ user: { $in: userIds } }),
