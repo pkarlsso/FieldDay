@@ -13,7 +13,8 @@
     "check:backend": "node scripts/check-backend.mjs",
     "test:integration": "node scripts/integration-session.mjs",
     "test:accounts": "node scripts/integration-accounts.mjs",
-    "seed:demo": "node scripts/seed-demo.mjs"
+    "seed:demo": "node scripts/seed-demo.mjs",
+    "postinstall": "patch-package"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
@@ -24,7 +25,8 @@
     "eslint-plugin-react-native": "^5.0.0",
     "eslint-plugin-react-refresh": "^0.5.7",
     "globals": "^15.15.0",
-    "typescript-eslint": "^8.70.0"
+    "typescript-eslint": "^8.70.0",
+    "patch-package": "^8.0.1"
   },
   "dependencies": {
     "winston": "^3.19.0"
