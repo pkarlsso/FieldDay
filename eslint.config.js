@@ -37,7 +37,7 @@ export default [
       "no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
     },
   },
-
+  
   // ---------------------------------------------------------------
   // 3. Frontend — browser + React
   // ---------------------------------------------------------------
@@ -256,6 +256,13 @@ export default [
   // ---------------------------------------------------------------
   {
     files: ["eslint.config.js", "*.config.mjs"],
+    languageOptions: {
+      sourceType: "module",
+      globals: { ...globals.node },
+    },
+  },
+  {
+    files: ["logger.js", "test-logger.js"],
     languageOptions: {
       sourceType: "module",
       globals: { ...globals.node },
