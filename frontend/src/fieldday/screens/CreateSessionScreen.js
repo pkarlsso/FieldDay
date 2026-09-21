@@ -3,6 +3,7 @@ import { Alert, Platform, ScrollView, Text, TextInput, View } from 'react-native
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Location from 'expo-location';
 import MapView, { Marker } from 'react-native-maps';
+import { addResultsListener, isAvailable as hasAppleSearch, resolve, search } from '../../../modules/apple-search-completer/src';
 import { PrimaryButton, ScreenHeader, Card } from '../components/ui';
 import { colors } from '../theme';
 import { graphql, CURRENT_USER_ID } from '../../api';
@@ -25,6 +26,11 @@ export default function CreateSessionScreen({ navigation }) {
 
   useEffect(() => {
     if (location.trim().length < 3) { setSuggestions([]); return undefined; }
+    if (Platform.OS === 'ios' && hasAppleSearch) {
+      const subscription = addResultsListener(({ results = [] }) => setSuggestions(results));
+      search(location);
+      return () => subscription?.remove();
+    }
     let active = true;
     const timer = setTimeout(async () => {
       try {
@@ -64,7 +70,16 @@ export default function CreateSessionScreen({ navigation }) {
   }
 
   function chooseSuggestion(result) {
-    const label = [result.name, result.street, result.city, result.region].filter(Boolean).join(', ');
+    const label = [result.title, result.subtitle].filter(Boolean).join(', ');
+    if (Platform.OS === 'ios' && hasAppleSearch) {
+      resolve(result.title, result.subtitle).then(({ latitude, longitude }) => {
+        setLocation(label || location);
+        setLocationPoint({ latitude, longitude });
+        mapRef.current?.animateToRegion({ latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 500);
+        setSuggestions([]);
+      }).catch((error) => Alert.alert('Location not found', error.message));
+      return;
+    }
     setLocation(label || location);
     setLocationPoint({ latitude: result.latitude, longitude: result.longitude });
     mapRef.current?.animateToRegion({ latitude: result.latitude, longitude: result.longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 500);
@@ -107,8 +122,8 @@ export default function CreateSessionScreen({ navigation }) {
           <DateTimePicker value={startsAt} mode="time" onChange={(_, value) => value && setStartsAt(value)} display={Platform.OS === 'ios' ? 'spinner' : 'default'} />
           <Text style={styles.label}>Location</Text>
           <TextInput value={location} onChangeText={setLocation} style={styles.input} placeholder="Search for an address" />
-          {suggestions.map((result, index) => <Text key={`${result.latitude}-${result.longitude}-${index}`} onPress={() => chooseSuggestion(result)} style={styles.suggestion}>
-            {[result.name, result.street, result.city, result.region].filter(Boolean).join(', ')}
+          {suggestions.map((result, index) => <Text key={`${result.title || result.name}-${index}`} onPress={() => chooseSuggestion(result)} style={styles.suggestion}>
+            {[result.title || result.name, result.subtitle || result.street, result.city, result.region].filter(Boolean).join(', ')}
           </Text>)}
           <PrimaryButton label={geocoding ? 'Finding location...' : 'Find address'} onPress={findLocation} disabled={geocoding || !location.trim()} variant="secondary" />
           <MapView ref={mapRef} style={styles.pickerMap} initialRegion={{ ...locationPoint, latitudeDelta: 0.02, longitudeDelta: 0.02 }} onPress={pickMapLocation}>
