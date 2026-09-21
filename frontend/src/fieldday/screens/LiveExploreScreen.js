@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Card, ScreenHeader, SportIcon } from '../components/ui';
 import { colors } from '../theme';
-import { graphql } from '../../../src/api';
+import { graphql } from '../../api';
 
 const QUERY = `{ getSessions(status: "upcoming") { id sport startsAt location locationPoint { coordinates } maxParticipants participants { id } } }`;
 
