@@ -1,4 +1,3 @@
-/* global require, module */
 const { withXcodeProject } = require('@expo/config-plugins');
 
 // React Native's generated iOS bundle phase executes the script path using
