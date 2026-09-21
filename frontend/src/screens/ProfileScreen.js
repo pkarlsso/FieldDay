@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, FlatList, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
-import { graphql, CURRENT_USER_ID } from '../api';
+import { View, Text, FlatList, StyleSheet, ActivityIndicator, RefreshControl, TouchableOpacity } from 'react-native';
+import { graphql } from '../api';
+import { CURRENT_USER_ID } from '../config';
+import { endSession } from '../session';
 
 const PURPLE = '#7C7EFF';
 const GOLD = '#FFB800';
@@ -8,7 +10,8 @@ const GOLD = '#FFB800';
 const QUERY = `
   query GetUser($id: ID!) {
     getUser(id: $id) {
-      id name email bio sports skillLevel socialRating totalRatings
+      id name email bio hometown sports skillLevel socialRating totalRatings
+      sportSkills { sport skillLevel }
       friends { id name socialRating sports }
     }
   }
@@ -34,7 +37,16 @@ export default function ProfileScreen({ navigation }) {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchUser(); }, [fetchUser]);
+  useEffect(() => {
+    const timer = setTimeout(fetchUser, 0);
+    return () => clearTimeout(timer);
+  }, [fetchUser]);
+
+  const handleLogout = async () => {
+    await endSession();
+    // Reset the parent stack so the back button can't return to a signed-in screen.
+    navigation.getParent()?.reset({ index: 0, routes: [{ name: 'Login' }] });
+  };
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', fetchUser);
@@ -82,6 +94,7 @@ export default function ProfileScreen({ navigation }) {
                 <Text style={styles.avatarLargeText}>{user.name.charAt(0)}</Text>
               </View>
               <Text style={styles.userName}>{user.name}</Text>
+              {!!user.hometown && <Text style={styles.userHometown}>📍 {user.hometown}</Text>}
               <Text style={styles.userBio}>{user.bio}</Text>
               <View style={styles.ratingBox}>
                 <Text style={styles.ratingNumber}>
@@ -93,12 +106,15 @@ export default function ProfileScreen({ navigation }) {
                 </Text>
               </View>
               <View style={styles.sportsRow}>
-                {user.sports?.map((s, i) => (
-                  <View key={i} style={styles.sportPill}>
-                    <Text style={styles.sportPillText}>{s}</Text>
+                {user.sportSkills?.map(({ sport, skillLevel }) => (
+                  <View key={sport} style={styles.sportPill}>
+                    <Text style={styles.sportPillText}>{sport} · Level {Math.round(skillLevel)}</Text>
                   </View>
                 ))}
               </View>
+              <TouchableOpacity style={styles.editBtn} onPress={() => navigation.navigate('EditProfile')}>
+                <Text style={styles.editBtnText}>Edit Profile</Text>
+              </TouchableOpacity>
             </View>
             <Text style={styles.friendsTitle}>
               Friends {user.friends?.length > 0 ? `(${user.friends.length})` : ''}
@@ -107,6 +123,11 @@ export default function ProfileScreen({ navigation }) {
               <Text style={styles.noFriends}>No friends yet — rate a session and add some!</Text>
             )}
           </View>
+        }
+        ListFooterComponent={
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+            <Text style={styles.logoutBtnText}>Log Out</Text>
+          </TouchableOpacity>
         }
         contentContainerStyle={styles.listContent}
       />
@@ -130,7 +151,15 @@ const styles = StyleSheet.create({
   },
   avatarLargeText: { color: '#fff', fontSize: 30, fontWeight: '700' },
   userName: { fontSize: 22, fontWeight: '700', color: '#222' },
-  userBio: { fontSize: 14, color: '#666', marginTop: 4 },
+  userHometown: { fontSize: 13, color: '#888', marginTop: 4 },
+  userBio: { fontSize: 14, color: '#666', marginTop: 4, textAlign: 'center' },
+  editBtn: {
+    marginTop: 16, borderWidth: 1, borderColor: PURPLE, borderRadius: 20,
+    paddingHorizontal: 22, paddingVertical: 8,
+  },
+  editBtnText: { color: PURPLE, fontSize: 14, fontWeight: '700' },
+  logoutBtn: { marginTop: 24, alignItems: 'center', paddingVertical: 12 },
+  logoutBtnText: { color: '#c00', fontSize: 15, fontWeight: '600' },
   ratingBox: { alignItems: 'center', marginTop: 12 },
   ratingNumber: { fontSize: 32, fontWeight: '700', color: '#222' },
   stars: { fontSize: 18, color: GOLD, marginTop: 2 },

@@ -44,7 +44,7 @@ export default function SessionDetailsScreen({ route, navigation }) {
             <View style={{ width: 74, height: 74, borderRadius: 37, backgroundColor: colors.green, alignItems: 'center', justifyContent: 'center' }}>
               <Ionicons name="checkmark" size={42} color={colors.card} />
             </View>
-            <Text style={{ color: colors.ink, fontSize: 24, fontWeight: '900' }}>You're in</Text>
+            <Text style={{ color: colors.ink, fontSize: 24, fontWeight: '900' }}>You&apos;re in</Text>
             <Text style={{ color: colors.text, textAlign: 'center', lineHeight: 20 }}>Added to your schedule. The group chat is ready for coordination.</Text>
             <View style={{ width: '100%', gap: 10 }}>
               <PrimaryButton label="Open Group Chat" icon="chatbubble-ellipses-outline" onPress={() => navigation.navigate('MainTabs', { screen: 'Friends' })} />

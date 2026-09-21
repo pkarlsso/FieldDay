@@ -12,13 +12,16 @@
     "build": "npm run build --workspace frontend",
     "check:backend": "node scripts/check-backend.mjs",
     "test:integration": "node scripts/integration-session.mjs",
+    "test:accounts": "node scripts/integration-accounts.mjs",
     "seed:demo": "node scripts/seed-demo.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
+    "@react-native/eslint-config": "^0.87.1",
     "eslint": "^9.39.5",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-native": "^5.0.0",
     "eslint-plugin-react-refresh": "^0.5.7",
     "globals": "^15.15.0",
     "typescript-eslint": "^8.70.0"
