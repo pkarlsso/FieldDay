@@ -1,4 +1,3 @@
-/* global console, process */
 import mongoose from 'mongoose';
 import User from '../backend/src/models/User.js';
 import Session from '../backend/src/models/Session.js';

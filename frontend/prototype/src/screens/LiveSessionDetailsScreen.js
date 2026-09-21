@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import { Card, IconButton, PrimaryButton, ScreenHeader } from '../components/ui';
 import { colors } from '../theme';

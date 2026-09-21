@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Platform, ScrollView, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Location from 'expo-location';
@@ -33,7 +33,7 @@ export default function CreateSessionScreen({ navigation }) {
       try {
         const results = await Location.geocodeAsync(location);
         if (active) setSuggestions(results.slice(0, 5));
-      } catch (error) {
+      } catch {
         if (active) setSuggestions([]);
       }
     }, 450);
@@ -61,7 +61,7 @@ export default function CreateSessionScreen({ navigation }) {
       const [result] = await Location.reverseGeocodeAsync(point);
       const label = [result?.name, result?.street, result?.city].filter(Boolean).join(', ');
       if (label) setLocation(label);
-    } catch (error) {
+    } catch {
       // The coordinate is still valid if reverse geocoding is unavailable.
     }
   }

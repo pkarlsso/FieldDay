@@ -1,4 +1,3 @@
-import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, shadow, sports } from '../theme';

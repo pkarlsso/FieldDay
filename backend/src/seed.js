@@ -1,7 +1,7 @@
-const mongoose = require('mongoose');
-const User = require('./models/User');
-const Session = require('./models/Session');
-const { getConfig } = require('./config');
+import mongoose from 'mongoose';
+import User from './models/User.js';
+import Session from './models/Session.js';
+import { getConfig } from './config.js';
 
 const users = [
   { name: 'Gabriel Ogbalor', email: 'gogbalor@purdue.edu', sports: ['Pickleball', 'Basketball'], skillLevel: 3.5, bio: 'Love pickup games!' },

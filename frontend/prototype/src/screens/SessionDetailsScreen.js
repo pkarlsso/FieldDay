@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar, Card, IconButton, NotificationButton, PrimaryButton, ScreenHeader, SportIcon, Stat, StatusBadge } from '../components/ui';

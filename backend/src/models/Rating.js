@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 // One document per (session, rater, ratee). The unique index is what
 // guarantees a player can only rate someone once for a given session, even if
@@ -20,4 +20,4 @@ const ratingSchema = new mongoose.Schema({
 ratingSchema.index({ session: 1, rater: 1, ratee: 1 }, { unique: true });
 ratingSchema.index({ ratee: 1, createdAt: -1 });
 
-module.exports = mongoose.model('Rating', ratingSchema);
+export default mongoose.model('Rating', ratingSchema);

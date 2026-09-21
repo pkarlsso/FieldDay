@@ -1,4 +1,3 @@
-import React from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Card, HeaderActionRow, NotificationButton, ScreenHeader, SportIcon, Stat, StatusBadge } from '../components/ui';

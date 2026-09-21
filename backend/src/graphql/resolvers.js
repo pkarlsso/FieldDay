@@ -1,13 +1,13 @@
-const User = require('../models/User');
-const Session = require('../models/Session');
-const Rating = require('../models/Rating');
-const { validatePasswordStrength, PASSWORD_REQUIREMENTS, hashPassword, verifyPassword } = require('../utils/password');
-const { generateCode, hashCode, CODE_TTL_MS, MAX_ATTEMPTS } = require('../utils/twoFactor');
-const { RESET_CODE_TTL_MS } = require('../utils/passwordReset');
-const authSessions = require('../utils/authSession');
+import User from '../models/User.js';
+import Session from '../models/Session.js';
+import Rating from '../models/Rating.js';
+import { validatePasswordStrength, PASSWORD_REQUIREMENTS, hashPassword, verifyPassword } from '../utils/password.js';
+import { generateCode, hashCode, CODE_TTL_MS, MAX_ATTEMPTS } from '../utils/twoFactor.js';
+import { RESET_CODE_TTL_MS } from '../utils/passwordReset.js';
+import * as authSessions from '../utils/authSession.js';
 // Called through the module objects (not destructured) so tests can stub them.
-const mailer = require('../utils/mailer');
-const googleAuth = require('../utils/googleAuth');
+import mailer from '../utils/mailer.js';
+import googleAuth from '../utils/googleAuth.js';
 
 const PROFILE_LIMITS = { name: 50, bio: 300, hometown: 80, sport: 30, sportCount: 10 };
 
@@ -494,4 +494,4 @@ const resolvers = {
   }
 };
 
-module.exports = resolvers;
+export default resolvers;

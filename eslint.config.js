@@ -35,6 +35,10 @@ export default [
     },
     rules: {
       "no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+      "eqeqeq": "warn",
+      "no-constant-binary-expression": "warn",
+      "no-duplicate-imports": "warn",
+      "prefer-const": "warn",
     },
   },
   
@@ -134,12 +138,12 @@ export default [
     },
     rules: {
       ...reactNativeConfig[0].rules,
-      //"react-native/no-inline-styles": "warn",
-      //"react-native/no-unused-styles": "warn",
-      //"react-native/no-color-literals": "warn",
-      //"react-native/no-raw-text": "warn",
-      //"react-native/split-platform-components": "warn",
-      //"react-native/no-single-element-style-arrays": "warn",
+      "react-native/no-inline-styles": "off",
+      "react-native/no-unused-styles": "warn",
+      "react-native/no-color-literals": "off",
+      "react-native/no-raw-text": "warn",
+      "react-native/split-platform-components": "warn",
+      "react-native/no-single-element-style-arrays": "warn",
       ...react.configs.recommended.rules,
       ...react.configs["jsx-runtime"].rules,
       ...reactHooks.configs.recommended.rules,
@@ -180,7 +184,7 @@ export default [
     },
     languageOptions: {
       ecmaVersion: "latest",
-      sourceType: "commonjs", // treat .js as CJS by default here
+      sourceType: "module",
       globals: {
         ...globals.node, // require, module, __dirname, process, Buffer, console...
       },

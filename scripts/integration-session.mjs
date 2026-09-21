@@ -1,11 +1,7 @@
-/* global console, fetch */
 import mongoose from 'mongoose';
-import { createRequire } from 'node:module';
-
-const require = createRequire(import.meta.url);
-const { getConfig } = require('../backend/src/config.js');
-const User = require('../backend/src/models/User.js');
-const Session = require('../backend/src/models/Session.js');
+import { getConfig } from '../backend/src/config.js';
+import User from '../backend/src/models/User.js';
+import Session from '../backend/src/models/Session.js';
 
 const endpoint = `http://localhost:${getConfig().port}/graphql`;
 

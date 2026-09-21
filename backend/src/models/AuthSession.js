@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 // A long-lived "stay signed in" login. Only the SHA-256 hash of the token is
 // stored, so a database leak does not expose usable tokens.
@@ -11,4 +11,4 @@ const authSessionSchema = new mongoose.Schema({
   expiresAt: { type: Date, required: true, index: { expireAfterSeconds: 0 } }
 });
 
-module.exports = mongoose.model('AuthSession', authSessionSchema);
+export default mongoose.model('AuthSession', authSessionSchema);

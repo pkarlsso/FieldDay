@@ -1,24 +1,20 @@
-/* global console */
 // Exercises password reset, Google sign-in, persistent sign-in, profile editing
 // and ratings against the database in MONGODB_URI. It runs the GraphQL schema
 // in-process (no server needed), stubs out email and Google, and deletes every
 // document it creates.
 import assert from 'node:assert/strict';
 import mongoose from 'mongoose';
-import { createRequire } from 'node:module';
-
-const require = createRequire(import.meta.url);
-const { ApolloServer } = require('@apollo/server');
-const { getConfig } = require('../backend/src/config.js');
-const typeDefs = require('../backend/src/graphql/typeDefs.js');
-const resolvers = require('../backend/src/graphql/resolvers.js');
-const mailer = require('../backend/src/utils/mailer.js');
-const googleAuth = require('../backend/src/utils/googleAuth.js');
-const { authenticateRequest } = require('../backend/src/utils/authSession.js');
-const User = require('../backend/src/models/User.js');
-const Session = require('../backend/src/models/Session.js');
-const Rating = require('../backend/src/models/Rating.js');
-const AuthSession = require('../backend/src/models/AuthSession.js');
+import { ApolloServer } from '@apollo/server';
+import { getConfig } from '../backend/src/config.js';
+import typeDefs from '../backend/src/graphql/typeDefs.js';
+import resolvers from '../backend/src/graphql/resolvers.js';
+import mailer from '../backend/src/utils/mailer.js';
+import googleAuth from '../backend/src/utils/googleAuth.js';
+import { authenticateRequest } from '../backend/src/utils/authSession.js';
+import User from '../backend/src/models/User.js';
+import Session from '../backend/src/models/Session.js';
+import Rating from '../backend/src/models/Rating.js';
+import AuthSession from '../backend/src/models/AuthSession.js';
 
 const tag = `accounts-${Date.now()}`;
 const emailFor = (name) => `${tag}-${name}@example.test`;

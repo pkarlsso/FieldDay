@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 import * as Location from 'expo-location';
 import MapView, { Callout, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
