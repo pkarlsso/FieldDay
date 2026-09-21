@@ -90,7 +90,7 @@ export default function LoginScreen({ route, navigation }) {
         </TouchableOpacity>
         <GoogleSignInButton navigation={navigation} onError={setError} />
         <TouchableOpacity style={styles.signUpLink} onPress={() => navigation.navigate('SignUpEmail')}>
-          <Text style={styles.signUpLinkText}>Don't have an account? <Text style={styles.signUpLinkBold}>Sign Up</Text></Text>
+          <Text style={styles.signUpLinkText}>Don&apos;t have an account? <Text style={styles.signUpLinkBold}>Sign Up</Text></Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>

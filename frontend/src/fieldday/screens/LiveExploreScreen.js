@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Card, ScreenHeader, SportIcon } from '../components/ui';
 import { colors } from '../theme';
-import { graphql } from '../../../src/api';
+import { graphql } from '../../api';
 
 const QUERY = `{ getSessions(status: "upcoming") { id sport startsAt location locationPoint { coordinates } maxParticipants participants { id } } }`;
 
@@ -13,7 +13,10 @@ export default function LiveExploreScreen({ navigation }) {
     try { setSessions((await graphql(QUERY)).getSessions || []); setError(''); }
     catch (err) { setError(err.message); }
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const timer = setTimeout(load, 0);
+    return () => clearTimeout(timer);
+  }, [load]);
   return <View style={{ flex: 1, backgroundColor: colors.page }}>
     <ScreenHeader title="Explore" />
     <ScrollView contentContainerStyle={{ padding: 18, gap: 12 }}>

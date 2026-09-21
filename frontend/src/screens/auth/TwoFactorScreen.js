@@ -75,7 +75,7 @@ export default function TwoFactorScreen({ route, navigation }) {
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Text style={styles.backBtnText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Verify It's You</Text>
+        <Text style={styles.headerTitle}>Verify It&apos;s You</Text>
         <Text style={styles.headerSubtitle}>Enter the 6-digit code sent to {email}</Text>
       </View>
       <View style={styles.content}>

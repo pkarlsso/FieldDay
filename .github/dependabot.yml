@@ -13,11 +13,13 @@ updates:
     labels:
       - "dependencies"
       - "dependabot"
+    target-branch: "dev"
 
   # Enable version updates for GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    target-branch: "dev"
     cooldown:
       default-days: 7
