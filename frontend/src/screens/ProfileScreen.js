@@ -37,7 +37,10 @@ export default function ProfileScreen({ navigation }) {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetchUser(); }, [fetchUser]);
+  useEffect(() => {
+    const timer = setTimeout(fetchUser, 0);
+    return () => clearTimeout(timer);
+  }, [fetchUser]);
 
   const handleLogout = async () => {
     await endSession();

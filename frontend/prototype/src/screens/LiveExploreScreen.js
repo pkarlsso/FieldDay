@@ -13,7 +13,10 @@ export default function LiveExploreScreen({ navigation }) {
     try { setSessions((await graphql(QUERY)).getSessions || []); setError(''); }
     catch (err) { setError(err.message); }
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const timer = setTimeout(load, 0);
+    return () => clearTimeout(timer);
+  }, [load]);
   return <View style={{ flex: 1, backgroundColor: colors.page }}>
     <ScreenHeader title="Explore" />
     <ScrollView contentContainerStyle={{ padding: 18, gap: 12 }}>

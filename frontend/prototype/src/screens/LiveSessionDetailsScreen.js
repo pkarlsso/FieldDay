@@ -11,7 +11,10 @@ const LEAVE = `mutation($sessionId:ID!,$userId:ID!){leaveSession(sessionId:$sess
 export default function LiveSessionDetailsScreen({ route, navigation }) {
   const [session, setSession] = useState(null); const [error, setError] = useState('');
   const load = useCallback(async () => { try { setSession((await graphql(QUERY, { id: route.params.sessionId })).getSession); } catch (err) { setError(err.message); } }, [route.params.sessionId]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const timer = setTimeout(load, 0);
+    return () => clearTimeout(timer);
+  }, [load]);
   async function change(mutation) { try { await graphql(mutation, { sessionId: session.id, userId: CURRENT_USER_ID }); await load(); } catch (err) { setError(err.message); } }
   if (!session) return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>{error ? <Text>{error}</Text> : <ActivityIndicator />}</View>;
   const joined = session.participants.some((user) => user.id === CURRENT_USER_ID);

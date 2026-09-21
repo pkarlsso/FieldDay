@@ -33,7 +33,8 @@ export default function HomeScreen({ navigation }) {
   }, []);
 
   useEffect(() => {
-    fetchSessions();
+    const timer = setTimeout(fetchSessions, 0);
+    return () => clearTimeout(timer);
   }, [fetchSessions]);
 
   useEffect(() => {

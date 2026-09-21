@@ -47,7 +47,7 @@ export default function ForgotPasswordScreen({ route, navigation }) {
           <Text style={styles.backBtnText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Forgot Password</Text>
-        <Text style={styles.headerSubtitle}>We'll email you a code to reset it</Text>
+        <Text style={styles.headerSubtitle}>We&apos;ll email you a code to reset it</Text>
       </View>
       <View style={styles.content}>
         <TextInput
