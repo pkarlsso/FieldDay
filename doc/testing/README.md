@@ -7,4 +7,10 @@ This directory keeps the verification records that support the FieldDay software
 - [Manual iOS session-flow report](manual-ios-session-flow-2026-09-20.md) records the first completed Device Hub test.
 - [Root cause analysis tracker](root-cause-analysis.md) links defects that require a documented RCA.
 
+## Completed root cause analyses
+
+| Date | Issue | Severity | Defect | Evidence |
+| --- | --- | --- | --- | --- |
+| 2026-09-20 | [#126](https://github.com/pkarlsso/FieldDay/issues/126) | Medium | iOS development builds failed from repository paths containing spaces; Xcode 27 also needed UIScene support. | [Issue RCA](https://github.com/pkarlsso/FieldDay/issues/126) and [manual iOS report](manual-ios-session-flow-2026-09-20.md) |
+
 The GitHub Actions build workflow is [`.github/workflows/build.yml`](../../.github/workflows/build.yml). It installs the locked dependencies and runs lint, backend validation, and Expo exports on a fresh GitHub-hosted Ubuntu runner.
