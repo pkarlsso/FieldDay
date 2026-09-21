@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { graphql } from '../../../src/api';
+import { graphql } from '../../api';
 
 const QUERY = `{ getSessions(status: "upcoming") { id sport location locationPoint { coordinates } } }`;
 

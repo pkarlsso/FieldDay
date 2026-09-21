@@ -5,7 +5,7 @@ import * as Location from 'expo-location';
 import MapView, { Marker } from 'react-native-maps';
 import { PrimaryButton, ScreenHeader, Card } from '../components/ui';
 import { colors } from '../theme';
-import { graphql, CURRENT_USER_ID } from '../../../src/api';
+import { graphql, CURRENT_USER_ID } from '../../api';
 
 const MUTATION = `
   mutation CreateSession($hostId: ID!, $input: CreateSessionInput!) {
