@@ -7,6 +7,7 @@ const typeDefs = require('./graphql/typeDefs');
 const resolvers = require('./graphql/resolvers');
 const { getConfig } = require('./config');
 const { authenticateRequest } = require('./utils/authSession');
+const logger = require('./utils/logger');
 
 async function startServer() {
   // False positive: the API uses no cookies or sessions, so it has no ambient credentials for CSRF to abuse.
@@ -15,7 +16,7 @@ async function startServer() {
   const { mongoUri, port } = getConfig();
 
   await mongoose.connect(mongoUri);
-  console.log('Connected to MongoDB Atlas');
+  logger.info('Connected to MongoDB Atlas');
 
   const server = new ApolloServer({ typeDefs, resolvers });
   await server.start();
@@ -29,11 +30,11 @@ async function startServer() {
   app.get('/health', (_, res) => res.json({ status: 'ok' }));
 
   app.listen(port, '0.0.0.0', () => {
-    console.log(`GraphQL server running at http://localhost:${port}/graphql`);
+    logger.info(`GraphQL server running at http://localhost:${port}/graphql`);
   });
 }
 
 startServer().catch(err => {
-  console.error('Failed to start server:', err);
+  logger.error('Failed to start server', err);
   process.exit(1);
 });
