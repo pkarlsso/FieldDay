@@ -1,13 +1,11 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { graphql } from '../../api';
-
-const QUERY = `{ getSessions(status: "upcoming") { id sport location locationPoint { coordinates } } }`;
+import { loadDiscoverySessions } from '../discovery';
 
 export default function MapScreen() {
   const [sessions, setSessions] = React.useState([]);
   React.useEffect(() => {
-    if (process.env.EXPO_PUBLIC_LIVE_DATA === 'true') graphql(QUERY).then((data) => setSessions(data.getSessions || [])).catch(() => {});
+    if (process.env.EXPO_PUBLIC_LIVE_DATA === 'true') loadDiscoverySessions({}).then(setSessions).catch(() => {});
   }, []);
   return (
     <View style={styles.container}>
