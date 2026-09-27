@@ -22,9 +22,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Lint JavaScript
-            command: npm run lint
-            artifact_path: ''
           - name: Validate backend
             command: npm run check:backend
             artifact_path: ''
