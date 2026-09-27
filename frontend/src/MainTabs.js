@@ -7,6 +7,7 @@ import RateSessionScreen from './screens/RateSessionScreen';
 import SessionCompleteScreen from './screens/SessionCompleteScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import EditProfileScreen from './screens/EditProfileScreen';
+import ReportUserScreen from './screens/ReportUserScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -24,7 +25,7 @@ export default function MainTabs() {
           if (route.name === 'Profile') return <Text style={{ fontSize: 22 }}>👤</Text>;
           return null;
         },
-        tabBarButton: ['RateSession', 'SessionComplete', 'EditProfile'].includes(route.name)
+        tabBarButton: ['RateSession', 'SessionComplete', 'EditProfile', 'ReportUser'].includes(route.name)
           ? () => null
           : undefined,
       })}
@@ -34,6 +35,7 @@ export default function MainTabs() {
       <Tab.Screen name="EditProfile" component={EditProfileScreen} options={{ tabBarButton: () => null }} />
       <Tab.Screen name="RateSession"component={RateSessionScreen} options={{ tabBarButton: () => null }} />
       <Tab.Screen name="SessionComplete" component={SessionCompleteScreen} options={{ tabBarButton: () => null }} />
+      <Tab.Screen name="ReportUser" component={ReportUserScreen} options={{ tabBarButton: () => null }} />
     </Tab.Navigator>
   );
 }

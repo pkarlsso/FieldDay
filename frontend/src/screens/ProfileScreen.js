@@ -74,6 +74,12 @@ export default function ProfileScreen({ navigation }) {
         </Text>
         {item.socialRating > 0 && <StarRating rating={item.socialRating} />}
       </View>
+      <TouchableOpacity
+        style={styles.reportBtn}
+        onPress={() => navigation.navigate('ReportUser', { user: item })}
+      >
+        <Text style={styles.reportBtnText}>⚠️</Text>
+      </TouchableOpacity>
     </View>
   );
 
@@ -184,4 +190,6 @@ const styles = StyleSheet.create({
   friendSports: { fontSize: 12, color: '#888', marginTop: 2 },
   friendRating: { alignItems: 'center' },
   friendRatingNum: { fontSize: 18, fontWeight: '700', color: '#222' },
+  reportBtn: { paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, backgroundColor: '#FEE', marginLeft: 8 },
+  reportBtnText: { fontSize: 16 },
 });
