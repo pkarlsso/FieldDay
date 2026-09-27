@@ -1,12 +1,42 @@
-import React, { useMemo, useState } from 'react';
-import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, NotificationButton, PrimaryButton, ScreenHeader, SportIcon, StatusBadge } from '../components/ui';
 import { colors } from '../theme';
 import { recommendationSeed, sessions } from '../data/mockData';
+import { graphql } from '../../api';
+import { CURRENT_USER_ID } from '../../config';
+
+const COMPLETED_SESSIONS = `
+  query GetCompletedSessions($userId: ID!) {
+    getCompletedSessions(userId: $userId) {
+      id sport date time location maxParticipants status
+      participants { id name skillLevel socialRating }
+    }
+  }
+`;
 
 export default function SessionsScreen({ navigation }) {
   const [query, setQuery] = useState(recommendationSeed);
+  const [completedSessions, setCompletedSessions] = useState([]);
+  const [loadingCompleted, setLoadingCompleted] = useState(process.env.EXPO_PUBLIC_LIVE_DATA === 'true');
+  const liveData = process.env.EXPO_PUBLIC_LIVE_DATA === 'true';
+
+  const loadCompletedSessions = useCallback(async () => {
+    if (!liveData) return;
+    try {
+      const data = await graphql(COMPLETED_SESSIONS, { userId: CURRENT_USER_ID });
+      setCompletedSessions(data.getCompletedSessions || []);
+    } finally {
+      setLoadingCompleted(false);
+    }
+  }, [liveData]);
+
+  useEffect(() => {
+    loadCompletedSessions();
+  }, [loadCompletedSessions]);
+
+  useEffect(() => navigation.addListener('focus', loadCompletedSessions), [navigation, loadCompletedSessions]);
   const recommended = useMemo(() => {
     const semanticQuery = query.toLowerCase();
     const allRecommended = sessions.filter((session) => session.recommended);
@@ -103,16 +133,31 @@ export default function SessionsScreen({ navigation }) {
         ))}
 
         <Text style={{ color: colors.ink, fontSize: 21, fontWeight: '900' }}>Needs Rating</Text>
-        <TouchableOpacity activeOpacity={0.88} onPress={() => navigation.navigate('RateSession', { sessionId: sessions[0].id })}>
-          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12, borderColor: colors.coral }}>
-            <SportIcon sport="Pickleball" size={52} />
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: colors.ink, fontWeight: '900', fontSize: 16 }}>Pickleball @ Hildegard Park</Text>
-              <Text style={{ color: colors.muted, marginTop: 4 }}>Session complete • 3 players to rate</Text>
-            </View>
-            <StatusBadge label="Rate" icon="star" color={colors.coral} />
-          </Card>
-        </TouchableOpacity>
+        {liveData && loadingCompleted ? <ActivityIndicator color={colors.purple} /> : null}
+        {liveData && !loadingCompleted && completedSessions.length === 0 ? (
+          <Card><Text style={{ color: colors.muted, textAlign: 'center' }}>You are all caught up on ratings.</Text></Card>
+        ) : null}
+        {(liveData ? completedSessions : [sessions[0]]).map((session) => {
+          const playersToRate = liveData
+            ? session.participants.filter((player) => player.id !== CURRENT_USER_ID).length
+            : session.players.length;
+          return (
+            <TouchableOpacity
+              key={session.id}
+              activeOpacity={0.88}
+              onPress={() => navigation.navigate('RateSession', liveData ? { session } : { sessionId: session.id })}
+            >
+              <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12, borderColor: colors.coral }}>
+                <SportIcon sport={session.sport} size={52} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.ink, fontWeight: '900', fontSize: 16 }}>{liveData ? `${session.sport} @ ${session.location}` : session.title}</Text>
+                  <Text style={{ color: colors.muted, marginTop: 4 }}>Session complete • {playersToRate} players to rate</Text>
+                </View>
+                <StatusBadge label="Rate" icon="star" color={colors.coral} />
+              </Card>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
     </View>
   );
