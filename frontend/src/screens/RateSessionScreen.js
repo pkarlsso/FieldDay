@@ -93,13 +93,21 @@ export default function RateSessionScreen({ route, navigation }) {
           <View key={player.id} style={styles.playerRow}>
             <View style={styles.playerHeader}>
               <Text style={styles.playerName}>{player.name}</Text>
-              <TouchableOpacity
-                style={[styles.friendCheck, friendFlags[player.id] && styles.friendCheckActive]}
-                onPress={() => setFriendFlags(f => ({ ...f, [player.id]: !f[player.id] }))}
-              >
-                {friendFlags[player.id] && <Text style={styles.checkMark}>✓</Text>}
-              </TouchableOpacity>
-              <Text style={styles.friendLabel}>Add Friend</Text>
+              <View style={styles.actionButtons}>
+                <TouchableOpacity
+                  style={[styles.friendCheck, friendFlags[player.id] && styles.friendCheckActive]}
+                  onPress={() => setFriendFlags(f => ({ ...f, [player.id]: !f[player.id] }))}
+                >
+                  {friendFlags[player.id] && <Text style={styles.checkMark}>✓</Text>}
+                </TouchableOpacity>
+                <Text style={styles.friendLabel}>Add Friend</Text>
+                <TouchableOpacity
+                  style={styles.reportBtn}
+                  onPress={() => navigation.navigate('ReportUser', { user: player })}
+                >
+                  <Text style={styles.reportBtnText}>⚠️ Report</Text>
+                </TouchableOpacity>
+              </View>
             </View>
             <RatingPicker
               value={ratings[player.id]}
@@ -132,13 +140,16 @@ const styles = StyleSheet.create({
   },
   playerHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   playerName: { fontSize: 20, fontWeight: '700', color: '#222', flex: 1 },
+  actionButtons: { flexDirection: 'row', alignItems: 'center' },
   friendCheck: {
     width: 22, height: 22, borderWidth: 2, borderColor: '#999',
     borderRadius: 4, justifyContent: 'center', alignItems: 'center', marginRight: 6,
   },
   friendCheckActive: { backgroundColor: GREEN, borderColor: GREEN },
   checkMark: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
-  friendLabel: { fontSize: 12, color: '#666' },
+  friendLabel: { fontSize: 12, color: '#666', marginRight: 12 },
+  reportBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, backgroundColor: '#FEE' },
+  reportBtnText: { fontSize: 12, fontWeight: '600', color: '#E74C3C' },
   ratingContainer: { alignItems: 'center' },
   ratingValue: { fontSize: 24, fontWeight: '700', color: PURPLE, marginBottom: 8 },
   ratingTrack: { width: '100%', height: 6, backgroundColor: '#DDD', borderRadius: 3, marginBottom: 12 },

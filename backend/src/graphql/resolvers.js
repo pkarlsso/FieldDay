@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const Session = require('../models/Session');
 const Rating = require('../models/Rating');
+const Report = require('../models/Report');
 const { validatePasswordStrength, PASSWORD_REQUIREMENTS, hashPassword, verifyPassword } = require('../utils/password');
 const { generateCode, hashCode, CODE_TTL_MS, MAX_ATTEMPTS } = require('../utils/twoFactor');
 const { RESET_CODE_TTL_MS } = require('../utils/passwordReset');
@@ -125,10 +126,18 @@ const resolvers = {
     createdAt: (rating) => new Date(rating.createdAt).toISOString()
   },
 
+  Report: {
+    reporter: (report) => String(report.reporter),
+    reportedUser: (report) => String(report.reportedUser),
+    createdAt: (report) => new Date(report.createdAt).toISOString()
+  },
+
   Query: {
     getRatingsForUser: async (_, { userId }) => Rating.find({ ratee: userId }).sort({ createdAt: -1 }),
 
     getRatingsBySession: async (_, { sessionId, raterId }) => Rating.find({ session: sessionId, rater: raterId }),
+
+    getReports: async () => Report.find().sort({ createdAt: -1 }),
 
     getSession: async (_, { id }) => populatedSessionQuery(id),
     getUser: async (_, { id }) => {
@@ -490,6 +499,44 @@ const resolvers = {
 
       await user.save();
       return User.findById(user._id).populate('friends');
+    },
+
+    reportUser: async (_, { reporterId, input }) => {
+      const { reportedUserId, reason } = input;
+
+      if (!reason || reason.trim().length === 0) {
+        return { success: false, message: 'Please provide a reason for the report.' };
+      }
+
+      if (reason.length > 500) {
+        return { success: false, message: 'Reason must be 500 characters or less.' };
+      }
+
+      if (String(reporterId) === String(reportedUserId)) {
+        return { success: false, message: 'You cannot report yourself.' };
+      }
+
+      const reporter = await User.findById(reporterId);
+      const reportedUser = await User.findById(reportedUserId);
+
+      if (!reporter || !reportedUser) {
+        return { success: false, message: 'User not found.' };
+      }
+
+      try {
+        const report = new Report({
+          reporter: reporterId,
+          reportedUser: reportedUserId,
+          reason: reason.trim()
+        });
+        await report.save();
+        return { success: true, message: 'Report submitted successfully. Thank you for helping keep our community safe.' };
+      } catch (err) {
+        if (err.code === 11000) {
+          return { success: false, message: 'You have already reported this user.' };
+        }
+        throw err;
+      }
     }
   }
 };

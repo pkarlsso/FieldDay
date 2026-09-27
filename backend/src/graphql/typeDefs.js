@@ -89,6 +89,25 @@ const typeDefs = `#graphql
     createdAt: String!
   }
 
+  type Report {
+    id: ID!
+    reporter: ID!
+    reportedUser: ID!
+    reason: String!
+    status: String!
+    createdAt: String!
+  }
+
+  type ReportResult {
+    success: Boolean!
+    message: String
+  }
+
+  input ReportInput {
+    reportedUserId: ID!
+    reason: String!
+  }
+
   type EmailCheckResult {
     exists: Boolean!
     message: String
@@ -111,6 +130,7 @@ const typeDefs = `#graphql
     checkEmailExists(email: String!): EmailCheckResult!
     getRatingsForUser(userId: ID!): [Rating!]!
     getRatingsBySession(sessionId: ID!, raterId: ID!): [Rating!]!
+    getReports: [Report!]!
   }
 
   type Mutation {
@@ -129,6 +149,7 @@ const typeDefs = `#graphql
     restoreSession(token: String!): AuthResult!
     logout(token: String!): AuthResult!
     updateProfile(input: UpdateProfileInput!): User!
+    reportUser(reporterId: ID!, input: ReportInput!): ReportResult!
   }
 `;
 
