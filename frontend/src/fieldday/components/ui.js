@@ -2,6 +2,7 @@ import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, shadow, sports } from '../theme';
+import { useNotifications } from '../../notifications';
 
 export function ScreenHeader({ eyebrow, title, subtitle, left, right }) {
   return (
@@ -120,7 +121,9 @@ export function HeaderActionRow({ children }) {
   return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>{children}</View>;
 }
 
-export function NotificationButton({ onPress, count = 2 }) {
+export function NotificationButton({ onPress, count = 0 }) {
+  const { unreadCount } = useNotifications();
+  const visibleCount = unreadCount || count;
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -138,7 +141,7 @@ export function NotificationButton({ onPress, count = 2 }) {
       }}
     >
       <Ionicons name="notifications-outline" size={20} color={colors.ink} />
-      {count ? (
+      {visibleCount ? (
         <View
           style={{
             position: 'absolute',
@@ -154,7 +157,7 @@ export function NotificationButton({ onPress, count = 2 }) {
             borderColor: colors.card,
           }}
         >
-          <Text style={{ color: colors.card, fontWeight: '900', fontSize: 9 }}>{count}</Text>
+          <Text style={{ color: colors.card, fontWeight: '900', fontSize: 9 }}>{visibleCount}</Text>
         </View>
       ) : null}
     </TouchableOpacity>

@@ -89,6 +89,37 @@ const typeDefs = `#graphql
     createdAt: String!
   }
 
+  type NotificationTarget {
+    version: Int!
+    screen: String!
+    params: String!
+  }
+
+  type Notification {
+    id: ID!
+    type: String!
+    category: String!
+    title: String!
+    body: String!
+    target: NotificationTarget!
+    readAt: String
+    createdAt: String!
+  }
+
+  type NotificationPreferences {
+    session: Boolean!
+    friends: Boolean!
+    ratings: Boolean!
+    chat: Boolean!
+  }
+
+  type NotificationDevice {
+    id: ID!
+    platform: String!
+    enabled: Boolean!
+    lastSeenAt: String!
+  }
+
   type EmailCheckResult {
     exists: Boolean!
     message: String
@@ -111,6 +142,10 @@ const typeDefs = `#graphql
     checkEmailExists(email: String!): EmailCheckResult!
     getRatingsForUser(userId: ID!): [Rating!]!
     getRatingsBySession(sessionId: ID!, raterId: ID!): [Rating!]!
+    getNotifications(limit: Int = 30, before: String): [Notification!]!
+    getUnreadNotificationCount: Int!
+    getNotificationPreferences: NotificationPreferences!
+    getNotificationDevices: [NotificationDevice!]!
   }
 
   type Mutation {
@@ -129,6 +164,11 @@ const typeDefs = `#graphql
     restoreSession(token: String!): AuthResult!
     logout(token: String!): AuthResult!
     updateProfile(input: UpdateProfileInput!): User!
+    markNotificationRead(id: ID!): Notification!
+    markAllNotificationsRead: Int!
+    registerNotificationDevice(token: String!, platform: String!): NotificationDevice!
+    unregisterNotificationDevice(token: String!): Boolean!
+    updateNotificationPreferences(session: Boolean, friends: Boolean, ratings: Boolean, chat: Boolean): NotificationPreferences!
   }
 `;
 

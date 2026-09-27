@@ -25,6 +25,7 @@
     },
     "plugins": [
       "expo-status-bar",
+      "expo-notifications",
       [
         "expo-splash-screen",
         {

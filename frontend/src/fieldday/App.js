@@ -21,6 +21,7 @@ import SessionDetailsScreen from './screens/SessionDetailsScreen';
 import LiveSessionDetailsScreen from './screens/LiveSessionDetailsScreen';
 import SessionsScreen from './screens/SessionsScreen';
 import { colors } from './theme';
+import { NotificationProvider } from '../notifications';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -74,17 +75,19 @@ function MainTabs() {
 
 export default function App() {
   return (
-    <NavigationContainer>
-      <StatusBar style="dark" />
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="MainTabs" component={MainTabs} />
-        <Stack.Screen name="SessionDetails" component={useLiveData ? LiveSessionDetailsScreen : SessionDetailsScreen} />
-        <Stack.Screen name="RateSession" component={RateSessionScreen} />
-        <Stack.Screen name="SessionComplete" component={SessionCompleteScreen} />
-        <Stack.Screen name="ChatDetail" component={ChatDetailScreen} />
-        <Stack.Screen name="Notifications" component={NotificationsScreen} />
-        <Stack.Screen name="Settings" component={SettingsScreen} />
-      </Stack.Navigator>
-    </NavigationContainer>
+    <NotificationProvider>
+      <NavigationContainer>
+        <StatusBar style="dark" />
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="MainTabs" component={MainTabs} />
+          <Stack.Screen name="SessionDetails" component={useLiveData ? LiveSessionDetailsScreen : SessionDetailsScreen} />
+          <Stack.Screen name="RateSession" component={RateSessionScreen} />
+          <Stack.Screen name="SessionComplete" component={SessionCompleteScreen} />
+          <Stack.Screen name="ChatDetail" component={ChatDetailScreen} />
+          <Stack.Screen name="Notifications" component={NotificationsScreen} />
+          <Stack.Screen name="Settings" component={SettingsScreen} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </NotificationProvider>
   );
 }
