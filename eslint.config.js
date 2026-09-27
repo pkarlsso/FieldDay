@@ -226,7 +226,7 @@ export default [
       globals: { ...globals.node },
     },
     rules: {
-      "@typescript-eslint/no-require-imports": "warn", // delete this after import has been fixed to new syntax
+      //"@typescript-eslint/no-require-imports": "warn",
       "no-redeclare": "warn", // remove once this is fixed
     },
   },
