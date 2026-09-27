@@ -1,34 +1,27 @@
 import React from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { Card, HeaderActionRow, NotificationButton, ScreenHeader, SportIcon, Stat, StatusBadge } from '../components/ui';
+import { Avatar, Card, HeaderActionRow, NotificationButton, ScreenHeader, SportIcon, Stat, StatusBadge } from '../components/ui';
 import { colors } from '../theme';
-import { currentUser, feed, sessions } from '../data/mockData';
+import { feed, sessions } from '../data/mockData';
+import { firstName, useCurrentUser } from '../useCurrentUser';
 
 export default function HomeScreen({ navigation }) {
   const nextSession = sessions[0];
+  const user = useCurrentUser();
+  const rating = user?.socialRating > 0 ? user.socialRating.toFixed(1) : '—';
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <ScreenHeader
         eyebrow="FIELD DAY"
-        title={`Welcome back, ${currentUser.name.split(' ')[0]}`}
+        title={user ? `Welcome back, ${firstName(user)}` : 'Welcome back'}
         subtitle="Your nearby games, trust signals, and upcoming sessions in one place."
         right={
           <HeaderActionRow>
             <NotificationButton onPress={() => navigation.navigate('Notifications')} />
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Profile')}
-              style={{
-                width: 44,
-                height: 44,
-                borderRadius: 22,
-                backgroundColor: colors.purple,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Text style={{ color: colors.card, fontWeight: '900' }}>{currentUser.initials}</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
+              <Avatar name={user?.name || ''} uri={user?.profilePicture} color={colors.purple} size={44} />
             </TouchableOpacity>
           </HeaderActionRow>
         }
@@ -46,8 +39,8 @@ export default function HomeScreen({ navigation }) {
             </View>
           </View>
           <View style={{ flexDirection: 'row', marginTop: 18, backgroundColor: 'rgba(255,255,255,0.14)', borderRadius: 18, padding: 12 }}>
-            <Stat value={currentUser.socialRating.toFixed(1)} label="rating" color={colors.card} labelColor={colors.card} />
-            <Stat value="3" label="sports" color={colors.card} labelColor={colors.card} />
+            <Stat value={rating} label="rating" color={colors.card} labelColor={colors.card} />
+            <Stat value={String(user?.sportSkills?.length ?? 0)} label="sports" color={colors.card} labelColor={colors.card} />
             <Stat value="2" label="alerts" color={colors.card} labelColor={colors.card} />
           </View>
         </Card>

@@ -3,28 +3,37 @@ import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar, Card, NotificationButton, ScreenHeader, StatusBadge } from '../components/ui';
 import { colors } from '../theme';
-import { conversations, friendActivities, players } from '../data/mockData';
+import { conversations } from '../data/mockData';
+import { useCurrentUser } from '../useCurrentUser';
 
 export default function FriendsScreen({ navigation }) {
+  const user = useCurrentUser();
+  const friends = user?.friends || [];
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <ScreenHeader title="Friends" right={<NotificationButton onPress={() => navigation.navigate('Notifications')} />} />
       <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 120, gap: 16 }}>
-        <Text style={{ color: colors.ink, fontSize: 21, fontWeight: '900' }}>Friend activity</Text>
-        {friendActivities.map((activity) => {
-          const friend = players.find((item) => item.id === activity.playerId);
-          return (
-            <Card key={activity.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Avatar name={activity.name} color={activity.color} size={48} />
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.ink, fontWeight: '900', fontSize: 15 }}>{activity.name}</Text>
-                <Text style={{ color: colors.text, marginTop: 3, lineHeight: 19 }}>{activity.status}</Text>
-                <Text style={{ color: colors.muted, marginTop: 2, fontSize: 12 }}>{activity.detail}</Text>
-              </View>
-              {friend ? <StatusBadge label={friend.rating.toFixed(1)} icon="star" color={colors.gold} /> : null}
-            </Card>
-          );
-        })}
+        <Text style={{ color: colors.ink, fontSize: 21, fontWeight: '900' }}>Your friends</Text>
+        {friends.length === 0 ? (
+          <Card>
+            <Text style={{ color: colors.muted, lineHeight: 20 }}>
+              {user ? 'No friends yet. Rate a session to add the people you played with.' : 'Loading your friends…'}
+            </Text>
+          </Card>
+        ) : null}
+        {friends.map((friend) => (
+          <Card key={friend.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Avatar name={friend.name} uri={friend.profilePicture} color={colors.purple} size={48} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.ink, fontWeight: '900', fontSize: 15 }}>{friend.name}</Text>
+              {friend.sports?.length ? (
+                <Text style={{ color: colors.muted, marginTop: 3 }}>{friend.sports.join(', ')}</Text>
+              ) : null}
+            </View>
+            {friend.socialRating > 0 ? <StatusBadge label={friend.socialRating.toFixed(1)} icon="star" color={colors.gold} /> : null}
+          </Card>
+        ))}
 
         <Text style={{ color: colors.ink, fontSize: 21, fontWeight: '900' }}>Messages</Text>
         {conversations.map((conversation) => (

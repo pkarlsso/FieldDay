@@ -9,7 +9,8 @@ const authSessions = require('../utils/authSession');
 const mailer = require('../utils/mailer');
 const googleAuth = require('../utils/googleAuth');
 
-const PROFILE_LIMITS = { name: 50, bio: 300, hometown: 80, sport: 30, sportCount: 10 };
+const PROFILE_LIMITS = { name: 50, bio: 300, hometown: 80, sport: 30, sportCount: 10, pictureChars: 200000 };
+const PICTURE_PATTERN = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 
 function normalizeEmail(email) {
   return email.trim().toLowerCase();
@@ -37,6 +38,16 @@ function cleanProfileText(value, label, maxLength, { required = false } = {}) {
   if (required && !trimmed) throw new Error(`${label} cannot be empty`);
   if (trimmed.length > maxLength) throw new Error(`${label} must be ${maxLength} characters or fewer`);
   return trimmed;
+}
+
+// Accepts a base64 image data URI (the app sends a 256px JPEG) or '' to remove
+// the picture. Returns undefined when the field was not supplied.
+function cleanProfilePicture(value) {
+  if (value === undefined || value === null) return undefined;
+  if (value === '') return '';
+  if (value.length > PROFILE_LIMITS.pictureChars) throw new Error('Profile picture is too large');
+  if (!PICTURE_PATTERN.test(value)) throw new Error('Profile picture must be a JPEG, PNG or WebP image');
+  return value;
 }
 
 function cleanSportSkills(sportSkills) {
@@ -473,11 +484,13 @@ const resolvers = {
       const name = cleanProfileText(input.name, 'Name', PROFILE_LIMITS.name, { required: true });
       const bio = cleanProfileText(input.bio, 'Bio', PROFILE_LIMITS.bio);
       const hometown = cleanProfileText(input.hometown, 'Hometown', PROFILE_LIMITS.hometown);
+      const profilePicture = cleanProfilePicture(input.profilePicture);
       const sportSkills = input.sportSkills ? cleanSportSkills(input.sportSkills) : undefined;
 
       if (name !== undefined) user.name = name;
       if (bio !== undefined) user.bio = bio;
       if (hometown !== undefined) user.hometown = hometown;
+      if (profilePicture !== undefined) user.profilePicture = profilePicture;
       if (sportSkills !== undefined) {
         user.sportSkills = sportSkills;
         // Keep the older flat fields in step for screens that still read them.

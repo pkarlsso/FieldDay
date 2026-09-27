@@ -6,7 +6,8 @@ import MapView, { Marker } from 'react-native-maps';
 import { addResultsListener, isAvailable as hasAppleSearch, resolve, search } from '../../../modules/apple-search-completer/src';
 import { PrimaryButton, ScreenHeader, Card } from '../components/ui';
 import { colors } from '../theme';
-import { graphql, CURRENT_USER_ID } from '../../api';
+import { graphql } from '../../api';
+import { CURRENT_USER_ID } from '../../config';
 
 const MUTATION = `
   mutation CreateSession($hostId: ID!, $input: CreateSessionInput!) {
