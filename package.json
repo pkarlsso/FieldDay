@@ -13,6 +13,7 @@
     "check:backend": "node scripts/check-backend.mjs",
     "test:integration": "node scripts/integration-session.mjs",
     "test:accounts": "node scripts/integration-accounts.mjs",
+    "test:sport-preferences": "node scripts/test-sport-preferences.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
     "postinstall": "patch-package"
   },
