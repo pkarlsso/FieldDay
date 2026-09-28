@@ -23,6 +23,7 @@
     "expo-build-properties": "~57.0.21",
     "expo-constants": "~57.0.18",
     "expo-crypto": "~57.0.3",
+    "expo-device": "~7.0.2",
     "expo-device-hub": "^0.10.1",
     "expo-location": "~57.0.19",
     "expo-notifications": "^0.32.17",
