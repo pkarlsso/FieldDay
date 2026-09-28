@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const logger = require('./logger');
 
 // Built lazily (not at module load) because index.js requires this module
 // before it calls dotenv.config(), so process.env.SMTP_* wouldn't be
@@ -20,7 +21,7 @@ async function sendCodeEmail({ toEmail, code, subject, text, purpose }) {
   if (!transporter) {
     // No SMTP configured — fall back to logging so the flow is still
     // testable locally without real email credentials.
-    console.log(`[dev] ${purpose} code for ${toEmail}: ${code}`);
+    logger.info('Email delivery is not configured; using development code', { purpose, toEmail, code });
     return;
   }
   await transporter.sendMail({

@@ -18,7 +18,22 @@ async function startServer() {
   await mongoose.connect(mongoUri);
   logger.info('Connected to MongoDB Atlas');
 
-  const server = new ApolloServer({ typeDefs, resolvers });
+  const server = new ApolloServer({
+    typeDefs,
+    resolvers,
+    plugins: [{
+      async requestDidStart() {
+        return {
+          async didEncounterErrors({ operationName, errors }) {
+            logger.error('GraphQL request encountered errors', {
+              operationName,
+              errors: errors.map((error) => ({ message: error.message, path: error.path }))
+            });
+          }
+        };
+      }
+    }]
+  });
   await server.start();
 
   app.use('/graphql', cors(), express.json(), expressMiddleware(server, {

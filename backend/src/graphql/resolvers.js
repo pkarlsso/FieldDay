@@ -8,6 +8,7 @@ const authSessions = require('../utils/authSession');
 // Called through the module objects (not destructured) so tests can stub them.
 const mailer = require('../utils/mailer');
 const googleAuth = require('../utils/googleAuth');
+const logger = require('../utils/logger');
 
 const PROFILE_LIMITS = { name: 50, bio: 300, hometown: 80, sport: 30, sportCount: 10 };
 const DEFAULT_DISCOVERY_RADIUS_MILES = 25;
@@ -551,7 +552,7 @@ const resolvers = {
       try {
         profile = await googleAuth.verifyGoogleIdToken(idToken);
       } catch (err) {
-        console.error('Google sign-in failed:', err.message);
+        logger.error('Google sign-in failed', { error: err.message, stack: err.stack });
         return { success: false, message: 'We could not verify your Google sign-in. Please try again.' };
       }
 

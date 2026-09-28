@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 import MapView, { Callout, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { getDiscoveryOrigin, loadDiscoverySessions } from '../discovery';
+import logger from '../../logger';
 
 const useGoogleMaps = process.env.EXPO_PUBLIC_MAP_PROVIDER === 'google';
 const DEFAULT_REGION = {
@@ -49,7 +50,10 @@ export default function MapScreen({ navigation }) {
       }
       if (mounted) setLoading(false);
     }
-    locateUser().catch(() => mounted && setLoading(false));
+    locateUser().catch((error) => {
+      logger.warn('Could not determine map location:', error);
+      if (mounted) setLoading(false);
+    });
     return () => { mounted = false; };
   }, []);
 
@@ -62,7 +66,7 @@ export default function MapScreen({ navigation }) {
       location: session.location,
       latitude: session.locationPoint.coordinates[1],
       longitude: session.locationPoint.coordinates[0],
-    })))).catch(() => {});
+    })))).catch((error) => logger.error('Could not load map sessions:', error));
     return undefined;
   }, [origin]);
 

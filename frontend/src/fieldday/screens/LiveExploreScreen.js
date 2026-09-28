@@ -3,6 +3,7 @@ import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-nativ
 import { Card, Pill, ScreenHeader, SportIcon } from '../components/ui';
 import { colors, sports } from '../theme';
 import { DEFAULT_DISCOVERY_FILTER, getDiscoveryOrigin, loadDiscoverySessions } from '../discovery';
+import logger from '../../logger';
 
 const sportOptions = Object.keys(sports);
 const radiusOptions = [5, 10, 25, 50];
@@ -31,7 +32,8 @@ export default function LiveExploreScreen({ navigation }) {
       const next = { ...DEFAULT_DISCOVERY_FILTER, origin: location || undefined };
       setDraft(next);
       await loadDiscoverySessions(next).then(setSessions);
-    }).catch(async () => {
+    }).catch(async (error) => {
+      logger.warn('Could not determine discovery location:', error);
       setOrigin(null);
       const next = { ...DEFAULT_DISCOVERY_FILTER, origin: undefined };
       setDraft(next);

@@ -3,6 +3,7 @@ import { View, Text, FlatList, StyleSheet, ActivityIndicator, RefreshControl, To
 import { graphql } from '../api';
 import { CURRENT_USER_ID } from '../config';
 import { endSession } from '../session';
+import logger from '../logger';
 
 const PURPLE = '#7C7EFF';
 const GOLD = '#FFB800';
@@ -32,7 +33,7 @@ export default function ProfileScreen({ navigation }) {
       const data = await graphql(QUERY, { id: CURRENT_USER_ID });
       setUser(data.getUser);
     } catch (err) {
-      console.log('Profile fetch error:', err.message);
+      logger.error('Profile fetch error:', err);
     }
     setLoading(false);
   }, []);

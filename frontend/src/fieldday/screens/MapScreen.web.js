@@ -1,11 +1,12 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { loadDiscoverySessions } from '../discovery';
+import logger from '../../logger';
 
 export default function MapScreen() {
   const [sessions, setSessions] = React.useState([]);
   React.useEffect(() => {
-    if (process.env.EXPO_PUBLIC_LIVE_DATA === 'true') loadDiscoverySessions({}).then(setSessions).catch(() => {});
+    if (process.env.EXPO_PUBLIC_LIVE_DATA === 'true') loadDiscoverySessions({}).then(setSessions).catch((error) => logger.error('Could not load web map sessions:', error));
   }, []);
   return (
     <View style={styles.container}>
