@@ -19,8 +19,9 @@ function checkDirectory(directory) {
 }
 checkDirectory(fileURLToPath(new URL('../backend/src/', import.meta.url)));
 const { buildSchema, validateSchema } = require('graphql');
-const errors = validateSchema(buildSchema(require('./src/graphql/typeDefs.js')));
+const { default: typeDefs } = await import('../backend/src/graphql/typeDefs.js');
+const errors = validateSchema(buildSchema(typeDefs));
 if (errors.length) throw new Error(errors.map(error => error.message).join('\n'));
-require('./src/models/User.js');
-require('./src/models/Session.js');
+require('../backend/src/models/User.js');
+require('../backend/src/models/Session.js');
 process.stdout.write('Backend syntax, GraphQL schema, and model loading passed.\n');

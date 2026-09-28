@@ -3,8 +3,6 @@ const { expressMiddleware } = require('@apollo/server/express4');
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
-const typeDefs = require('./graphql/typeDefs');
-const resolvers = require('./graphql/resolvers');
 const { getConfig } = require('./config');
 const { authenticateRequest } = require('./utils/authSession');
 
@@ -13,6 +11,10 @@ async function startServer() {
   // nosemgrep: javascript.express.security.audit.express-check-csurf-middleware-usage.express-check-csurf-middleware-usage
   const app = express();
   const { mongoUri, port } = getConfig();
+  const [{ default: typeDefs }, { default: resolvers }] = await Promise.all([
+    import('./graphql/typeDefs.js'),
+    import('./graphql/resolvers.js')
+  ]);
 
   await mongoose.connect(mongoUri);
   console.log('Connected to MongoDB Atlas');

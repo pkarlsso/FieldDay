@@ -191,6 +191,13 @@ export default [
     },
   },
 
+  {
+    files: ["backend/src/graphql/*.js"],
+    languageOptions: {
+      sourceType: "module",
+    },
+  },
+
   // ---------------------------------------------------------------
   // 5b. Backend ESM files (if any use import/export)
   // ---------------------------------------------------------------
