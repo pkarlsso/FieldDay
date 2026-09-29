@@ -1,0 +1,68 @@
+name: Deploy Backend to AWS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - backend/**
+      - .github/workflows/deploy-backend.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: fieldday-production-backend
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-2
+  EB_APPLICATION: fieldday-api
+  EB_ENVIRONMENT: fieldday-api-prod-v2
+  EB_BUCKET: elasticbeanstalk-us-east-2-545595342317
+  API_HEALTH_URL: https://sgbtn5pq84.execute-api.us-east-2.amazonaws.com/health
+
+jobs:
+  deploy:
+    name: Deploy backend
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Configure AWS credentials through GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::545595342317:role/FieldDayGitHubDeployRole
+          aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: '545595342317'
+          role-session-name: FieldDayBackendDeploy
+
+      - name: Package Elastic Beanstalk source bundle
+        run: |
+          cd backend
+          zip -r ../fieldday-backend.zip . -x '.env' 'node_modules/*'
+
+      - name: Upload and deploy the backend
+        env:
+          VERSION_LABEL: main-${{ github.sha }}-${{ github.run_id }}
+        run: |
+          BUNDLE_KEY="fieldday/deployments/${VERSION_LABEL}.zip"
+          aws s3 cp fieldday-backend.zip "s3://${EB_BUCKET}/${BUNDLE_KEY}"
+          aws elasticbeanstalk create-application-version \
+            --application-name "$EB_APPLICATION" \
+            --version-label "$VERSION_LABEL" \
+            --source-bundle "S3Bucket=${EB_BUCKET},S3Key=${BUNDLE_KEY}" \
+            --process
+          aws elasticbeanstalk update-environment \
+            --environment-name "$EB_ENVIRONMENT" \
+            --version-label "$VERSION_LABEL"
+          aws elasticbeanstalk wait environment-updated \
+            --environment-names "$EB_ENVIRONMENT"
+
+      - name: Verify deployed API health
+        run: curl --fail --retry 20 --retry-all-errors --retry-delay 15 "$API_HEALTH_URL"
