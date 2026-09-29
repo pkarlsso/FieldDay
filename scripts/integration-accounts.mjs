@@ -19,6 +19,7 @@ const User = require('../backend/src/models/User.js');
 const Session = require('../backend/src/models/Session.js');
 const Rating = require('../backend/src/models/Rating.js');
 const AuthSession = require('../backend/src/models/AuthSession.js');
+const FriendRequest = require('../backend/src/models/FriendRequest.js');
 
 const tag = `accounts-${Date.now()}`;
 const emailFor = (name) => `${tag}-${name}@example.test`;
@@ -72,7 +73,7 @@ const sessionIds = [];
 
 try {
   await mongoose.connect(getConfig().mongoUri);
-  await Promise.all([User.init(), Rating.init(), AuthSession.init()]);
+  await Promise.all([User.init(), Rating.init(), AuthSession.init(), FriendRequest.init()]);
 
   // ---- #104 persistent sign-in -------------------------------------------
   const alice = await signUpAndVerify('alice');
@@ -275,7 +276,45 @@ try {
   assert.equal(guestAfter.totalRatings, 3);
   assert.equal(guestAfter.socialRating, 4.3, '(8 + 5) / 3 rounded to one decimal');
   assert.equal(await Rating.countDocuments({ session: session._id, rater: host._id }), 2, 'each rating is stored');
-  assert.deepEqual((await User.findById(guest._id)).friends.map(String), [ids.host], 'friendship is mutual');
+  assert.deepEqual((await User.findById(guest._id)).friends.map(String), [], 'rating opt-in waits for acceptance');
+  assert.deepEqual((await User.findById(host._id)).friends.map(String), []);
+  const request = await FriendRequest.findOne({ requester: host._id, recipient: guest._id });
+  assert.equal(request.status, 'pending');
+
+  const requestFields = 'id status requester { id name } recipient { id name }';
+  await fails(
+    `mutation($id:ID!){sendFriendRequest(recipientId:$id){${requestFields}}}`,
+    { id: ids.guest },
+    host,
+    'already pending'
+  );
+  await fails(
+    `mutation($id:ID!){acceptFriendRequest(requestId:$id){${requestFields}}}`,
+    { id: String(request._id) },
+    host,
+    'Only the recipient'
+  );
+  const accepted = await ok(
+    `mutation($id:ID!){acceptFriendRequest(requestId:$id){${requestFields}}}`,
+    { id: String(request._id) },
+    guest
+  );
+  assert.equal(accepted.acceptFriendRequest.status, 'accepted');
+  assert.deepEqual((await User.findById(guest._id)).friends.map(String), [ids.host], 'accepted friendship is mutual');
+  assert.deepEqual((await User.findById(host._id)).friends.map(String), [ids.guest]);
+
+  const declined = (await ok(
+    `mutation($id:ID!){sendFriendRequest(recipientId:$id){${requestFields}}}`,
+    { id: ids.outsider },
+    host
+  )).sendFriendRequest;
+  const decline = await ok(
+    `mutation($id:ID!){declineFriendRequest(requestId:$id){${requestFields}}}`,
+    { id: declined.id },
+    outsider
+  );
+  assert.equal(decline.declineFriendRequest.status, 'declined');
+  assert.deepEqual((await User.findById(outsider._id)).friends.map(String), []);
   assert.deepEqual((await User.findById(host._id)).friends.map(String), [ids.guest]);
 
   await fails(submit, rate(ids.host, [{ userId: ids.guest, rating: 1 }]), null, 'already rated');
@@ -305,6 +344,7 @@ try {
     Rating.deleteMany({ session: { $in: sessionIds } }),
     Session.deleteMany({ _id: { $in: sessionIds } }),
     AuthSession.deleteMany({ user: { $in: userIds } }),
+    FriendRequest.deleteMany({ $or: [{ requester: { $in: userIds } }, { recipient: { $in: userIds } }] }),
     User.deleteMany({ _id: { $in: userIds } })
   ]);
   await mongoose.disconnect();

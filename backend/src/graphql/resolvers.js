@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const Session = require('../models/Session');
 const Rating = require('../models/Rating');
+const FriendRequest = require('../models/FriendRequest');
 const { validatePasswordStrength, PASSWORD_REQUIREMENTS, hashPassword, verifyPassword } = require('../utils/password');
 const { generateCode, hashCode, CODE_TTL_MS, MAX_ATTEMPTS } = require('../utils/twoFactor');
 const { RESET_CODE_TTL_MS } = require('../utils/passwordReset');
@@ -28,6 +29,44 @@ async function issueTwoFactorCode(user) {
 function requireUser(context) {
   if (!context.currentUser) throw new Error('You must be signed in to do that.');
   return context.currentUser;
+}
+
+function publicUserQuery(id) {
+  return User.findById(id).select('name bio hometown profilePicture sports socialRating');
+}
+
+function populatedFriendRequestQuery(id) {
+  return FriendRequest.findById(id).populate('requester').populate('recipient');
+}
+
+async function createFriendRequest(requesterId, recipientId) {
+  if (String(requesterId) === String(recipientId)) throw new Error('You cannot send a friend request to yourself');
+
+  const [requester, recipient] = await Promise.all([
+    User.findById(requesterId),
+    User.findById(recipientId)
+  ]);
+  if (!requester || !recipient) throw new Error('User not found');
+  if (requester.friends.some((id) => id.equals(recipientId))) {
+    throw new Error('You are already friends');
+  }
+
+  const existing = await FriendRequest.findOne({
+    status: 'pending',
+    $or: [
+      { requester: requesterId, recipient: recipientId },
+      { requester: recipientId, recipient: requesterId }
+    ]
+  });
+  if (existing) throw new Error('A friend request is already pending');
+
+  try {
+    const request = await FriendRequest.create({ requester: requesterId, recipient: recipientId });
+    return populatedFriendRequestQuery(request._id);
+  } catch (err) {
+    if (err.code === 11000) throw new Error('A friend request is already pending');
+    throw err;
+  }
 }
 
 // Trims an optional profile text field and enforces its length. Returns
@@ -136,6 +175,19 @@ const resolvers = {
     createdAt: (rating) => new Date(rating.createdAt).toISOString()
   },
 
+  PublicUser: {
+    id: (user) => String(user._id || user.id)
+  },
+
+  FriendRequest: {
+    id: (request) => String(request._id || request.id),
+    requester: (request) => request.requester,
+    recipient: (request) => request.recipient,
+    status: (request) => request.status,
+    createdAt: (request) => new Date(request.createdAt).toISOString(),
+    updatedAt: (request) => new Date(request.updatedAt).toISOString()
+  },
+
   Query: {
     getRatingsForUser: async (_, { userId }) => Rating.find({ ratee: userId }).sort({ createdAt: -1 }),
 
@@ -176,6 +228,40 @@ const resolvers = {
     getFriends: async (_, { userId }) => {
       const user = await User.findById(userId).populate('friends');
       return user ? user.friends : [];
+    },
+
+    findUserById: async (_, { id }, context) => {
+      requireUser(context);
+      return publicUserQuery(id);
+    },
+
+    getMyFriendRequests: async (_, { status = 'pending' }, context) => {
+      const user = requireUser(context);
+      const filter = { $or: [{ requester: user._id }, { recipient: user._id }] };
+      if (status) filter.status = status;
+      return FriendRequest.find(filter)
+        .populate('requester')
+        .populate('recipient')
+        .sort({ createdAt: -1 });
+    },
+
+    getFriendCandidates: async (_, __, context) => {
+      const user = requireUser(context);
+      const sessions = await Session.find({ status: 'completed', participants: user._id }, 'participants');
+      const participantIds = [...new Set(sessions.flatMap((session) => session.participants.map(String)))]
+        .filter((id) => id !== String(user._id) && !user.friends.some((friendId) => String(friendId) === id));
+      if (participantIds.length === 0) return [];
+
+      const pending = await FriendRequest.find({
+        status: 'pending',
+        $or: [
+          { requester: user._id, recipient: { $in: participantIds } },
+          { requester: { $in: participantIds }, recipient: user._id }
+        ]
+      }, 'requester recipient');
+      const pendingIds = new Set(pending.flatMap(({ requester, recipient }) => [String(requester), String(recipient)]));
+      return User.find({ _id: { $in: participantIds.filter((id) => !pendingIds.has(id)) } })
+        .select('name bio hometown profilePicture sports socialRating');
     }
   },
 
@@ -238,11 +324,14 @@ const resolvers = {
         totalGiven += rating;
 
         if (addFriend) {
-          const [rater] = await Promise.all([
-            User.updateOne({ _id: raterId }, { $addToSet: { friends: userId } }),
-            User.updateOne({ _id: userId }, { $addToSet: { friends: raterId } })
-          ]);
-          if (rater.modifiedCount > 0) friendsSent++;
+          try {
+            await createFriendRequest(raterId, userId);
+            friendsSent++;
+          } catch (err) {
+            if (!['A friend request is already pending', 'You are already friends'].includes(err.message)) {
+              throw err;
+            }
+          }
         }
       }
 
@@ -271,21 +360,44 @@ const resolvers = {
       };
     },
 
-    addFriend: async (_, { userId, friendId }) => {
-      const user = await User.findById(userId);
-      const friend = await User.findById(friendId);
-      if (!user || !friend) throw new Error('User not found');
+    addFriend: async (_, { userId, friendId }, context) => {
+      const user = requireUser(context);
+      if (String(user._id) !== String(userId)) throw new Error('You can only add friends for yourself');
+      await createFriendRequest(user._id, friendId);
+      return User.findById(user._id).populate('friends');
+    },
 
-      if (!user.friends.includes(friendId)) {
-        user.friends.push(friendId);
-        await user.save();
-      }
-      if (!friend.friends.includes(userId)) {
-        friend.friends.push(userId);
-        await friend.save();
-      }
+    sendFriendRequest: async (_, { recipientId }, context) => {
+      const user = requireUser(context);
+      return createFriendRequest(user._id, recipientId);
+    },
 
-      return User.findById(userId).populate('friends');
+    acceptFriendRequest: async (_, { requestId }, context) => {
+      const user = requireUser(context);
+      const request = await FriendRequest.findById(requestId);
+      if (!request) throw new Error('Friend request not found');
+      if (!request.recipient.equals(user._id)) throw new Error('Only the recipient can accept this request');
+      if (request.status !== 'pending') throw new Error('This friend request is no longer pending');
+
+      request.status = 'accepted';
+      await request.save();
+      await Promise.all([
+        User.updateOne({ _id: request.requester }, { $addToSet: { friends: request.recipient } }),
+        User.updateOne({ _id: request.recipient }, { $addToSet: { friends: request.requester } })
+      ]);
+      return populatedFriendRequestQuery(request._id);
+    },
+
+    declineFriendRequest: async (_, { requestId }, context) => {
+      const user = requireUser(context);
+      const request = await FriendRequest.findById(requestId);
+      if (!request) throw new Error('Friend request not found');
+      if (!request.recipient.equals(user._id)) throw new Error('Only the recipient can decline this request');
+      if (request.status !== 'pending') throw new Error('This friend request is no longer pending');
+
+      request.status = 'declined';
+      await request.save();
+      return populatedFriendRequestQuery(request._id);
     },
 
     signUp: async (_, { email, password }) => {
