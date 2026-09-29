@@ -1,15 +1,39 @@
 import React, { useState } from 'react';
-import { Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import { Avatar, Card, IconButton, NotificationButton, PrimaryButton, ScreenHeader, SportIcon, StatusBadge } from '../components/ui';
 import { colors } from '../theme';
 import { sessions } from '../data/mockData';
+import { graphql } from '../../api';
+import { CURRENT_USER_ID } from '../../config';
 
 const reportReasons = ['No-show', 'Unsafe play', 'Harassment', 'Wrong skill level'];
 
+const SUBMIT_RATINGS = `
+  mutation SubmitRatings($sessionId: ID!, $raterId: ID!, $ratings: [RatingInput!]!) {
+    submitRatings(sessionId: $sessionId, raterId: $raterId, ratings: $ratings) {
+      success
+      message
+      avgRatingGiven
+      friendRequestsSent
+    }
+  }
+`;
+
 export default function RateSessionScreen({ route, navigation }) {
-  const session = sessions.find((item) => item.id === route.params?.sessionId) || sessions[0];
+  const liveSession = route.params?.session;
+  const isLiveSession = Boolean(liveSession?.participants);
+  const session = isLiveSession
+    ? {
+      ...liveSession,
+      title: `${liveSession.sport} @ ${liveSession.location}`,
+      joined: liveSession.participants.length,
+      players: liveSession.participants
+        .filter((player) => player.id !== CURRENT_USER_ID)
+        .map((player) => ({ ...player, present: true })),
+    }
+    : sessions.find((item) => item.id === route.params?.sessionId) || sessions[0];
   const [ratings, setRatings] = useState(
     session.players.reduce((acc, player) => ({ ...acc, [player.id]: player.present ? 4 : 2 }), {})
   );
@@ -21,17 +45,44 @@ export default function RateSessionScreen({ route, navigation }) {
   const [reportNotes, setReportNotes] = useState('');
   const [submittedReports, setSubmittedReports] = useState({});
 
-  const submit = () => {
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async () => {
+    if (submitting) return;
+    if (session.players.length === 0) {
+      Alert.alert('No players to rate', 'There are no other participants in this session.');
+      return;
+    }
+    setSubmitting(true);
     const avgRatingGiven = Math.round(
       (Object.values(ratings).reduce((sum, value) => sum + value, 0) / Object.values(ratings).length) * 10
     ) / 10;
     const friendRequestsSent = Object.values(friends).filter(Boolean).length;
-    navigation.navigate('SessionComplete', {
-      sessionId: session.id,
-      avgRatingGiven,
-      friendRequestsSent,
-      playersRated: session.players.length,
-    });
+    try {
+      const result = isLiveSession
+        ? await graphql(SUBMIT_RATINGS, {
+          sessionId: session.id,
+          raterId: CURRENT_USER_ID,
+          ratings: session.players.map((player) => ({
+            userId: player.id,
+            rating: ratings[player.id],
+            addFriend: friends[player.id],
+          })),
+        })
+        : { submitRatings: { avgRatingGiven, friendRequestsSent } };
+      const saved = result.submitRatings;
+      navigation.replace('SessionComplete', {
+        sessionId: session.id,
+        session,
+        avgRatingGiven: saved.avgRatingGiven,
+        friendRequestsSent: saved.friendRequestsSent,
+        playersRated: session.players.length,
+      });
+    } catch (error) {
+      Alert.alert('Ratings not sent', error.message || 'Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -159,7 +210,12 @@ export default function RateSessionScreen({ route, navigation }) {
           </Card>
         ))}
 
-        <PrimaryButton label="Submit Ratings" icon="checkmark-circle-outline" onPress={submit} />
+        <PrimaryButton
+          label={submitting ? 'Sending ratings…' : 'Submit Ratings'}
+          icon={submitting ? undefined : 'checkmark-circle-outline'}
+          onPress={submit}
+          disabled={submitting}
+        />
       </ScrollView>
 
       <Modal

@@ -6,14 +6,14 @@ import { colors } from '../theme';
 import { sessions } from '../data/mockData';
 
 export default function SessionCompleteScreen({ route, navigation }) {
-  const session = sessions.find((item) => item.id === route.params?.sessionId) || sessions[0];
+  const session = route.params?.session || sessions.find((item) => item.id === route.params?.sessionId) || sessions[0];
   const { avgRatingGiven = 4.2, friendRequestsSent = 2, playersRated = 3 } = route.params || {};
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <ScreenHeader
-        title="Session Complete"
-        left={<IconButton icon="chevron-back" onPress={() => navigation.goBack()} />}
+        title="Ratings sent"
+        left={<IconButton icon="close" onPress={() => navigation.navigate('MainTabs', { screen: 'Sessions' })} />}
         right={<NotificationButton onPress={() => navigation.navigate('Notifications')} />}
       />
       <View style={{ padding: 18, gap: 16 }}>
@@ -21,7 +21,8 @@ export default function SessionCompleteScreen({ route, navigation }) {
           <View style={{ width: 96, height: 96, borderRadius: 48, backgroundColor: colors.greenSoft, alignItems: 'center', justifyContent: 'center' }}>
             <Ionicons name="checkmark" size={54} color={colors.green} />
           </View>
-          <Text style={{ color: colors.ink, fontSize: 28, fontWeight: '900', marginTop: 18 }}>Session Complete</Text>
+          <Text style={{ color: colors.ink, fontSize: 28, fontWeight: '900', marginTop: 18 }}>Ratings sent!</Text>
+          <Text style={{ color: colors.text, marginTop: 8, textAlign: 'center' }}>Thanks for helping keep FieldDay welcoming and reliable.</Text>
           <Text style={{ color: colors.muted, marginTop: 8 }}>{session.title}</Text>
           <View style={{ alignSelf: 'stretch', borderTopWidth: 1, borderTopColor: colors.line, marginTop: 22, paddingTop: 18, gap: 10 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -52,7 +53,7 @@ export default function SessionCompleteScreen({ route, navigation }) {
 
         <View style={{ gap: 10 }}>
           <PrimaryButton label="Share Session" icon="share-outline" variant="secondary" onPress={() => {}} />
-          <PrimaryButton label="Done" icon="checkmark-circle-outline" onPress={() => navigation.navigate('MainTabs', { screen: 'HomeTab' })} />
+          <PrimaryButton label="Done" icon="checkmark-circle-outline" onPress={() => navigation.navigate('MainTabs', { screen: 'Sessions' })} />
         </View>
       </View>
     </View>
