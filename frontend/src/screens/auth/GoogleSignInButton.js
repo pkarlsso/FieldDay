@@ -57,7 +57,7 @@ function GoogleButton({ navigation, onError }) {
           onError(data.googleSignIn.message);
         } else {
           await startSession(data.googleSignIn);
-          if (active) navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+          if (active) navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
         }
       } catch (err) {
         onError(err.message);

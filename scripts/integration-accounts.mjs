@@ -212,6 +212,18 @@ try {
   await fails(update, { i: { sportSkills: [{ sport: 'Golf', skillLevel: 2 }, { sport: 'golf', skillLevel: 3 }] } }, await fresh(), 'more than once');
   assert.equal((await fresh()).name, 'Alice Ace', 'a rejected update changes nothing');
 
+  const pictureUpdate = `mutation($i:UpdateProfileInput!){updateProfile(input:$i){ name profilePicture }}`;
+  const tinyJpeg = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2w==';
+  const pictured = (await ok(pictureUpdate, { i: { profilePicture: tinyJpeg } }, await fresh())).updateProfile;
+  assert.equal(pictured.profilePicture, tinyJpeg);
+  assert.equal(pictured.name, 'Alice Ace', 'setting a picture leaves other fields alone');
+  await fails(pictureUpdate, { i: { profilePicture: 'https://example.com/me.jpg' } }, await fresh(), 'JPEG, PNG or WebP');
+  await fails(pictureUpdate, { i: { profilePicture: 'data:image/svg+xml;base64,PHN2Zz4=' } }, await fresh(), 'JPEG, PNG or WebP');
+  await fails(pictureUpdate, { i: { profilePicture: `data:image/jpeg;base64,${'A'.repeat(200001)}` } }, await fresh(), 'too large');
+  assert.equal((await fresh()).profilePicture, tinyJpeg, 'a rejected picture keeps the old one');
+  const cleared = (await ok(pictureUpdate, { i: { profilePicture: '' } }, await fresh())).updateProfile;
+  assert.equal(cleared.profilePicture, '', 'an empty string removes the picture');
+
   const legacy = await User.create({ name: 'Legacy', email: emailFor('legacy'), sports: ['Soccer'], skillLevel: 2 });
   createdEmails.push(emailFor('legacy'));
   const legacyView = await ok('query($id:ID!){getUser(id:$id){sportSkills{sport skillLevel}}}', { id: String(legacy._id) });

@@ -1,4 +1,5 @@
-import { Text, TouchableOpacity, View } from 'react-native';
+import React from 'react';
+import { Image, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors, shadow, sports } from '../theme';
 
@@ -160,7 +161,10 @@ export function NotificationButton({ onPress, count = 2 }) {
   );
 }
 
-export function Avatar({ name, size = 44, color = colors.purple }) {
+export function Avatar({ name, uri, size = 44, color = colors.purple }) {
+  if (uri) {
+    return <Image source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: colors.line }} />;
+  }
   const initials = name
     .split(' ')
     .map((part) => part[0])

@@ -20,7 +20,8 @@ async function startServer() {
   const server = new ApolloServer({ typeDefs, resolvers });
   await server.start();
 
-  app.use('/graphql', cors(), express.json(), expressMiddleware(server, {
+  // Raised from the 100kb default so profile pictures (up to ~200k chars) fit.
+  app.use('/graphql', cors(), express.json({ limit: '300kb' }), expressMiddleware(server, {
     // Makes the signed-in user (from the "Authorization: Bearer <token>" header)
     // available to resolvers as context.currentUser.
     context: async ({ req }) => ({ currentUser: await authenticateRequest(req) })

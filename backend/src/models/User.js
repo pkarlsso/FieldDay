@@ -5,6 +5,8 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   bio: { type: String, default: '' },
   hometown: { type: String, default: '' },
+  // A small square JPEG/PNG/WebP stored inline as a data URI; '' when unset.
+  profilePicture: { type: String, default: '' },
   sports: [{ type: String }],
   sportSkills: [{
     _id: false,
