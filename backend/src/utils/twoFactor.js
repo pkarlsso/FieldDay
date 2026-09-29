@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+import crypto from 'node:crypto';
 
 const CODE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_ATTEMPTS = 5;
@@ -14,4 +14,4 @@ function hashCode(code) {
   return crypto.createHash('sha256').update(code).digest('hex');
 }
 
-module.exports = { generateCode, hashCode, CODE_TTL_MS, MAX_ATTEMPTS };
+export { generateCode, hashCode, CODE_TTL_MS, MAX_ATTEMPTS };

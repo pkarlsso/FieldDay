@@ -134,4 +134,4 @@ const typeDefs = `#graphql
   }
 `;
 
-module.exports = typeDefs;
+export default typeDefs;
