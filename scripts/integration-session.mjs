@@ -1,4 +1,3 @@
-/* global console, fetch */
 import mongoose from 'mongoose';
 import { createRequire } from 'node:module';
 

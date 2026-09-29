@@ -1,6 +1,9 @@
 const User = require('../models/User');
 const Session = require('../models/Session');
 const Rating = require('../models/Rating');
+const Conversation = require('../models/Conversation');
+const Message = require('../models/Message');
+const chatEvents = require('../utils/chatEvents');
 const { validatePasswordStrength, PASSWORD_REQUIREMENTS, hashPassword, verifyPassword } = require('../utils/password');
 const { generateCode, hashCode, CODE_TTL_MS, MAX_ATTEMPTS } = require('../utils/twoFactor');
 const { RESET_CODE_TTL_MS } = require('../utils/passwordReset');
@@ -11,6 +14,8 @@ const googleAuth = require('../utils/googleAuth');
 
 const PROFILE_LIMITS = { name: 50, bio: 300, hometown: 80, sport: 30, sportCount: 10, pictureChars: 200000 };
 const PICTURE_PATTERN = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
+const MESSAGE_MAX_LENGTH = 2000;
+const MESSAGE_PAGE_SIZE = 50;
 
 function normalizeEmail(email) {
   return email.trim().toLowerCase();
@@ -28,6 +33,76 @@ async function issueTwoFactorCode(user) {
 function requireUser(context) {
   if (!context.currentUser) throw new Error('You must be signed in to do that.');
   return context.currentUser;
+}
+
+function sameId(left, right) {
+  return String(left) === String(right);
+}
+
+function hasParticipant(conversation, userId) {
+  return conversation.participants.some((participant) => sameId(participant, userId));
+}
+
+async function getAuthorizedConversation(conversationId, user, { allowFormerSession = false } = {}) {
+  const conversation = await Conversation.findById(conversationId);
+  if (!conversation) throw new Error('Conversation not found');
+  if (!hasParticipant(conversation, user._id)) {
+    if (!(allowFormerSession && conversation.kind === 'session')) throw new Error('You cannot access this conversation');
+    const session = await Session.findById(conversation.session);
+    if (!session || !hasParticipant(conversation, user._id)) throw new Error('You cannot access this conversation');
+  }
+  if (conversation.kind === 'session') {
+    const session = await Session.findById(conversation.session);
+    if (!session) throw new Error('Session not found');
+    return { conversation, session, canSend: hasParticipant(session, user._id) };
+  }
+  return { conversation, canSend: true };
+}
+
+function cleanMessageBody(body) {
+  if (typeof body !== 'string') throw new Error('Message must be text');
+  const cleaned = body.trim();
+  if (!cleaned) throw new Error('Message cannot be empty');
+  if (cleaned.length > MESSAGE_MAX_LENGTH) throw new Error(`Message must be ${MESSAGE_MAX_LENGTH} characters or fewer`);
+  return cleaned;
+}
+
+function serializeMessage(message, userId) {
+  return {
+    ...message.toObject(),
+    conversationId: String(message.conversation),
+    mine: sameId(message.sender._id || message.sender, userId),
+    read: message.readBy.some((id) => sameId(id, userId))
+  };
+}
+
+async function ensureSessionConversation(session) {
+  return Conversation.findOneAndUpdate(
+    { session: session._id },
+    { $setOnInsert: { kind: 'session', session: session._id, participants: session.participants } },
+    { new: true, upsert: true }
+  );
+}
+
+async function conversationView(conversation, user) {
+  const messages = await Message.find({ conversation: conversation._id })
+    .sort({ createdAt: -1, _id: -1 }).limit(1).populate('sender', 'name profilePicture');
+  const unreadCount = await Message.countDocuments({
+    conversation: conversation._id,
+    readBy: { $ne: user._id },
+    sender: { $ne: user._id }
+  });
+  const participants = await User.find({ _id: { $in: conversation.participants } }).select('name profilePicture');
+  const otherNames = participants.filter((participant) => !sameId(participant._id, user._id)).map(({ name }) => name);
+  return {
+    ...conversation.toObject(),
+    sessionId: conversation.session ? String(conversation.session) : null,
+    name: conversation.kind === 'session' ? (otherNames[0] || 'Session chat') : (otherNames.join(', ') || 'Direct message'),
+    participants,
+    messages: messages.map((message) => serializeMessage(message, user._id)),
+    unreadCount,
+    lastMessageAt: conversation.lastMessageAt ? conversation.lastMessageAt.toISOString() : null
+  };
 }
 
 // Trims an optional profile text field and enforces its length. Returns
@@ -136,10 +211,49 @@ const resolvers = {
     createdAt: (rating) => new Date(rating.createdAt).toISOString()
   },
 
+  Message: {
+    id: (message) => String(message._id),
+    conversationId: (message) => String(message.conversation),
+    createdAt: (message) => new Date(message.createdAt).toISOString()
+  },
+
   Query: {
     getRatingsForUser: async (_, { userId }) => Rating.find({ ratee: userId }).sort({ createdAt: -1 }),
 
     getRatingsBySession: async (_, { sessionId, raterId }) => Rating.find({ session: sessionId, rater: raterId }),
+
+    getConversations: async (_, __, context) => {
+      const user = requireUser(context);
+      const sessions = await Session.find({ participants: user._id }).select('_id participants');
+      await Promise.all(sessions.map(ensureSessionConversation));
+      const conversations = await Conversation.find({
+        $or: [{ participants: user._id }, { session: { $in: sessions.map(({ _id }) => _id) } }]
+      }).sort({ lastMessageAt: -1, createdAt: -1 });
+      return Promise.all(conversations.map((conversation) => conversationView(conversation, user)));
+    },
+
+    getConversationMessages: async (_, { conversationId, cursor, limit = MESSAGE_PAGE_SIZE }, context) => {
+      const user = requireUser(context);
+      const access = await getAuthorizedConversation(conversationId, user, { allowFormerSession: true });
+      const boundedLimit = Math.min(Math.max(limit, 1), MESSAGE_PAGE_SIZE);
+      const filter = { conversation: access.conversation._id };
+      if (cursor) {
+        const cursorMessage = await Message.findById(cursor).select('createdAt _id');
+        if (!cursorMessage) throw new Error('Invalid message cursor');
+        filter.$or = [
+          { createdAt: { $lt: cursorMessage.createdAt } },
+          { createdAt: cursorMessage.createdAt, _id: { $lt: cursorMessage._id } }
+        ];
+      }
+      const messages = await Message.find(filter).sort({ createdAt: -1, _id: -1 })
+        .limit(boundedLimit + 1).populate('sender', 'name profilePicture');
+      const hasMore = messages.length > boundedLimit;
+      const page = hasMore ? messages.slice(0, boundedLimit) : messages;
+      return {
+        messages: page.reverse().map((message) => serializeMessage(message, user._id)),
+        nextCursor: hasMore ? String(page[0]._id) : null
+      };
+    },
 
     getSession: async (_, { id }) => populatedSessionQuery(id),
     getUser: async (_, { id }) => {
@@ -503,6 +617,61 @@ const resolvers = {
 
       await user.save();
       return User.findById(user._id).populate('friends');
+    },
+
+    getOrCreateDirectConversation: async (_, { friendId }, context) => {
+      const user = requireUser(context);
+      if (sameId(user._id, friendId)) throw new Error('You cannot message yourself');
+      const friend = await User.findById(friendId);
+      if (!friend || !friend.friends.some((id) => sameId(id, user._id)) || !user.friends.some((id) => sameId(id, friendId))) {
+        throw new Error('You can only message a friend');
+      }
+      const participants = [String(user._id), String(friendId)].sort();
+      const participantKey = participants.join(':');
+      const conversation = await Conversation.findOneAndUpdate(
+        { kind: 'direct', participantKey },
+        { $setOnInsert: { kind: 'direct', participants, participantKey } },
+        { new: true, upsert: true }
+      );
+      return conversationView(conversation, user);
+    },
+
+    sendMessage: async (_, { conversationId, body, clientMessageId }, context) => {
+      const user = requireUser(context);
+      const access = await getAuthorizedConversation(conversationId, user);
+      if (!access.canSend) throw new Error('You can no longer send messages in this session');
+      if (!clientMessageId || clientMessageId.length > 100) throw new Error('clientMessageId is required');
+      const cleanedBody = cleanMessageBody(body);
+      const existing = await Message.findOne({ conversation: access.conversation._id, clientMessageId }).populate('sender', 'name profilePicture');
+      if (existing) return serializeMessage(existing, user._id);
+      let message;
+      try {
+        message = await Message.create({
+          conversation: access.conversation._id,
+          sender: user._id,
+          body: cleanedBody,
+          clientMessageId,
+          readBy: [user._id]
+        });
+      } catch (error) {
+        if (error.code !== 11000) throw error;
+        message = await Message.findOne({ conversation: access.conversation._id, clientMessageId });
+      }
+      await Conversation.updateOne({ _id: access.conversation._id }, { $set: { lastMessageAt: message.createdAt } });
+      await message.populate('sender', 'name profilePicture');
+      const serialized = serializeMessage(message, user._id);
+      chatEvents.emit('message', String(access.conversation._id), { ...serialized, mine: false, read: false });
+      return serialized;
+    },
+
+    markConversationRead: async (_, { conversationId }, context) => {
+      const user = requireUser(context);
+      const access = await getAuthorizedConversation(conversationId, user, { allowFormerSession: true });
+      await Message.updateMany(
+        { conversation: access.conversation._id, sender: { $ne: user._id }, readBy: { $ne: user._id } },
+        { $addToSet: { readBy: user._id } }
+      );
+      return true;
     }
   }
 };

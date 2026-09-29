@@ -1,4 +1,3 @@
-/* global console */
 // Comprehensive tests for sport preferences and skill levels feature
 import assert from 'node:assert/strict';
 import mongoose from 'mongoose';

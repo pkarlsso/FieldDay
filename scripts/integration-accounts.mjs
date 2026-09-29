@@ -1,4 +1,3 @@
-/* global console */
 // Exercises password reset, Google sign-in, persistent sign-in, profile editing
 // and ratings against the database in MONGODB_URI. It runs the GraphQL schema
 // in-process (no server needed), stubs out email and Google, and deletes every

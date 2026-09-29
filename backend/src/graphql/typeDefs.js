@@ -91,6 +91,38 @@ const typeDefs = `#graphql
     createdAt: String!
   }
 
+  type ChatParticipant {
+    id: ID!
+    name: String!
+    profilePicture: String
+  }
+
+  type Message {
+    id: ID!
+    conversationId: ID!
+    sender: ChatParticipant!
+    body: String!
+    createdAt: String!
+    mine: Boolean!
+    read: Boolean!
+  }
+
+  type Conversation {
+    id: ID!
+    kind: String!
+    sessionId: ID
+    name: String!
+    participants: [ChatParticipant!]!
+    messages: [Message!]!
+    unreadCount: Int!
+    lastMessageAt: String
+  }
+
+  type MessagePage {
+    messages: [Message!]!
+    nextCursor: String
+  }
+
   type EmailCheckResult {
     exists: Boolean!
     message: String
@@ -113,6 +145,8 @@ const typeDefs = `#graphql
     checkEmailExists(email: String!): EmailCheckResult!
     getRatingsForUser(userId: ID!): [Rating!]!
     getRatingsBySession(sessionId: ID!, raterId: ID!): [Rating!]!
+    getConversations: [Conversation!]!
+    getConversationMessages(conversationId: ID!, cursor: String, limit: Int): MessagePage!
   }
 
   type Mutation {
@@ -131,6 +165,9 @@ const typeDefs = `#graphql
     restoreSession(token: String!): AuthResult!
     logout(token: String!): AuthResult!
     updateProfile(input: UpdateProfileInput!): User!
+    getOrCreateDirectConversation(friendId: ID!): Conversation!
+    sendMessage(conversationId: ID!, body: String!, clientMessageId: String!): Message!
+    markConversationRead(conversationId: ID!): Boolean!
   }
 `;
 
