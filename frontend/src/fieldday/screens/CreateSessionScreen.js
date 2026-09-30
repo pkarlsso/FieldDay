@@ -77,7 +77,7 @@ export default function CreateSessionScreen({ navigation }) {
       const [result] = await Location.reverseGeocodeAsync(point);
       const label = [result?.name, result?.street, result?.city].filter(Boolean).join(', ');
       if (label) setLocation(label);
-    } catch {
+    } catch (error) {
       // The coordinate is still valid if reverse geocoding is unavailable.
       logger.warn('Could not reverse geocode session location:', error);
     }

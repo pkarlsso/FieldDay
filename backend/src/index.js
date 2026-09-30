@@ -7,6 +7,7 @@ import typeDefs from './graphql/typeDefs.js';
 import resolvers from './graphql/resolvers.js';
 import { getConfig } from './config.js';
 import { authenticateRequest } from './utils/authSession.js';
+import logger from './utils/logger.js';
 
 async function startServer() {
   // False positive: the API uses no cookies or sessions, so it has no ambient credentials for CSRF to abuse.

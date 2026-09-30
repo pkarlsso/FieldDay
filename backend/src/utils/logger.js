@@ -1,1 +1,3 @@
-module.exports = require('../../../logger.cjs');
+import logger from '../../../logger.cjs';
+
+export default logger;
