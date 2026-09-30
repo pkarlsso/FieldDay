@@ -1,0 +1,91 @@
+name: Label Pull Requests
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apply labels from changed files
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          declare -A LABEL_COLORS=(
+            [backend]="1d76db"
+            [ci]="5319e7"
+            [dependencies]="0366d6"
+            [docs]="0075ca"
+            [frontend]="fbca04"
+            [tests]="d93f0b"
+          )
+
+          declare -A LABEL_DESCRIPTIONS=(
+            [backend]="Changes to the backend"
+            [ci]="Changes to CI or repository automation"
+            [dependencies]="Changes dependencies or dependency configuration"
+            [docs]="Documentation changes"
+            [frontend]="Changes to the frontend"
+            [tests]="Changes to tests or test tooling"
+          )
+
+          managed_labels=(backend ci dependencies docs frontend tests)
+
+          for label in "${managed_labels[@]}"; do
+            gh api \
+              --method PUT \
+              "repos/${REPOSITORY}/labels/${label}" \
+              -f "new_name=${label}" \
+              -f "color=${LABEL_COLORS[$label]}" \
+              -f "description=${LABEL_DESCRIPTIONS[$label]}" \
+              >/dev/null
+          done
+
+          for label in "${managed_labels[@]}"; do
+            gh api \
+              --method DELETE \
+              "repos/${REPOSITORY}/issues/${PR_NUMBER}/labels/${label}" \
+              >/dev/null 2>&1 || true
+          done
+
+          changed_files=$(gh api --paginate \
+            "repos/${REPOSITORY}/pulls/${PR_NUMBER}/files?per_page=100" \
+            --jq '.[].filename')
+          labels_to_apply=()
+
+          while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
+            case "$file" in
+              backend/*) labels_to_apply+=(backend) ;;
+              frontend/*) labels_to_apply+=(frontend) ;;
+              .github/*) labels_to_apply+=(ci) ;;
+              doc/*|README.md) labels_to_apply+=(docs) ;;
+              scripts/*|test-*.js) labels_to_apply+=(tests) ;;
+            esac
+
+            case "$file" in
+              package.json|package-lock.json|backend/package.json|frontend/package.json|patches/*)
+                labels_to_apply+=(dependencies)
+                ;;
+            esac
+          done <<< "$changed_files"
+
+          if ((${#labels_to_apply[@]} > 0)); then
+            printf '%s\n' "${labels_to_apply[@]}" | sort -u | while IFS= read -r label; do
+              gh api \
+                --method POST \
+                "repos/${REPOSITORY}/issues/${PR_NUMBER}/labels" \
+                -f "labels[]=${label}" \
+                >/dev/null
+            done
+          fi
