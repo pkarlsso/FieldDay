@@ -42,13 +42,21 @@ jobs:
           managed_labels=(backend ci dependencies docs frontend tests)
 
           for label in "${managed_labels[@]}"; do
-            gh api \
-              --method PUT \
+            if ! gh api \
+              --method PATCH \
               "repos/${REPOSITORY}/labels/${label}" \
               -f "new_name=${label}" \
               -f "color=${LABEL_COLORS[$label]}" \
               -f "description=${LABEL_DESCRIPTIONS[$label]}" \
-              >/dev/null
+              >/dev/null 2>&1; then
+              gh api \
+                --method POST \
+                "repos/${REPOSITORY}/labels" \
+                -f "name=${label}" \
+                -f "color=${LABEL_COLORS[$label]}" \
+                -f "description=${LABEL_DESCRIPTIONS[$label]}" \
+                >/dev/null
+            fi
           done
 
           for label in "${managed_labels[@]}"; do
