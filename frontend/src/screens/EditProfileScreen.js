@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Modal, Platform } from 'react-native';
 import { CommonActions, usePreventRemove } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
