@@ -8,9 +8,12 @@ import * as authSessions from '../utils/authSession.js';
 // Called through the module objects (not destructured) so tests can stub them.
 import mailer from '../utils/mailer.js';
 import googleAuth from '../utils/googleAuth.js';
+import logger from '../utils/logger.js';
 
 const PROFILE_LIMITS = { name: 50, bio: 300, hometown: 80, sport: 30, sportCount: 10, pictureChars: 200000 };
 const PICTURE_PATTERN = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
+const DEFAULT_DISCOVERY_RADIUS_MILES = 25;
+const MILES_TO_METERS = 1609.344;
 
 function normalizeEmail(email) {
   return email.trim().toLowerCase();
@@ -104,13 +107,124 @@ function formatSessionInput(input) {
   if (longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) {
     throw new Error('locationPoint coordinates are out of range');
   }
+  if (input.skillMin !== undefined && input.skillMax !== undefined
+    && (input.skillMin < 1 || input.skillMax > 5 || input.skillMin > input.skillMax)) {
+    throw new Error('skill bounds must be between 1 and 5, with skillMin no greater than skillMax');
+  }
   return {
     ...input,
     date: startsAt.toISOString().slice(0, 10),
     time: startsAt.toISOString().slice(11, 16),
     startsAt,
-    locationPoint: { type: 'Point', coordinates: [longitude, latitude] }
+    locationPoint: { type: 'Point', coordinates: [longitude, latitude] },
+    tags: input.tags || []
   };
+}
+
+function parseSkillRange(skillRange) {
+  if (typeof skillRange !== 'string') return null;
+  const match = skillRange.trim().match(/^(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)$/);
+  if (!match) return null;
+  const min = Number(match[1]);
+  const max = Number(match[2]);
+  return Number.isFinite(min) && Number.isFinite(max) && min <= max ? { min, max } : null;
+}
+
+function validateDiscoveryFilter(filter = {}) {
+  const normalized = { ...filter };
+  if (normalized.origin) {
+    const { longitude, latitude } = normalized.origin;
+    if (longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) {
+      throw new Error('filter.origin coordinates are out of range');
+    }
+  }
+  if (normalized.maxDistanceMiles !== undefined
+    && (!Number.isFinite(normalized.maxDistanceMiles) || normalized.maxDistanceMiles <= 0)) {
+    throw new Error('maxDistanceMiles must be greater than zero');
+  }
+  if (normalized.maxDistanceMiles !== undefined && !normalized.origin) {
+    throw new Error('origin is required when maxDistanceMiles is provided');
+  }
+  if (normalized.minSkillLevel !== undefined
+    && (!Number.isFinite(normalized.minSkillLevel) || normalized.minSkillLevel < 1 || normalized.minSkillLevel > 5)) {
+    throw new Error('minSkillLevel must be between 1 and 5');
+  }
+  if (normalized.maxSkillLevel !== undefined
+    && (!Number.isFinite(normalized.maxSkillLevel) || normalized.maxSkillLevel < 1 || normalized.maxSkillLevel > 5)) {
+    throw new Error('maxSkillLevel must be between 1 and 5');
+  }
+  if (normalized.minSkillLevel !== undefined && normalized.maxSkillLevel !== undefined
+    && normalized.minSkillLevel > normalized.maxSkillLevel) {
+    throw new Error('minSkillLevel cannot be greater than maxSkillLevel');
+  }
+  for (const field of ['startsAfter', 'startsBefore']) {
+    if (normalized[field] !== undefined && Number.isNaN(new Date(normalized[field]).getTime())) {
+      throw new Error(`${field} must be a valid ISO date`);
+    }
+  }
+  if (normalized.startsAfter && normalized.startsBefore
+    && new Date(normalized.startsAfter) > new Date(normalized.startsBefore)) {
+    throw new Error('startsAfter cannot be later than startsBefore');
+  }
+  if (normalized.minOpenSpots !== undefined
+    && (!Number.isInteger(normalized.minOpenSpots) || normalized.minOpenSpots < 0)) {
+    throw new Error('minOpenSpots must be a non-negative whole number');
+  }
+  return normalized;
+}
+
+function discoveryQuery(status, input) {
+  const filter = validateDiscoveryFilter(input);
+  const query = { status: status || 'upcoming' };
+  if (query.status === 'upcoming') query.startsAt = { $gte: new Date() };
+  if (filter.sports?.length) query.sport = { $in: filter.sports };
+  if (filter.startsAfter || filter.startsBefore) {
+    query.startsAt = {
+      ...(query.startsAt || {}),
+      ...(filter.startsAfter ? { $gte: new Date(filter.startsAfter) } : {}),
+      ...(filter.startsBefore ? { $lte: new Date(filter.startsBefore) } : {})
+    };
+  }
+  if (filter.minOpenSpots !== undefined) {
+    query.$expr = {
+      $gte: [
+        { $subtract: ['$maxParticipants', { $size: { $ifNull: ['$participants', []] } }] },
+        filter.minOpenSpots
+      ]
+    };
+  }
+  if (filter.tags?.length) query.tags = { $all: filter.tags };
+  if (filter.origin) {
+    const maxDistanceMiles = filter.maxDistanceMiles ?? DEFAULT_DISCOVERY_RADIUS_MILES;
+    query.locationPoint = {
+      $near: {
+        $geometry: { type: 'Point', coordinates: [filter.origin.longitude, filter.origin.latitude] },
+        $maxDistance: maxDistanceMiles * MILES_TO_METERS
+      }
+    };
+  }
+  return { query, filter };
+}
+
+function skillRangeMatches(session, filter) {
+  if (filter.minSkillLevel === undefined && filter.maxSkillLevel === undefined) return true;
+  const range = parseSkillRange(session.skillRange);
+  const min = session.skillMin ?? range?.min;
+  const max = session.skillMax ?? range?.max;
+  if (min === undefined || max === undefined) return false;
+  return (filter.minSkillLevel === undefined || max >= filter.minSkillLevel)
+    && (filter.maxSkillLevel === undefined || min <= filter.maxSkillLevel);
+}
+
+function distanceMiles(session, origin) {
+  if (!origin || !session.locationPoint?.coordinates) return null;
+  const [longitude, latitude] = session.locationPoint.coordinates;
+  const latitudeDelta = (latitude - origin.latitude) * Math.PI / 180;
+  const longitudeDelta = (longitude - origin.longitude) * Math.PI / 180;
+  const first = Math.sin(latitudeDelta / 2) ** 2
+    + Math.cos(origin.latitude * Math.PI / 180) * Math.cos(latitude * Math.PI / 180)
+      * Math.sin(longitudeDelta / 2) ** 2;
+  return 3958.7613 * 2 * Math.atan2(Math.sqrt(first), Math.sqrt(1 - first));
 }
 
 function populatedSessionQuery(id) {
@@ -119,7 +233,9 @@ function populatedSessionQuery(id) {
 
 const resolvers = {
   Session: {
-    startsAt: (session) => new Date(session.startsAt).toISOString()
+    startsAt: (session) => new Date(session.startsAt).toISOString(),
+    tags: (session) => session.tags || [],
+    distanceMiles: (session) => session._distanceMiles ?? null
   },
 
   User: {
@@ -153,12 +269,18 @@ const resolvers = {
         : { exists: false, message: null };
     },
 
-    getSessions: async (_, { status }) => {
-      const filter = status ? { status } : {};
-      return Session.find(filter)
+    getSessions: async (_, { status, filter: input }) => {
+      const { query, filter } = discoveryQuery(status, input);
+      const sessions = await Session.find(query)
         .populate('participants')
         .populate('host')
         .sort({ createdAt: -1 });
+      return sessions
+        .filter((session) => skillRangeMatches(session, filter))
+        .map((session) => {
+          session._distanceMiles = distanceMiles(session, filter.origin);
+          return session;
+        });
     },
 
     getCompletedSessions: async (_, { userId }) => {
@@ -441,7 +563,7 @@ const resolvers = {
       try {
         profile = await googleAuth.verifyGoogleIdToken(idToken);
       } catch (err) {
-        console.error('Google sign-in failed:', err.message);
+        logger.error('Google sign-in failed', { error: err.message, stack: err.stack });
         return { success: false, message: 'We could not verify your Google sign-in. Please try again.' };
       }
 

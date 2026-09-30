@@ -8,6 +8,7 @@ import { PrimaryButton, ScreenHeader, Card } from '../components/ui';
 import { colors } from '../theme';
 import { graphql } from '../../api';
 import { CURRENT_USER_ID } from '../../config';
+import logger from '../../logger';
 
 const MUTATION = `
   mutation CreateSession($hostId: ID!, $input: CreateSessionInput!) {
@@ -46,7 +47,8 @@ export default function CreateSessionScreen({ navigation }) {
       try {
         const results = await Location.geocodeAsync(location);
         if (active) setSuggestions(results.slice(0, 5));
-      } catch {
+      } catch (error) {
+        logger.warn('Could not load location suggestions:', error);
         if (active) setSuggestions([]);
       }
     }, 450);
@@ -62,6 +64,7 @@ export default function CreateSessionScreen({ navigation }) {
       setLocationPoint({ latitude, longitude });
       mapRef.current?.animateToRegion({ latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 500);
     } catch (error) {
+      logger.warn('Could not find session location:', error);
       Alert.alert('Location not found', error.message);
     } finally { setGeocoding(false); }
   }
@@ -74,8 +77,9 @@ export default function CreateSessionScreen({ navigation }) {
       const [result] = await Location.reverseGeocodeAsync(point);
       const label = [result?.name, result?.street, result?.city].filter(Boolean).join(', ');
       if (label) setLocation(label);
-    } catch {
+    } catch (error) {
       // The coordinate is still valid if reverse geocoding is unavailable.
+      logger.warn('Could not reverse geocode session location:', error);
     }
   }
 
@@ -87,7 +91,10 @@ export default function CreateSessionScreen({ navigation }) {
         setLocationPoint({ latitude, longitude });
         mapRef.current?.animateToRegion({ latitude, longitude, latitudeDelta: 0.01, longitudeDelta: 0.01 }, 500);
         setSuggestions([]);
-      }).catch((error) => Alert.alert('Location not found', error.message));
+      }).catch((error) => {
+        logger.warn('Could not resolve selected location:', error);
+        Alert.alert('Location not found', error.message);
+      });
       return;
     }
     setLocation(label || location);

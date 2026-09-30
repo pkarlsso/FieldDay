@@ -23,6 +23,9 @@ const sessionSchema = new mongoose.Schema({
     }
   },
   skillRange: { type: String, default: '3.0-4.0' },
+  skillMin: { type: Number },
+  skillMax: { type: Number },
+  tags: { type: [String], default: [] },
   maxParticipants: { type: Number, default: 6 },
   participants: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   host: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -35,5 +38,6 @@ const sessionSchema = new mongoose.Schema({
 });
 
 sessionSchema.index({ locationPoint: '2dsphere' });
+sessionSchema.index({ sport: 1, startsAt: 1, status: 1 });
 
 export default mongoose.model('Session', sessionSchema);

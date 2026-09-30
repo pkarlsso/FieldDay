@@ -35,6 +35,7 @@ export default [
     },
     rules: {
       "no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+      "no-console": "error",
       "eqeqeq": "warn",
       "no-constant-binary-expression": "warn",
       "no-duplicate-imports": "warn",
@@ -190,7 +191,7 @@ export default [
       },
     },
     rules: {
-      "no-console": "off", // server code logs to console legitimately
+      "no-console": "error",
       "@typescript-eslint/no-require-imports": "warn",   // delete this after import has been fixed to new syntax
     },
   },
@@ -228,6 +229,7 @@ export default [
     rules: {
       //"@typescript-eslint/no-require-imports": "warn",
       "no-redeclare": "warn", // remove once this is fixed
+      "no-console": "off", // CLI scripts intentionally print their command results.
     },
   },
 
@@ -252,6 +254,7 @@ export default [
     rules: {
       "@typescript-eslint/no-require-imports": "warn", // delete this after import has been fixed to new syntax
       "no-redeclare": "warn", // remove once this is fixed
+      "no-console": "off", // CLI scripts intentionally print their command results.
     },
   },
 
@@ -266,10 +269,13 @@ export default [
     },
   },
   {
-    files: ["logger.js", "test-logger.js"],
+    files: ["logger.js", "logger.cjs", "test-logger.js", "frontend/src/logger.js"],
     languageOptions: {
       sourceType: "module",
       globals: { ...globals.node },
+    },
+    rules: {
+      "no-console": "off",
     },
   },
 ];
