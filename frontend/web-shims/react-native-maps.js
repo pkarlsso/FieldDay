@@ -1,5 +1,4 @@
 // Local web-only stand-in for react-native-maps (native-only package).
-import React from 'react';
 import { Text, View } from 'react-native';
 
 export default function MapView({ style }) {
