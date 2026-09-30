@@ -1,5 +1,5 @@
-const nodemailer = require('nodemailer');
-const logger = require('./logger');
+import nodemailer from 'nodemailer';
+import logger from './logger.js';
 
 // Built lazily (not at module load) because index.js requires this module
 // before it calls dotenv.config(), so process.env.SMTP_* wouldn't be
@@ -55,4 +55,7 @@ function sendPasswordResetEmail(toEmail, code) {
   });
 }
 
-module.exports = { sendTwoFactorEmail, sendPasswordResetEmail };
+const mailer = { sendTwoFactorEmail, sendPasswordResetEmail };
+
+export { sendTwoFactorEmail, sendPasswordResetEmail };
+export default mailer;

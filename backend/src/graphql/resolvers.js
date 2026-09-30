@@ -1,16 +1,17 @@
-const User = require('../models/User');
-const Session = require('../models/Session');
-const Rating = require('../models/Rating');
-const { validatePasswordStrength, PASSWORD_REQUIREMENTS, hashPassword, verifyPassword } = require('../utils/password');
-const { generateCode, hashCode, CODE_TTL_MS, MAX_ATTEMPTS } = require('../utils/twoFactor');
-const { RESET_CODE_TTL_MS } = require('../utils/passwordReset');
-const authSessions = require('../utils/authSession');
+import User from '../models/User.js';
+import Session from '../models/Session.js';
+import Rating from '../models/Rating.js';
+import { validatePasswordStrength, PASSWORD_REQUIREMENTS, hashPassword, verifyPassword } from '../utils/password.js';
+import { generateCode, hashCode, CODE_TTL_MS, MAX_ATTEMPTS } from '../utils/twoFactor.js';
+import { RESET_CODE_TTL_MS } from '../utils/passwordReset.js';
+import * as authSessions from '../utils/authSession.js';
 // Called through the module objects (not destructured) so tests can stub them.
-const mailer = require('../utils/mailer');
-const googleAuth = require('../utils/googleAuth');
-const logger = require('../utils/logger');
+import mailer from '../utils/mailer.js';
+import googleAuth from '../utils/googleAuth.js';
+import logger from '../utils/logger.js';
 
-const PROFILE_LIMITS = { name: 50, bio: 300, hometown: 80, sport: 30, sportCount: 10 };
+const PROFILE_LIMITS = { name: 50, bio: 300, hometown: 80, sport: 30, sportCount: 10, pictureChars: 200000 };
+const PICTURE_PATTERN = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 const DEFAULT_DISCOVERY_RADIUS_MILES = 25;
 const MILES_TO_METERS = 1609.344;
 
@@ -40,6 +41,16 @@ function cleanProfileText(value, label, maxLength, { required = false } = {}) {
   if (required && !trimmed) throw new Error(`${label} cannot be empty`);
   if (trimmed.length > maxLength) throw new Error(`${label} must be ${maxLength} characters or fewer`);
   return trimmed;
+}
+
+// Accepts a base64 image data URI (the app sends a 256px JPEG) or '' to remove
+// the picture. Returns undefined when the field was not supplied.
+function cleanProfilePicture(value) {
+  if (value === undefined || value === null) return undefined;
+  if (value === '') return '';
+  if (value.length > PROFILE_LIMITS.pictureChars) throw new Error('Profile picture is too large');
+  if (!PICTURE_PATTERN.test(value)) throw new Error('Profile picture must be a JPEG, PNG or WebP image');
+  return value;
 }
 
 function cleanSportSkills(sportSkills) {
@@ -595,11 +606,13 @@ const resolvers = {
       const name = cleanProfileText(input.name, 'Name', PROFILE_LIMITS.name, { required: true });
       const bio = cleanProfileText(input.bio, 'Bio', PROFILE_LIMITS.bio);
       const hometown = cleanProfileText(input.hometown, 'Hometown', PROFILE_LIMITS.hometown);
+      const profilePicture = cleanProfilePicture(input.profilePicture);
       const sportSkills = input.sportSkills ? cleanSportSkills(input.sportSkills) : undefined;
 
       if (name !== undefined) user.name = name;
       if (bio !== undefined) user.bio = bio;
       if (hometown !== undefined) user.hometown = hometown;
+      if (profilePicture !== undefined) user.profilePicture = profilePicture;
       if (sportSkills !== undefined) {
         user.sportSkills = sportSkills;
         // Keep the older flat fields in step for screens that still read them.
@@ -616,4 +629,4 @@ const resolvers = {
   }
 };
 
-module.exports = resolvers;
+export default resolvers;

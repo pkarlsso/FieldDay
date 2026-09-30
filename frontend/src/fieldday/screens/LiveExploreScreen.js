@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Card, Pill, ScreenHeader, SportIcon } from '../components/ui';
-import { colors, sports } from '../theme';
-import { DEFAULT_DISCOVERY_FILTER, getDiscoveryOrigin, loadDiscoverySessions } from '../discovery';
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Card, ScreenHeader, SportIcon } from '../components/ui';
+import { colors } from '../theme';
+import { graphql } from '../../api';'
 import logger from '../../logger';
 
 const sportOptions = Object.keys(sports);

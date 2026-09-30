@@ -1,13 +1,12 @@
-const { ApolloServer } = require('@apollo/server');
-const { expressMiddleware } = require('@apollo/server/express4');
-const express = require('express');
-const cors = require('cors');
-const mongoose = require('mongoose');
-const typeDefs = require('./graphql/typeDefs');
-const resolvers = require('./graphql/resolvers');
-const { getConfig } = require('./config');
-const { authenticateRequest } = require('./utils/authSession');
-const logger = require('./utils/logger');
+import { ApolloServer } from '@apollo/server';
+import { expressMiddleware } from '@apollo/server/express4';
+import express from 'express';
+import cors from 'cors';
+import mongoose from 'mongoose';
+import typeDefs from './graphql/typeDefs.js';
+import resolvers from './graphql/resolvers.js';
+import { getConfig } from './config.js';
+import { authenticateRequest } from './utils/authSession.js';
 
 async function startServer() {
   // False positive: the API uses no cookies or sessions, so it has no ambient credentials for CSRF to abuse.
@@ -36,7 +35,8 @@ async function startServer() {
   });
   await server.start();
 
-  app.use('/graphql', cors(), express.json(), expressMiddleware(server, {
+  // Raised from the 100kb default so profile pictures (up to ~200k chars) fit.
+  app.use('/graphql', cors(), express.json({ limit: '300kb' }), expressMiddleware(server, {
     // Makes the signed-in user (from the "Authorization: Bearer <token>" header)
     // available to resolvers as context.currentUser.
     context: async ({ req }) => ({ currentUser: await authenticateRequest(req) })

@@ -1,6 +1,7 @@
 {
   "name": "fieldday-backend",
   "version": "1.0.0",
+  "type": "module",
   "description": "FieldDay prototype backend - GraphQL + MongoDB",
   "main": "src/index.js",
   "scripts": {

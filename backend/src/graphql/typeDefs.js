@@ -5,6 +5,7 @@ const typeDefs = `#graphql
     email: String!
     bio: String
     hometown: String
+    profilePicture: String
     sports: [String]
     sportSkills: [SportSkill!]!
     skillLevel: Float
@@ -27,6 +28,7 @@ const typeDefs = `#graphql
     name: String
     bio: String
     hometown: String
+    profilePicture: String
     sportSkills: [SportSkillInput!]
   }
 
@@ -149,4 +151,4 @@ const typeDefs = `#graphql
   }
 `;
 
-module.exports = typeDefs;
+export default typeDefs;

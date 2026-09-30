@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { graphql } from '../../api';
 import { startSession } from '../../session';
@@ -48,7 +48,7 @@ export default function TwoFactorScreen({ route, navigation }) {
         setError(data.verifyTwoFactorCode.message);
       } else {
         await startSession(data.verifyTwoFactorCode);
-        navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+        navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
       }
     } catch (err) {
       setError(err.message);

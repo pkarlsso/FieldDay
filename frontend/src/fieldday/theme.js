@@ -37,4 +37,5 @@ export const sports = {
   Volleyball: { icon: 'volleyball', color: colors.coral },
   Running: { icon: 'run-fast', color: colors.purple },
   Baseball: { icon: 'baseball', color: '#E24A4A' },
+  Golf: { icon: 'golf', color: colors.greenDark },
 };

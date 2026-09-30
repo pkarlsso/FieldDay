@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const sessionSchema = new mongoose.Schema({
   sport: { type: String, required: true },
@@ -40,4 +40,4 @@ const sessionSchema = new mongoose.Schema({
 sessionSchema.index({ locationPoint: '2dsphere' });
 sessionSchema.index({ sport: 1, startsAt: 1, status: 1 });
 
-module.exports = mongoose.model('Session', sessionSchema);
+export default mongoose.model('Session', sessionSchema);

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Platform, ScrollView, Text, TextInput, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Location from 'expo-location';
@@ -6,7 +6,8 @@ import MapView, { Marker } from 'react-native-maps';
 import { addResultsListener, isAvailable as hasAppleSearch, resolve, search } from '../../../modules/apple-search-completer/src';
 import { PrimaryButton, ScreenHeader, Card } from '../components/ui';
 import { colors } from '../theme';
-import { graphql, CURRENT_USER_ID } from '../../api';
+import { graphql } from '../../api';
+import { CURRENT_USER_ID } from '../../config';
 import logger from '../../logger';
 
 const MUTATION = `
@@ -76,7 +77,7 @@ export default function CreateSessionScreen({ navigation }) {
       const [result] = await Location.reverseGeocodeAsync(point);
       const label = [result?.name, result?.street, result?.city].filter(Boolean).join(', ');
       if (label) setLocation(label);
-    } catch (error) {
+    } catch {
       // The coordinate is still valid if reverse geocoding is unavailable.
       logger.warn('Could not reverse geocode session location:', error);
     }
