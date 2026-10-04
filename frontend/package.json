@@ -10,7 +10,7 @@
     "build": "expo export --platform all"
   },
   "dependencies": {
-    "@apollo/client": "^4.1.7",
+    "@apollo/client": "^4.3.1",
     "@expo/vector-icons": "^15.0.2",
     "@fieldday/apple-search-completer": "file:modules/apple-search-completer",
     "@react-native-community/datetimepicker": "9.1.0",
