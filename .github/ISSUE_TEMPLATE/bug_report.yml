@@ -1,0 +1,46 @@
+name: Defect report
+description: Record a FieldDay defect found during implementation or verification.
+title: "bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Describe the actual defect and keep secrets, access tokens, and connection strings out of the report."
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - High - crash, data loss, or security issue
+        - Medium - functional failure with a workaround
+        - Low - UI, typo, or minor edge case
+    validations:
+      required: true
+  - type: input
+    id: requirement
+    attributes:
+      label: Requirement or test case ID
+      placeholder: FR-1.1 or MT-FR1-03
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. ...\n2. ...\n3. ..."
+    validations:
+      required: true
+  - type: textarea
+    id: expected_actual
+    attributes:
+      label: Expected and actual result
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Link the manual test report, GitHub Actions run, log, or screenshot.
+  - type: textarea
+    id: rca
+    attributes:
+      label: Root cause analysis and fix verification
+      description: Required for high-severity defects. State how it was discovered, root cause, fix verification, prevention, and remaining affected areas.

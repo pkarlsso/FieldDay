@@ -1,10 +1,12 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const userSchema = new mongoose.Schema({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
   bio: { type: String, default: '' },
   hometown: { type: String, default: '' },
+  // A small square JPEG/PNG/WebP stored inline as a data URI; '' when unset.
+  profilePicture: { type: String, default: '' },
   sports: [{ type: String }],
   sportSkills: [{
     _id: false,
@@ -29,4 +31,4 @@ const userSchema = new mongoose.Schema({
   passwordResetAttempts: { type: Number, default: 0 }
 });
 
-module.exports = mongoose.model('User', userSchema);
+export default mongoose.model('User', userSchema);

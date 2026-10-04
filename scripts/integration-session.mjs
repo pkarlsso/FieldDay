@@ -1,13 +1,9 @@
-/* global console, fetch */
 import mongoose from 'mongoose';
-import { createRequire } from 'node:module';
-
-const require = createRequire(import.meta.url);
-const { getConfig } = require('../backend/src/config.js');
-const User = require('../backend/src/models/User.js');
-const Session = require('../backend/src/models/Session.js');
-const SessionRegistration = (await import('../backend/src/models/SessionRegistration.mjs')).default;
-const { createAuthSession } = require('../backend/src/utils/authSession.js');
+import { getConfig } from '../backend/src/config.js';
+import User from '../backend/src/models/User.js';
+import Session from '../backend/src/models/Session.js';
+import SessionRegistration from '../backend/src/models/SessionRegistration.js';
+import { createAuthSession } from '../backend/src/utils/authSession.js';
 
 const endpoint = `http://localhost:${getConfig().port}/graphql`;
 
@@ -27,16 +23,59 @@ async function graphql(query, variables, token) {
 const tag = `integration-${Date.now()}`;
 let host;
 let guest;
+let overflowGuest;
 let sessionId;
+
+async function expectGraphqlError(query, variables, expectedMessage) {
+  try {
+    await graphql(query, variables);
+    throw new Error(`Expected GraphQL error: ${expectedMessage}`);
+  } catch (error) {
+    if (!error.message.includes(expectedMessage)) throw error;
+  }
+}
 
 try {
   await mongoose.connect(getConfig().mongoUri);
-  [host, guest] = await User.create([
+  [host, guest, overflowGuest] = await User.create([
     { name: 'Integration Host', email: `${tag}-host@example.test`, socialRating: 4.5 },
-    { name: 'Integration Guest', email: `${tag}-guest@example.test`, socialRating: 4.5 }
+    { name: 'Integration Guest', email: `${tag}-guest@example.test`, socialRating: 4.5 },
+    { name: 'Integration Overflow Guest', email: `${tag}-overflow@example.test`, socialRating: 4.5 }
   ]);
   const hostToken = await createAuthSession(host._id);
   const guestToken = await createAuthSession(guest._id);
+
+  await expectGraphqlError(
+    'mutation($hostId:ID!,$input:CreateSessionInput!){createSession(hostId:$hostId,input:$input){id}}',
+    {
+      hostId: String(host._id),
+      input: {
+        sport: 'Pickleball',
+        startsAt: 'not-a-date',
+        location: 'Station 21 West Lafayette',
+        locationPoint: { longitude: -86.9147, latitude: 40.4259 },
+        skillRange: '2.0-4.0',
+        maxParticipants: 2
+      }
+    },
+    'startsAt must be a valid ISO date'
+  );
+
+  await expectGraphqlError(
+    'mutation($hostId:ID!,$input:CreateSessionInput!){createSession(hostId:$hostId,input:$input){id}}',
+    {
+      hostId: String(host._id),
+      input: {
+        sport: 'Pickleball',
+        startsAt: '2026-10-01T22:00:00.000Z',
+        location: 'Station 21 West Lafayette',
+        locationPoint: { longitude: -200, latitude: 40.4259 },
+        skillRange: '2.0-4.0',
+        maxParticipants: 2
+      }
+    },
+    'locationPoint coordinates are out of range'
+  );
 
   const created = await graphql(
     'mutation($hostId:ID!,$input:CreateSessionInput!){createSession(hostId:$hostId,input:$input){id startsAt location locationPoint{coordinates} participants{id}}}',
@@ -76,6 +115,12 @@ try {
   );
   if (joined.joinSession.participants.length !== 2) throw new Error('guest was not added');
 
+  await expectGraphqlError(
+    'mutation($sessionId:ID!,$userId:ID!){joinSession(sessionId:$sessionId,userId:$userId){id}}',
+    { sessionId, userId: String(overflowGuest._id) },
+    'Session is full'
+  );
+
   const duplicate = await graphql(
     'mutation($sessionId:ID!,$userId:ID!){joinSession(sessionId:$sessionId,userId:$userId){participants{id}}}',
     { sessionId, userId: String(guest._id) },
@@ -92,10 +137,9 @@ try {
 
   console.log('Integration session test passed: create -> join -> leave');
 } finally {
-  if (sessionId) {
-    await SessionRegistration.deleteMany({ session: sessionId });
-    await Session.deleteOne({ _id: sessionId });
+  if (sessionId) await Session.deleteOne({ _id: sessionId });
+  if (host || guest || overflowGuest) {
+    await User.deleteMany({ _id: { $in: [host?._id, guest?._id, overflowGuest?._id].filter(Boolean) } });
   }
-  if (host || guest) await User.deleteMany({ _id: { $in: [host?._id, guest?._id].filter(Boolean) } });
   await mongoose.disconnect();
 }
