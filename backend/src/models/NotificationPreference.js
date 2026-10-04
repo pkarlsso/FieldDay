@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const notificationPreferenceSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
@@ -9,4 +9,4 @@ const notificationPreferenceSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
-module.exports = mongoose.model('NotificationPreference', notificationPreferenceSchema);
+export default mongoose.model('NotificationPreference', notificationPreferenceSchema);

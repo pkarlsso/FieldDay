@@ -3,11 +3,11 @@ import Session from '../models/Session.js';
 import Rating from '../models/Rating.js';
 import Notification from '../models/Notification.js';
 import DeviceToken from '../models/DeviceToken.js';
-import authSessions from '../utils/authSession.js';
+import * as authSessions from '../utils/authSession.js';
 import { validatePasswordStrength, PASSWORD_REQUIREMENTS, hashPassword, verifyPassword } from '../utils/password.js';
 import { generateCode, hashCode, CODE_TTL_MS, MAX_ATTEMPTS } from '../utils/twoFactor.js';
 import { RESET_CODE_TTL_MS } from '../utils/passwordReset.js';
-import getPreferences from '../utils/notifications.js';
+import { getPreferences } from '../utils/notifications.js';
 // Called through the module objects (not destructured) so tests can stub them.
 import mailer from '../utils/mailer.js';
 import googleAuth from '../utils/googleAuth.js';

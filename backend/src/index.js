@@ -14,10 +14,6 @@ async function startServer() {
   // nosemgrep: javascript.express.security.audit.express-check-csurf-middleware-usage.express-check-csurf-middleware-usage
   const app = express();
   const { mongoUri, port } = getConfig();
-  const [{ default: typeDefs }, { default: resolvers }] = await Promise.all([
-    import('./graphql/typeDefs.js'),
-    import('./graphql/resolvers.js')
-  ]);
 
   await mongoose.connect(mongoUri);
   logger.info('Connected to MongoDB Atlas');

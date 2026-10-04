@@ -1,7 +1,7 @@
-const Notification = require('../models/Notification');
-const DeviceToken = require('../models/DeviceToken');
-const NotificationPreference = require('../models/NotificationPreference');
-const { logError } = require('./logger');
+import Notification from '../models/Notification.js';
+import DeviceToken from '../models/DeviceToken.js';
+import NotificationPreference from '../models/NotificationPreference.js';
+import logger from './logger.js';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
@@ -42,7 +42,8 @@ async function deliverPush(notification) {
     });
     if (!response.ok) throw new Error(`Expo push request failed with status ${response.status}`);
   } catch (error) {
-    await logError('Notification push delivery failed', error, {
+    logger.error(error, {
+      context: 'Notification push delivery failed',
       notificationId: String(notification.id),
       recipientId: String(notification.recipient),
       category: notification.category
@@ -57,4 +58,4 @@ async function createNotification(input) {
   return notification;
 }
 
-module.exports = { createNotification, getPreferences };
+export { createNotification, getPreferences };
