@@ -35,6 +35,11 @@ export default [
     },
     rules: {
       "no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+      "no-console": "error",
+      "eqeqeq": "warn",
+      "no-constant-binary-expression": "warn",
+      "no-duplicate-imports": "warn",
+      "prefer-const": "warn",
     },
   },
   
@@ -134,12 +139,12 @@ export default [
     },
     rules: {
       ...reactNativeConfig[0].rules,
-      //"react-native/no-inline-styles": "warn",
-      //"react-native/no-unused-styles": "warn",
-      //"react-native/no-color-literals": "warn",
-      //"react-native/no-raw-text": "warn",
-      //"react-native/split-platform-components": "warn",
-      //"react-native/no-single-element-style-arrays": "warn",
+      "react-native/no-inline-styles": "off",
+      "react-native/no-unused-styles": "warn",
+      "react-native/no-color-literals": "off",
+      "react-native/no-raw-text": "warn",
+      "react-native/split-platform-components": "warn",
+      "react-native/no-single-element-style-arrays": "warn",
       ...react.configs.recommended.rules,
       ...react.configs["jsx-runtime"].rules,
       ...reactHooks.configs.recommended.rules,
@@ -180,13 +185,13 @@ export default [
     },
     languageOptions: {
       ecmaVersion: "latest",
-      sourceType: "commonjs", // treat .js as CJS by default here
+      sourceType: "module",
       globals: {
         ...globals.node, // require, module, __dirname, process, Buffer, console...
       },
     },
     rules: {
-      "no-console": "off", // server code logs to console legitimately
+      "no-console": "error",
       "@typescript-eslint/no-require-imports": "warn",   // delete this after import has been fixed to new syntax
     },
   },
@@ -222,8 +227,9 @@ export default [
       globals: { ...globals.node },
     },
     rules: {
-      "@typescript-eslint/no-require-imports": "warn", // delete this after import has been fixed to new syntax
+      //"@typescript-eslint/no-require-imports": "warn",
       "no-redeclare": "warn", // remove once this is fixed
+      "no-console": "off", // CLI scripts intentionally print their command results.
     },
   },
 
@@ -248,6 +254,7 @@ export default [
     rules: {
       "@typescript-eslint/no-require-imports": "warn", // delete this after import has been fixed to new syntax
       "no-redeclare": "warn", // remove once this is fixed
+      "no-console": "off", // CLI scripts intentionally print their command results.
     },
   },
 
@@ -262,10 +269,13 @@ export default [
     },
   },
   {
-    files: ["logger.js", "test-logger.js"],
+    files: ["logger.js", "logger.cjs", "test-logger.js", "frontend/src/logger.js"],
     languageOptions: {
       sourceType: "module",
       globals: { ...globals.node },
+    },
+    rules: {
+      "no-console": "off",
     },
   },
 ];

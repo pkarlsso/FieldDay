@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { graphql } from '../api';
 import { CURRENT_USER_ID } from '../config';
+import logger from '../logger';
 
 const QUERY = `
   query CurrentUser($id: ID!) {
@@ -23,7 +24,7 @@ export function useCurrentUser() {
       let active = true;
       graphql(QUERY, { id: CURRENT_USER_ID })
         .then((data) => { if (active) setUser(data.getUser); })
-        .catch((err) => console.log('Current user fetch error:', err.message));
+        .catch((err) => logger.error('Current user fetch error:', err));
       return () => { active = false; };
     }, []),
   );

@@ -1,4 +1,4 @@
-const argon2 = require('argon2');
+import argon2 from 'argon2';
 
 const PASSWORD_REQUIREMENTS =
   'Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number, and a special character.';
@@ -24,4 +24,4 @@ function verifyPassword(hash, password) {
   return argon2.verify(hash, password);
 }
 
-module.exports = { validatePasswordStrength, PASSWORD_REQUIREMENTS, hashPassword, verifyPassword };
+export { validatePasswordStrength, PASSWORD_REQUIREMENTS, hashPassword, verifyPassword };

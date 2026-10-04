@@ -1,6 +1,7 @@
 {
   "name": "fieldday-backend",
   "version": "1.0.0",
+  "type": "module",
   "description": "FieldDay prototype backend - GraphQL + MongoDB",
   "main": "src/index.js",
   "scripts": {
@@ -8,14 +9,14 @@
     "seed": "node src/seed.js"
   },
   "dependencies": {
-    "@apollo/server": "^4.11.3",
+    "@apollo/server": "^5.5.1",
     "argon2": "^0.41.1",
     "cors": "^2.8.5",
     "dotenv": "^17.4.1",
-    "express": "^4.21.2",
+    "express": "^5.2.1",
     "google-auth-library": "^11.1.0",
     "graphql": "^16.10.0",
-    "mongoose": "^8.13.2",
-    "nodemailer": "^6.9.16"
+    "mongoose": "^9.10.2",
+    "nodemailer": "^10.0.11"
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Modal, Platform } from 'react-native';
 import { CommonActions, usePreventRemove } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
@@ -7,6 +7,7 @@ import { graphql } from '../api';
 import { CURRENT_USER_ID } from '../config';
 import { Avatar, Card, IconButton, Pill, PrimaryButton, ScreenHeader, SportIcon } from '../fieldday/components/ui';
 import { colors } from '../fieldday/theme';
+import logger from '../logger';
 
 const LEVELS = [1, 2, 3, 4, 5];
 const SUGGESTED_SPORTS = ['Pickleball', 'Tennis', 'Basketball', 'Soccer', 'Volleyball', 'Golf', 'Running'];
@@ -169,7 +170,7 @@ export default function EditProfileScreen({ navigation }) {
       const saved = await image.saveAsync({ compress: 0.7, format: SaveFormat.JPEG, base64: true });
       setProfilePicture(`data:image/jpeg;base64,${saved.base64}`);
     } catch (err) {
-      console.log('Profile picture error:', err.message);
+      logger.error('Profile picture error:', err);
       setError('Could not use that photo. Try a different one.');
     }
   };
