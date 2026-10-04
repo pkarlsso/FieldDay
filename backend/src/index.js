@@ -1,17 +1,18 @@
-const { ApolloServer } = require('@apollo/server');
-const { expressMiddleware } = require('@apollo/server/express4');
-const express = require('express');
-const cors = require('cors');
-const mongoose = require('mongoose');
-const typeDefs = require('./graphql/typeDefs');
-const resolvers = require('./graphql/resolvers');
-const { getConfig } = require('./config');
-const { authenticateRequest } = require('./utils/authSession');
-const { createServer } = require('http');
-const { Server: SocketServer } = require('socket.io');
-const Conversation = require('./models/Conversation');
-const Session = require('./models/Session');
-const chatEvents = require('./utils/chatEvents');
+import { ApolloServer } from '@apollo/server';
+import { expressMiddleware } from '@apollo/server/express4';
+import express from 'express';
+import cors from 'cors';
+import mongoose from 'mongoose';
+import typeDefs from './graphql/typeDefs.js';
+import resolvers from './graphql/resolvers.js';
+import { getConfig } from './config.js';
+import { authenticateRequest } from './utils/authSession.js';
+import { createServer } from 'http';
+import { Server as SocketServer } from 'socket.io';
+import logger from './utils/logger.js';
+import Conversation from './models/Conversation.js';
+import Session from './models/Session.js';
+import chatEvents from './utils/chatEvents.js';
 
 async function startServer() {
   // False positive: the API uses no cookies or sessions, so it has no ambient credentials for CSRF to abuse.
@@ -20,9 +21,24 @@ async function startServer() {
   const { mongoUri, port } = getConfig();
 
   await mongoose.connect(mongoUri);
-  console.log('Connected to MongoDB Atlas');
+  logger.info('Connected to MongoDB Atlas');
 
-  const server = new ApolloServer({ typeDefs, resolvers });
+  const server = new ApolloServer({
+    typeDefs,
+    resolvers,
+    plugins: [{
+      async requestDidStart() {
+        return {
+          async didEncounterErrors({ operationName, errors }) {
+            logger.error('GraphQL request encountered errors', {
+              operationName,
+              errors: errors.map((error) => ({ message: error.message, path: error.path }))
+            });
+          }
+        };
+      }
+    }]
+  });
   await server.start();
 
   // Raised from the 100kb default so profile pictures (up to ~200k chars) fit.
@@ -65,12 +81,12 @@ async function startServer() {
     io.to(`conversation:${conversationId}`).emit('message', message);
   });
 
-  httpServer.listen(port, '0.0.0.0', () => {
-    console.log(`GraphQL server running at http://localhost:${port}/graphql`);
+  app.listen(port, '0.0.0.0', () => {
+    logger.info(`GraphQL server running at http://localhost:${port}/graphql`);
   });
 }
 
 startServer().catch(err => {
-  console.error('Failed to start server:', err);
+  logger.error('Failed to start server', err);
   process.exit(1);
 });

@@ -9,6 +9,7 @@
   "scripts": {
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "test:logger": "node test-logger.js",
     "build": "npm run build --workspace frontend",
     "check:backend": "node scripts/check-backend.mjs",
     "test:integration": "node scripts/integration-session.mjs",

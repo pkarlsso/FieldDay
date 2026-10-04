@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
-import * as Location from 'expo-location';
 import MapView, { Callout, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-import { graphql } from '../../api';
+import { getDiscoveryOrigin, loadDiscoverySessions } from '../discovery';
+import logger from '../../logger';
 
 const useGoogleMaps = process.env.EXPO_PUBLIC_MAP_PROVIDER === 'google';
 const DEFAULT_REGION = {
@@ -19,7 +19,6 @@ const DEMO_SESSIONS = [
     id: 's2', sport: 'Soccer', startsAt: '2026-04-12T17:30:00', location: 'Central Field', latitude: 40.431, longitude: -86.915,
   },
 ];
-const LIVE_QUERY = `{ getSessions(status: "upcoming") { id sport startsAt location locationPoint { coordinates } } }`;
 const useLiveData = process.env.EXPO_PUBLIC_LIVE_DATA === 'true';
 
 function formatSessionTime(startsAt) {
@@ -37,35 +36,39 @@ export default function MapScreen({ navigation }) {
   const [region, setRegion] = useState(DEFAULT_REGION);
   const [loading, setLoading] = useState(true);
   const [sessions, setSessions] = useState(DEMO_SESSIONS);
+  const [origin, setOrigin] = useState(null);
 
   useEffect(() => {
     let mounted = true;
     async function locateUser() {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (permission.status === 'granted') {
-        const result = await Location.getCurrentPositionAsync({});
+      const location = await getDiscoveryOrigin();
+      if (location) {
         if (mounted) {
-          setRegion({ ...DEFAULT_REGION, latitude: result.coords.latitude, longitude: result.coords.longitude });
+          setOrigin(location);
+          setRegion({ ...DEFAULT_REGION, latitude: location.latitude, longitude: location.longitude });
         }
       }
       if (mounted) setLoading(false);
     }
-    locateUser().catch(() => mounted && setLoading(false));
+    locateUser().catch((error) => {
+      logger.warn('Could not determine map location:', error);
+      if (mounted) setLoading(false);
+    });
     return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
     if (!useLiveData) return undefined;
-    graphql(LIVE_QUERY).then((data) => setSessions((data.getSessions || []).filter(hasCoordinates).map((session) => ({
+    loadDiscoverySessions({ origin }).then((data) => setSessions(data.filter(hasCoordinates).map((session) => ({
       id: session.id,
       sport: session.sport,
       startsAt: session.startsAt,
       location: session.location,
       latitude: session.locationPoint.coordinates[1],
       longitude: session.locationPoint.coordinates[0],
-    })))).catch(() => {});
+    })))).catch((error) => logger.error('Could not load map sessions:', error));
     return undefined;
-  }, []);
+  }, [origin]);
 
   return (
     <View style={styles.container}>

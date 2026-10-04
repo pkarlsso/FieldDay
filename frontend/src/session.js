@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import { graphql } from './api';
 import { setCurrentUserId } from './config';
 import { getAuthToken, setAuthToken } from './authToken';
+import logger from './logger';
 
 // Keeps the user signed in across app launches. The server issues a token that
 // is good for 30 days (and renewed each time the app reopens); we store it in
@@ -15,7 +16,8 @@ async function readStored() {
       ? localStorage.getItem(STORAGE_KEY)
       : await SecureStore.getItemAsync(STORAGE_KEY);
     return raw ? JSON.parse(raw) : null;
-  } catch {
+  } catch (error) {
+    logger.warn('Could not read stored session:', error);
     return null;
   }
 }
@@ -31,7 +33,7 @@ async function writeStored(value) {
       await SecureStore.deleteItemAsync(STORAGE_KEY);
     }
   } catch (err) {
-    console.log('Could not update stored session:', err.message);
+    logger.warn('Could not update stored session:', err);
   }
 }
 
@@ -70,7 +72,7 @@ export async function restoreSession() {
     await writeStored(null);
   } catch (err) {
     // Server unreachable: leave the saved login in place for the next launch.
-    console.log('Could not restore session:', err.message);
+    logger.warn('Could not restore session:', err);
   }
   return false;
 }
@@ -83,7 +85,7 @@ export async function endSession() {
     try {
       await graphql(LOGOUT_MUTATION, { token });
     } catch (err) {
-      console.log('Logout request failed:', err.message);
+      logger.warn('Logout request failed:', err);
     }
   }
 }

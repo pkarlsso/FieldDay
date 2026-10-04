@@ -1,7 +1,7 @@
 import { EventEmitter, requireNativeModule } from 'expo-modules-core';
 
 let nativeModule;
-try { nativeModule = requireNativeModule('AppleSearchCompleter'); } catch (error) { nativeModule = null; }
+try { nativeModule = requireNativeModule('AppleSearchCompleter'); } catch { nativeModule = null; }
 const emitter = nativeModule ? new EventEmitter(nativeModule) : null;
 
 export function search(query) {
