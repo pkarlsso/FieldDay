@@ -5,6 +5,7 @@ const typeDefs = `#graphql
     email: String!
     bio: String
     hometown: String
+    profilePicture: String
     sports: [String]
     sportSkills: [SportSkill!]!
     skillLevel: Float
@@ -27,6 +28,7 @@ const typeDefs = `#graphql
     name: String
     bio: String
     hometown: String
+    profilePicture: String
     sportSkills: [SportSkillInput!]
   }
 
@@ -39,6 +41,8 @@ const typeDefs = `#graphql
     location: String!
     locationPoint: GeoPoint!
     skillRange: String
+    tags: [String!]!
+    distanceMiles: Float
     maxParticipants: Int
     participants: [User]
     host: User
@@ -56,12 +60,27 @@ const typeDefs = `#graphql
     latitude: Float!
   }
 
+  input SessionDiscoveryFilterInput {
+    origin: LocationPointInput
+    maxDistanceMiles: Float
+    sports: [String!]
+    minSkillLevel: Float
+    maxSkillLevel: Float
+    startsAfter: String
+    startsBefore: String
+    minOpenSpots: Int
+    tags: [String!]
+  }
+
   input CreateSessionInput {
     sport: String!
     startsAt: String!
     location: String!
     locationPoint: LocationPointInput!
     skillRange: String
+    skillMin: Float
+    skillMax: Float
+    tags: [String!]
     maxParticipants: Int
   }
 
@@ -136,7 +155,7 @@ const typeDefs = `#graphql
   type Query {
     getUser(id: ID!): User
     getSession(id: ID!): Session
-    getSessions(status: String): [Session]
+    getSessions(status: String, filter: SessionDiscoveryFilterInput): [Session]
     getCompletedSessions(userId: ID!): [Session]
     getFriends(userId: ID!): [User]
     checkEmailExists(email: String!): EmailCheckResult!

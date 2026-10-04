@@ -37,6 +37,14 @@
       "@react-native-community/datetimepicker",
       "expo-secure-store",
       "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "FieldDay uses your photo library so you can choose a profile picture.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
       "./plugins/withQuotedReactNativeXcodeScript",
       [
         "expo-build-properties",

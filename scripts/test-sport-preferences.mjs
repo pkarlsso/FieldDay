@@ -1,15 +1,11 @@
-/* global console */
 // Comprehensive tests for sport preferences and skill levels feature
 import assert from 'node:assert/strict';
 import mongoose from 'mongoose';
-import { createRequire } from 'node:module';
-
-const require = createRequire(import.meta.url);
-const { ApolloServer } = require('@apollo/server');
-const { getConfig } = require('../backend/src/config.js');
-const typeDefs = require('../backend/src/graphql/typeDefs.js');
-const resolvers = require('../backend/src/graphql/resolvers.js');
-const User = require('../backend/src/models/User.js');
+import { ApolloServer } from '@apollo/server';
+import { getConfig } from '../backend/src/config.js';
+import typeDefs from '../backend/src/graphql/typeDefs.js';
+import resolvers from '../backend/src/graphql/resolvers.js';
+import User from '../backend/src/models/User.js';
 
 const tag = `sport-test-${Date.now()}`;
 const emailFor = (name) => `${tag}-${name}@example.test`;

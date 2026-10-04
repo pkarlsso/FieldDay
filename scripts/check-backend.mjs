@@ -1,11 +1,13 @@
 import { readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { createRequire } from 'node:module';
 import process from 'node:process';
 import { fileURLToPath, URL } from 'node:url';
+import { buildSchema, validateSchema } from 'graphql';
+import typeDefs from '../backend/src/graphql/typeDefs.js';
+import '../backend/src/models/User.js';
+import '../backend/src/models/Session.js';
 
-const require = createRequire(new URL('../backend/package.json', import.meta.url));
 function checkDirectory(directory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
@@ -18,10 +20,6 @@ function checkDirectory(directory) {
   }
 }
 checkDirectory(fileURLToPath(new URL('../backend/src/', import.meta.url)));
-const { buildSchema, validateSchema } = require('graphql');
-const { default: typeDefs } = await import('../backend/src/graphql/typeDefs.js');
 const errors = validateSchema(buildSchema(typeDefs));
 if (errors.length) throw new Error(errors.map(error => error.message).join('\n'));
-require('../backend/src/models/User.js');
-require('../backend/src/models/Session.js');
 process.stdout.write('Backend syntax, GraphQL schema, and model loading passed.\n');

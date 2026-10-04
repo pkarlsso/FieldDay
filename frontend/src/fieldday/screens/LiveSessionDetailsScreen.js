@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import { Card, IconButton, PrimaryButton, ScreenHeader } from '../components/ui';
 import { colors } from '../theme';
-import { graphql, CURRENT_USER_ID } from '../../api';
+import { graphql } from '../../api';
+import { CURRENT_USER_ID } from '../../config';
 
 const QUERY = `query($id:ID!){ getSession(id:$id){ id sport startsAt location locationPoint{coordinates} maxParticipants participants{id name} host{id name} status } }`;
 const JOIN = `mutation($sessionId:ID!,$userId:ID!){joinSession(sessionId:$sessionId,userId:$userId){id participants{id name}}}`;
