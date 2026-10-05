@@ -1,4 +1,4 @@
-import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar, Card, NotificationButton, ScreenHeader, StatusBadge } from '../components/ui';
 import { colors } from '../theme';
@@ -12,7 +12,7 @@ export default function FriendsScreen({ navigation }) {
         const data = await graphql(GET_OR_CREATE_DIRECT_CONVERSATION, { friendId });
         navigation.navigate('ChatDetail', { conversationId: data.getOrCreateDirectConversation.id });
       } catch (error) {
-        console.log('Direct chat error:', error.message);
+        Alert.alert('Unable to open chat', error.message);
       }
     };
 

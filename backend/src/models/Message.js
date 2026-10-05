@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const messageSchema = new mongoose.Schema({
   conversation: { type: mongoose.Schema.Types.ObjectId, ref: 'Conversation', required: true },
@@ -12,4 +12,4 @@ const messageSchema = new mongoose.Schema({
 messageSchema.index({ conversation: 1, createdAt: -1, _id: -1 });
 messageSchema.index({ conversation: 1, clientMessageId: 1 }, { unique: true });
 
-module.exports = mongoose.model('Message', messageSchema);
+export default mongoose.model('Message', messageSchema);

@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const conversationSchema = new mongoose.Schema({
   kind: { type: String, enum: ['session', 'direct'], required: true },
@@ -13,4 +13,4 @@ conversationSchema.index({ participants: 1, lastMessageAt: -1 });
 conversationSchema.index({ session: 1 }, { unique: true, partialFilterExpression: { session: { $type: 'objectId' } } });
 conversationSchema.index({ participantKey: 1 }, { unique: true, partialFilterExpression: { kind: 'direct', participantKey: { $type: 'string' } } });
 
-module.exports = mongoose.model('Conversation', conversationSchema);
+export default mongoose.model('Conversation', conversationSchema);
