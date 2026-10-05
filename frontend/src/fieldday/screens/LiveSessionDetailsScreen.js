@@ -6,8 +6,8 @@ import { graphql } from '../../api';
 import { CURRENT_USER_ID } from '../../config';
 
 const QUERY = `query($id:ID!){ getSession(id:$id){ id sport startsAt location locationPoint{coordinates} maxParticipants participants{id name} host{id name} status } }`;
-const JOIN = `mutation($sessionId:ID!,$userId:ID!){joinSession(sessionId:$sessionId,userId:$userId){id participants{id name}}}`;
-const LEAVE = `mutation($sessionId:ID!,$userId:ID!){leaveSession(sessionId:$sessionId,userId:$userId){id participants{id name}}}`;
+const JOIN = `mutation($sessionId:ID!){joinSession(sessionId:$sessionId){id participants{id name}}}`;
+const LEAVE = `mutation($sessionId:ID!){leaveSession(sessionId:$sessionId){id participants{id name}}}`;
 
 export default function LiveSessionDetailsScreen({ route, navigation }) {
   const [session, setSession] = useState(null); const [error, setError] = useState('');
@@ -16,7 +16,7 @@ export default function LiveSessionDetailsScreen({ route, navigation }) {
     const timer = setTimeout(load, 0);
     return () => clearTimeout(timer);
   }, [load]);
-  async function change(mutation) { try { await graphql(mutation, { sessionId: session.id, userId: CURRENT_USER_ID }); await load(); } catch (err) { setError(err.message); } }
+  async function change(mutation) { try { await graphql(mutation, { sessionId: session.id }); await load(); } catch (err) { setError(err.message); } }
   if (!session) return <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>{error ? <Text>{error}</Text> : <ActivityIndicator />}</View>;
   const joined = session.participants.some((user) => user.id === CURRENT_USER_ID);
   return <View style={{ flex: 1, backgroundColor: colors.page }}><ScreenHeader title="Session Details" left={<IconButton icon="chevron-back" onPress={() => navigation.goBack()} />} /><ScrollView contentContainerStyle={{ padding: 18, gap: 14 }}>

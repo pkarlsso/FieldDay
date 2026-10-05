@@ -302,34 +302,35 @@ const resolvers = {
   },
 
   Mutation: {
-    createSession: async (_, { hostId, input }) => {
-      const host = await User.findById(hostId);
-      if (!host) throw new Error('Host not found');
+    createSession: async (_, { input }, context) => {
+      const host = requireUser(context);
       const session = await Session.create({
         ...formatSessionInput(input),
-        host: hostId,
-        participants: [hostId],
+        host: host._id,
+        participants: [host._id],
         status: 'upcoming'
       });
       return populatedSessionQuery(session._id);
     },
 
-    joinSession: async (_, { sessionId, userId }) => {
-      const [session, user] = await Promise.all([Session.findById(sessionId), User.findById(userId)]);
-      if (!session || !user) throw new Error('Session or user not found');
+    joinSession: async (_, { sessionId }, context) => {
+      const user = requireUser(context);
+      const session = await Session.findById(sessionId);
+      if (!session) throw new Error('Session not found');
       if (session.status !== 'upcoming') throw new Error('Only upcoming sessions can be joined');
-      if (session.participants.some((id) => id.equals(userId))) return populatedSessionQuery(sessionId);
+      if (session.participants.some((id) => id.equals(user._id))) return populatedSessionQuery(sessionId);
       if (session.participants.length >= session.maxParticipants) throw new Error('Session is full');
-      session.participants.push(userId);
+      session.participants.push(user._id);
       await session.save();
       return populatedSessionQuery(sessionId);
     },
 
-    leaveSession: async (_, { sessionId, userId }) => {
+    leaveSession: async (_, { sessionId }, context) => {
+      const user = requireUser(context);
       const session = await Session.findById(sessionId);
       if (!session) throw new Error('Session not found');
-      if (session.host && session.host.equals(userId)) throw new Error('The host cannot leave their session');
-      session.participants = session.participants.filter((id) => !id.equals(userId));
+      if (session.host && session.host.equals(user._id)) throw new Error('The host cannot leave their session');
+      session.participants = session.participants.filter((id) => !id.equals(user._id));
       await session.save();
       return populatedSessionQuery(sessionId);
     },
