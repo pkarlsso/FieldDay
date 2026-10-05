@@ -46,11 +46,18 @@ jobs:
         run: npm ci
       - name: Run check
         run: ${{ matrix.command }}
+      - name: Record build version
+        if: matrix.artifact_path != ''
+        id: version
+        run: |
+          VERSION=$(node -p "require('./frontend/app.json').expo.version")
+          VERSION="$VERSION" node -e "const fs=require('fs'); fs.writeFileSync('frontend/dist/build-info.json', JSON.stringify({version: process.env.VERSION, commit: process.env.GITHUB_SHA}, null, 2) + '\\n')"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
       - name: Upload application build artifacts
         if: matrix.artifact_path != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: fieldday-bundles-${{ github.sha }}
+          name: fieldday-bundles-${{ steps.version.outputs.version }}-${{ github.sha }}
           path: ${{ matrix.artifact_path }}
           if-no-files-found: error
           retention-days: 7
