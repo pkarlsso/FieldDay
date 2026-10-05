@@ -1,7 +1,7 @@
 # Version Traceability
 
 FieldDay uses semantic versioning. The user-facing version is the `expo.version`
-value in `frontend/app.json`, currently `1.0.0`, and it is kept aligned with the
+value in `frontend/app.json`, currently `0.1.0`, and it is kept aligned with the
 frontend package version. The Settings screen reads that Expo value and shows it
 to the user.
 
