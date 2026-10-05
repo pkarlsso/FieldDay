@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const friendRequestSchema = new mongoose.Schema({
   requester: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -20,4 +20,4 @@ friendRequestSchema.pre('save', function updateTimestamp(next) {
   next();
 });
 
-module.exports = mongoose.model('FriendRequest', friendRequestSchema);
+export default mongoose.model('FriendRequest', friendRequestSchema);
