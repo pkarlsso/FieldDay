@@ -25,12 +25,39 @@ jobs:
           - name: Validate backend
             command: npm run check:backend
             artifact_path: ''
+          - name: Start backend and verify health
+            command: |
+              npm run start --workspace backend > backend.log 2>&1 &
+              backend_pid=$!
+              trap 'kill "$backend_pid" 2>/dev/null || true' EXIT
+
+              for attempt in {1..20}; do
+                if curl --fail --silent --show-error http://127.0.0.1:4000/health; then
+                  exit 0
+                fi
+                sleep 1
+              done
+
+              cat backend.log
+              exit 1
+            artifact_path: ''
           - name: Build frontend
             command: npm run build
             artifact_path: frontend/dist/
     env:
       CI: 'true'
       EXPO_NO_TELEMETRY: '1'
+      MONGODB_URI: mongodb://127.0.0.1:27017/fieldday-ci
+    services:
+      mongo:
+        image: mongo:8.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand(\"ping\").ok' --quiet"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Check out source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
