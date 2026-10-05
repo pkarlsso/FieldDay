@@ -17,6 +17,10 @@ async function graphql(query, variables) {
 }
 
 const tag = `integration-${Date.now()}`;
+// Sessions must start in the future, so build the timestamp relative to now.
+const startsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+startsAt.setUTCMinutes(0, 0, 0);
+const startsAtIso = startsAt.toISOString();
 let host;
 let guest;
 let overflowGuest;
@@ -48,7 +52,7 @@ try {
         startsAt: 'not-a-date',
         location: 'Station 21 West Lafayette',
         locationPoint: { longitude: -86.9147, latitude: 40.4259 },
-        skillRange: '2.0-4.0',
+        skillLevel: 2,
         maxParticipants: 2
       }
     },
@@ -61,10 +65,10 @@ try {
       hostId: String(host._id),
       input: {
         sport: 'Pickleball',
-        startsAt: '2026-10-01T22:00:00.000Z',
+        startsAt: startsAtIso,
         location: 'Station 21 West Lafayette',
         locationPoint: { longitude: -200, latitude: 40.4259 },
-        skillRange: '2.0-4.0',
+        skillLevel: 2,
         maxParticipants: 2
       }
     },
@@ -72,23 +76,24 @@ try {
   );
 
   const created = await graphql(
-    'mutation($hostId:ID!,$input:CreateSessionInput!){createSession(hostId:$hostId,input:$input){id startsAt location locationPoint{coordinates} participants{id}}}',
+    'mutation($hostId:ID!,$input:CreateSessionInput!){createSession(hostId:$hostId,input:$input){id startsAt location locationPoint{coordinates} skillLevel maxParticipants participants{id}}}',
     {
       hostId: String(host._id),
       input: {
         sport: 'Pickleball',
-        startsAt: '2026-10-01T22:00:00.000Z',
+        startsAt: startsAtIso,
         location: 'Station 21 West Lafayette',
         locationPoint: { longitude: -86.9147, latitude: 40.4259 },
-        skillRange: '2.0-4.0',
+        skillLevel: 2,
         maxParticipants: 2
       }
     }
   );
   sessionId = created.createSession.id;
   if (created.createSession.participants.length !== 1) throw new Error('host was not added');
-  if (created.createSession.startsAt !== '2026-10-01T22:00:00.000Z') throw new Error('timestamp was not returned as ISO');
+  if (created.createSession.startsAt !== startsAtIso) throw new Error('timestamp was not returned as ISO');
   if (created.createSession.locationPoint.coordinates.join(',') !== '-86.9147,40.4259') throw new Error('GeoJSON coordinates were not stored');
+  if (created.createSession.skillLevel !== 2 || created.createSession.maxParticipants !== 2) throw new Error('capacity and skill level were not stored');
 
   try {
     await graphql(
