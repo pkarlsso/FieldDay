@@ -12,6 +12,7 @@
     "test:logger": "node test-logger.js",
     "build": "npm run build --workspace frontend",
     "check:backend": "node scripts/check-backend.mjs",
+    "check": "node scripts/check.mjs",
     "test:integration": "node scripts/integration-session.mjs",
     "test:chat": "node scripts/integration-chat.mjs",
     "test:accounts": "node scripts/integration-accounts.mjs",
