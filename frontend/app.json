@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "FieldDay",
+    "slug": "fieldday",
     "scheme": "fieldday",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -53,6 +53,11 @@
           }
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "dd004d66-cf1c-41a0-823f-64efc93b48f7"
+      }
+    }
   }
 }
