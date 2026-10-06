@@ -7,12 +7,11 @@ import { addResultsListener, isAvailable as hasAppleSearch, resolve, search } fr
 import { PrimaryButton, ScreenHeader, Card } from '../components/ui';
 import { colors } from '../theme';
 import { graphql } from '../../api';
-import { CURRENT_USER_ID } from '../../config';
 import logger from '../../logger';
 
 const MUTATION = `
-  mutation CreateSession($hostId: ID!, $input: CreateSessionInput!) {
-    createSession(hostId: $hostId, input: $input) { id sport startsAt location }
+  mutation CreateSession($input: CreateSessionInput!) {
+    createSession(input: $input) { id sport startsAt location }
   }
 `;
 
@@ -107,8 +106,7 @@ export default function CreateSessionScreen({ navigation }) {
     setLoading(true);
     try {
       const data = await graphql(MUTATION, {
-        hostId: CURRENT_USER_ID,
-          input: {
+        input: {
             sport,
           startsAt: startsAt.toISOString(),
           location,

@@ -133,9 +133,9 @@ const typeDefs = `#graphql
   }
 
   type Mutation {
-    createSession(hostId: ID!, input: CreateSessionInput!): Session
-    joinSession(sessionId: ID!, userId: ID!): Session
-    leaveSession(sessionId: ID!, userId: ID!): Session
+    createSession(input: CreateSessionInput!): Session
+    joinSession(sessionId: ID!): Session
+    leaveSession(sessionId: ID!): Session
     submitRatings(sessionId: ID!, raterId: ID!, ratings: [RatingInput!]!): RatingResult
     addFriend(userId: ID!, friendId: ID!): User
     signUp(email: String!, password: String!): AuthResult!
