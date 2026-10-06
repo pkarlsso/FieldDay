@@ -28,6 +28,12 @@ async function issueTwoFactorCode(user) {
   await mailer.sendTwoFactorEmail(user.email, code);
 }
 
+async function createDemoAuthSession(user, message) {
+  if (process.env.AUTH_DEMO_BYPASS !== 'true') return null;
+  const token = await authSessions.createAuthSession(user._id);
+  return authSuccess(user, message, { token, requiresTwoFactor: false });
+}
+
 function requireUser(context) {
   if (!context.currentUser) throw new Error('You must be signed in to do that.');
   return context.currentUser;
@@ -429,6 +435,11 @@ const resolvers = {
         passwordHash
       });
 
+      if (process.env.AUTH_DEMO_BYPASS === 'true') {
+        await user.save();
+        return createDemoAuthSession(user, 'Account created for demo testing.');
+      }
+
       await issueTwoFactorCode(user);
 
       return {
@@ -449,6 +460,9 @@ const resolvers = {
       if (!valid) {
         return { success: false, message: 'Incorrect email or password.' };
       }
+
+      const demoAuth = await createDemoAuthSession(user, 'Welcome back.');
+      if (demoAuth) return demoAuth;
 
       await issueTwoFactorCode(user);
 

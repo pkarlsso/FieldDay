@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { graphql } from '../../api';
 import GoogleSignInButton from './GoogleSignInButton';
+import { startSession } from '../../session';
 
 const PURPLE = '#7C7EFF';
 
@@ -12,6 +13,7 @@ const MUTATION = `
       message
       userId
       requiresTwoFactor
+      token
     }
   }
 `;
@@ -36,8 +38,11 @@ export default function LoginScreen({ route, navigation }) {
       const data = await graphql(MUTATION, { email: email.trim(), password });
       if (!data.login.success) {
         setError(data.login.message);
-      } else {
+      } else if (data.login.requiresTwoFactor) {
         navigation.navigate('TwoFactor', { email: email.trim(), mode: 'login' });
+      } else {
+        await startSession(data.login);
+        navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
       }
     } catch (err) {
       setError(err.message);
