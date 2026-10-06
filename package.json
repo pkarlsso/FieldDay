@@ -17,6 +17,8 @@
     "test:accounts": "node scripts/integration-accounts.mjs",
     "test:sport-preferences": "node scripts/test-sport-preferences.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
+    "export:shaped": "node backend/scripts/export-shaped-data.mjs",
+    "test:shaped-export": "node scripts/test-shaped-export.mjs",
     "postinstall": "patch-package"
   },
   "devDependencies": {
