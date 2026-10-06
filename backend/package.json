@@ -17,6 +17,7 @@
     "google-auth-library": "^11.1.0",
     "graphql": "^16.10.0",
     "mongoose": "^8.24.4",
-    "nodemailer": "^6.10.1"
+    "nodemailer": "^6.10.1",
+    "winston": "^3.19.0"
   }
 }
