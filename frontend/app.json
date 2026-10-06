@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "FieldDay",
+    "slug": "fieldday",
     "scheme": "fieldday",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -12,7 +12,7 @@
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "FieldDay uses your location to show nearby sport sessions on the map."
       },
-      "bundleIdentifier": "com.anonymous.frontend"
+      "bundleIdentifier": "com.gogbalor.fieldday"
     },
     "android": {
       "adaptiveIcon": {
@@ -53,6 +53,11 @@
           }
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "dd004d66-cf1c-41a0-823f-64efc93b48f7"
+      }
+    }
   }
 }
