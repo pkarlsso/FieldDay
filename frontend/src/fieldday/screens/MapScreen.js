@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 import MapView, { Callout, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { getDiscoveryOrigin, loadDiscoverySessions } from '../discovery';
@@ -57,8 +58,8 @@ export default function MapScreen({ navigation }) {
     return () => { mounted = false; };
   }, []);
 
-  useEffect(() => {
-    if (!useLiveData) return undefined;
+  const refreshSessions = useCallback(() => {
+    if (!useLiveData) return;
     loadDiscoverySessions({ origin }).then((data) => setSessions(data.filter(hasCoordinates).map((session) => ({
       id: session.id,
       sport: session.sport,
@@ -67,8 +68,15 @@ export default function MapScreen({ navigation }) {
       latitude: session.locationPoint.coordinates[1],
       longitude: session.locationPoint.coordinates[0],
     })))).catch((error) => logger.error('Could not load map sessions:', error));
-    return undefined;
   }, [origin]);
+
+  // Refresh shared session markers every time the Map tab gains focus.
+  useFocusEffect(
+    useCallback(() => {
+      refreshSessions();
+      return undefined;
+    }, [refreshSessions]),
+  );
 
   return (
     <View style={styles.container}>

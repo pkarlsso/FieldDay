@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Card, Pill, ScreenHeader, SportIcon } from '../components/ui';
 import { colors, sports } from '../theme';
@@ -25,6 +26,16 @@ export default function LiveExploreScreen({ navigation }) {
     try { setSessions(await loadDiscoverySessions(nextFilter)); setError(''); }
     catch (err) { setError(err.message); }
   }, []);
+
+  // A session can be created or joined from another device while this screen is
+  // mounted. Refetch whenever Explore becomes the active tab so users do not
+  // need to restart the app to see current shared data.
+  useFocusEffect(
+    useCallback(() => {
+      if (!locating) load({ ...draft, origin: origin || undefined });
+      return undefined;
+    }, [draft, load, locating, origin]),
+  );
 
   useEffect(() => {
     getDiscoveryOrigin().then(async (location) => {
