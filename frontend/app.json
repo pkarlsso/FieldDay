@@ -12,7 +12,7 @@
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "FieldDay uses your location to show nearby sport sessions on the map."
       },
-      "bundleIdentifier": "com.anonymous.frontend"
+      "bundleIdentifier": "com.gogbalor.fieldday"
     },
     "android": {
       "adaptiveIcon": {
