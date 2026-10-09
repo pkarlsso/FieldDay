@@ -1,14 +1,18 @@
 import User from '../models/User.js';
 import Session from '../models/Session.js';
 import Rating from '../models/Rating.js';
+import Notification from '../models/Notification.js';
+import DeviceToken from '../models/DeviceToken.js';
+import * as authSessions from '../utils/authSession.js';
 import { validatePasswordStrength, PASSWORD_REQUIREMENTS, hashPassword, verifyPassword } from '../utils/password.js';
 import { generateCode, hashCode, CODE_TTL_MS, MAX_ATTEMPTS } from '../utils/twoFactor.js';
 import { RESET_CODE_TTL_MS } from '../utils/passwordReset.js';
-import * as authSessions from '../utils/authSession.js';
+import { getPreferences } from '../utils/notifications.js';
 // Called through the module objects (not destructured) so tests can stub them.
 import mailer from '../utils/mailer.js';
 import googleAuth from '../utils/googleAuth.js';
 import logger from '../utils/logger.js';
+
 
 const PROFILE_LIMITS = { name: 50, bio: 300, hometown: 80, sport: 30, sportCount: 10, pictureChars: 200000 };
 const PICTURE_PATTERN = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
@@ -258,6 +262,20 @@ const resolvers = {
     createdAt: (rating) => new Date(rating.createdAt).toISOString()
   },
 
+  Notification: {
+    target: (notification) => ({
+      ...notification.target,
+      params: JSON.stringify(notification.target.params || {})
+    }),
+    readAt: (notification) => notification.readAt && new Date(notification.readAt).toISOString(),
+    createdAt: (notification) => new Date(notification.createdAt).toISOString()
+  },
+
+  NotificationDevice: {
+    id: (device) => String(device._id),
+    lastSeenAt: (device) => new Date(device.lastSeenAt).toISOString()
+  },
+
   Query: {
     getRatingsForUser: async (_, { userId }) => Rating.find({ ratee: userId }).sort({ createdAt: -1 }),
 
@@ -304,6 +322,25 @@ const resolvers = {
     getFriends: async (_, { userId }) => {
       const user = await User.findById(userId).populate('friends');
       return user ? user.friends : [];
+    },
+
+    getNotifications: async (_, { limit, before }, context) => {
+      const user = requireUser(context);
+      const query = { recipient: user._id };
+      if (before) query.createdAt = { $lt: new Date(before) };
+      return Notification.find(query).sort({ createdAt: -1 }).limit(Math.min(limit, 100));
+    },
+
+    getUnreadNotificationCount: async (_, __, context) => {
+      const user = requireUser(context);
+      return Notification.countDocuments({ recipient: user._id, readAt: null });
+    },
+
+    getNotificationPreferences: async (_, __, context) => getPreferences(requireUser(context)._id),
+
+    getNotificationDevices: async (_, __, context) => {
+      const user = requireUser(context);
+      return DeviceToken.find({ user: user._id }).sort({ lastSeenAt: -1 });
     }
   },
 
@@ -639,6 +676,57 @@ const resolvers = {
 
       await user.save();
       return User.findById(user._id).populate('friends');
+    },
+
+    markNotificationRead: async (_, { id }, context) => {
+      const user = requireUser(context);
+      const notification = await Notification.findOneAndUpdate(
+        { _id: id, recipient: user._id, readAt: null },
+        { $set: { readAt: new Date() } },
+        { new: true }
+      );
+      if (notification) return notification;
+      const existing = await Notification.findOne({ _id: id, recipient: user._id });
+      if (!existing) throw new Error('Notification not found');
+      return existing;
+    },
+
+    markAllNotificationsRead: async (_, __, context) => {
+      const user = requireUser(context);
+      const result = await Notification.updateMany(
+        { recipient: user._id, readAt: null },
+        { $set: { readAt: new Date() } }
+      );
+      return result.modifiedCount;
+    },
+
+    registerNotificationDevice: async (_, { token, platform }, context) => {
+      const user = requireUser(context);
+      if (!['ios', 'android'].includes(platform)) throw new Error('Unsupported notification platform');
+      return DeviceToken.findOneAndUpdate(
+        { token },
+        { $set: { user: user._id, platform, enabled: true, lastSeenAt: new Date() } },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+    },
+
+    unregisterNotificationDevice: async (_, { token }, context) => {
+      const user = requireUser(context);
+      const result = await DeviceToken.updateOne(
+        { token, user: user._id },
+        { $set: { enabled: false, lastSeenAt: new Date() } }
+      );
+      return result.modifiedCount > 0;
+    },
+
+    updateNotificationPreferences: async (_, values, context) => {
+      const user = requireUser(context);
+      const preferences = await getPreferences(user._id);
+      const updates = Object.fromEntries(
+        Object.entries(values).filter(([key, value]) => key !== 'user' && value !== undefined)
+      );
+      Object.assign(preferences, updates, { updatedAt: new Date() });
+      return preferences.save();
     }
   }
 };

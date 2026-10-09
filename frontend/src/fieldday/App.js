@@ -22,6 +22,7 @@ import LiveSessionDetailsScreen from './screens/LiveSessionDetailsScreen';
 import SessionsScreen from './screens/SessionsScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import { colors } from './theme';
+import { NotificationProvider } from '../notifications';
 import { restoreSession } from '../session';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import SignUpEmailScreen from '../screens/auth/SignUpEmailScreen';
@@ -102,10 +103,10 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer>
-      <StatusBar style="dark" />
-      {/* cardStyle flex keeps each card viewport-sized on web, so screens scroll inside themselves. */}
-      <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false, cardStyle: { flex: 1 } }}>
+    <NotificationProvider>
+      <NavigationContainer>
+        <StatusBar style="dark" />
+        <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false, cardStyle: { flex: 1 } }}>
         <Stack.Screen name="SignUpEmail" component={SignUpEmailScreen} />
         <Stack.Screen name="SignUpPassword" component={SignUpPasswordScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
@@ -120,7 +121,8 @@ export default function App() {
         <Stack.Screen name="ChatDetail" component={ChatDetailScreen} />
         <Stack.Screen name="Notifications" component={NotificationsScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
-      </Stack.Navigator>
-    </NavigationContainer>
+        </Stack.Navigator>
+      </NavigationContainer>
+    </NotificationProvider>
   );
 }
