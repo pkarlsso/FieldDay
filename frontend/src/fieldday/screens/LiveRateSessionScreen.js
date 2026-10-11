@@ -14,8 +14,8 @@ const QUERY = `query($id:ID!){ getSession(id:$id){
   attendance{ user{id} status } myNoShowReport{ noShows } ratingEligibility{ eligible reason }
 } }`;
 const SUBMIT_RATINGS = `
-  mutation SubmitRatings($sessionId: ID!, $raterId: ID!, $ratings: [RatingInput!]!) {
-    submitRatings(sessionId: $sessionId, raterId: $raterId, ratings: $ratings) {
+  mutation SubmitRatings($sessionId: ID!, $ratings: [RatingInput!]!) {
+    submitRatings(sessionId: $sessionId, ratings: $ratings) {
       success avgRatingGiven friendRequestsSent
     }
   }
@@ -97,7 +97,6 @@ export default function LiveRateSessionScreen({ route, navigation }) {
     try {
       const { submitRatings } = await graphql(SUBMIT_RATINGS, {
         sessionId: session.id,
-        raterId: CURRENT_USER_ID,
         ratings: players.map((player) => ({ userId: player.id, rating: ratings[player.id], addFriend: Boolean(friends[player.id]) })),
       });
       navigation.replace('SessionComplete', {

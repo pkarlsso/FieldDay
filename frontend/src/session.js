@@ -43,6 +43,12 @@ const RESTORE_MUTATION = `
   }
 `;
 
+const SETUP_QUERY = `
+  query ProfileSetupStatus {
+    me { id profileComplete }
+  }
+`;
+
 const LOGOUT_MUTATION = `
   mutation Logout($token: String!) {
     logout(token: $token) { success }
@@ -77,9 +83,29 @@ export async function restoreSession() {
   return false;
 }
 
+// The first screen to show once signed in: first-run profile setup until the
+// profile has everything it needs, then the main app.
+export async function screenAfterSignIn() {
+  try {
+    const { me } = await graphql(SETUP_QUERY);
+    return me && !me.profileComplete ? 'ProfileSetup' : 'MainTabs';
+  } catch (err) {
+    // Don't lock someone out of the app because this check failed.
+    logger.warn('Could not check profile setup:', err);
+    return 'MainTabs';
+  }
+}
+
+// Call once a login (2FA, Google or demo) succeeds, then show the right screen.
+export async function finishSignIn(navigation, result) {
+  await startSession(result);
+  navigation.reset({ index: 0, routes: [{ name: await screenAfterSignIn() }] });
+}
+
 export async function endSession() {
   const token = getAuthToken();
   setAuthToken(null);
+  setCurrentUserId(null);
   await writeStored(null);
   if (token) {
     try {

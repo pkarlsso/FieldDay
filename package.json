@@ -17,6 +17,10 @@
     "test:accounts": "node scripts/integration-accounts.mjs",
     "test:sport-preferences": "node scripts/test-sport-preferences.mjs",
     "test:session-lifecycle": "node scripts/test-session-lifecycle.mjs",
+    "test:session-membership": "node scripts/test-session-membership.mjs",
+    "test:session-visibility": "node scripts/test-session-visibility.mjs",
+    "test:authorization": "node scripts/test-authorization.mjs",
+    "test:profile-setup": "node scripts/test-profile-setup.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
     "postinstall": "patch-package"
   },
