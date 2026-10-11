@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import MapView, { Callout, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { graphql } from '../../api';
+import { colors, getSportConfig } from '../theme';
 
 const useGoogleMaps = process.env.EXPO_PUBLIC_MAP_PROVIDER === 'google';
 const DEFAULT_REGION = {
@@ -12,16 +14,33 @@ const DEFAULT_REGION = {
   longitudeDelta: 0.08,
 };
 const DEMO_SESSIONS = [
-  { id: 's1', title: 'Pickleball at Hildegard Park', latitude: 40.4237, longitude: -86.9212 },
-  { id: 's2', title: 'Soccer at Central Field', latitude: 40.431, longitude: -86.915 },
+  { id: 's1', sport: 'Pickleball', title: 'Pickleball at Hildegard Park', latitude: 40.4237, longitude: -86.9212 },
+  { id: 's2', sport: 'Soccer', title: 'Soccer at Central Field', latitude: 40.431, longitude: -86.915 },
+  { id: 's3', sport: 'Basketball', title: 'Basketball at Co-Rec Courts', latitude: 40.428, longitude: -86.921 },
+  { id: 's4', sport: 'Tennis', title: 'Tennis at Riverside Courts', latitude: 40.419, longitude: -86.907 },
+  { id: 's5', sport: 'Volleyball', title: 'Volleyball at Third Street Courts', latitude: 40.426, longitude: -86.93 },
+  { id: 's6', sport: 'Running', title: 'Running at Discovery Park Loop', latitude: 40.438, longitude: -86.912 },
+  { id: 's7', sport: 'Baseball', title: 'Baseball at Slater Hill', latitude: 40.416, longitude: -86.923 },
 ];
 const LIVE_QUERY = `{ getSessions(status: "upcoming") { id sport location locationPoint { coordinates } } }`;
 const useLiveData = process.env.EXPO_PUBLIC_LIVE_DATA === 'true';
+
+function SessionMarkerIcon({ sport, selected }) {
+  const config = getSportConfig(sport);
+  return (
+    <View style={[styles.markerOuter, selected && { borderColor: config.color, borderWidth: 3 }]}>
+      <View style={[styles.markerInner, { backgroundColor: config.color }]}>
+        <MaterialCommunityIcons name={config.icon} size={20} color={colors.card} />
+      </View>
+    </View>
+  );
+}
 
 export default function MapScreen({ navigation }) {
   const [region, setRegion] = useState(DEFAULT_REGION);
   const [loading, setLoading] = useState(true);
   const [sessions, setSessions] = useState(DEMO_SESSIONS);
+  const [selectedSessionId, setSelectedSessionId] = useState(null);
 
   useEffect(() => {
     let mounted = true;
@@ -43,6 +62,7 @@ export default function MapScreen({ navigation }) {
     if (!useLiveData) return undefined;
     graphql(LIVE_QUERY).then((data) => setSessions((data.getSessions || []).map((session) => ({
       id: session.id,
+      sport: session.sport,
       title: `${session.sport} at ${session.location}`,
       latitude: session.locationPoint.coordinates[1],
       longitude: session.locationPoint.coordinates[0],
@@ -60,7 +80,14 @@ export default function MapScreen({ navigation }) {
         showsMyLocationButton
       >
         {sessions.map((session) => (
-          <Marker key={session.id} coordinate={session}>
+          <Marker
+            key={session.id}
+            coordinate={session}
+            anchor={{ x: 0.5, y: 0.5 }}
+            accessibilityLabel={`${session.sport || 'Sport'} session at ${session.title}`}
+            onPress={() => setSelectedSessionId(session.id)}
+          >
+            <SessionMarkerIcon sport={session.sport} selected={session.id === selectedSessionId} />
             <Callout onPress={() => navigation?.navigate('SessionDetails', { sessionId: session.id })}>
               <Text>{session.title}{useLiveData ? '\nTap to view and join' : ''}</Text>
             </Callout>
@@ -76,4 +103,20 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { flex: 1 },
   status: { position: 'absolute', top: 58, alignSelf: 'center', flexDirection: 'row', gap: 8, backgroundColor: '#fff', padding: 10, borderRadius: 8 },
+  markerOuter: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.card,
+    borderWidth: 2,
+    borderColor: colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.ink,
+    shadowOpacity: 0.18,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  markerInner: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
 });
