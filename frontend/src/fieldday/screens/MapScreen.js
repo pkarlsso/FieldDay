@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
 import MapView, { Callout, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-import { graphql } from '../../api';
+import { getDiscoveryOrigin, loadDiscoverySessions } from '../discovery';
+import { formatSessionTime, playersLabel, skillLabel } from '../sessionInfo';
 import { colors, getSportConfig } from '../theme';
+import logger from '../../logger';
 
 const useGoogleMaps = process.env.EXPO_PUBLIC_MAP_PROVIDER === 'google';
 const DEFAULT_REGION = {
@@ -14,15 +15,14 @@ const DEFAULT_REGION = {
   longitudeDelta: 0.08,
 };
 const DEMO_SESSIONS = [
-  { id: 's1', sport: 'Pickleball', title: 'Pickleball at Hildegard Park', latitude: 40.4237, longitude: -86.9212 },
-  { id: 's2', sport: 'Soccer', title: 'Soccer at Central Field', latitude: 40.431, longitude: -86.915 },
-  { id: 's3', sport: 'Basketball', title: 'Basketball at Co-Rec Courts', latitude: 40.428, longitude: -86.921 },
-  { id: 's4', sport: 'Tennis', title: 'Tennis at Riverside Courts', latitude: 40.419, longitude: -86.907 },
-  { id: 's5', sport: 'Volleyball', title: 'Volleyball at Third Street Courts', latitude: 40.426, longitude: -86.93 },
-  { id: 's6', sport: 'Running', title: 'Running at Discovery Park Loop', latitude: 40.438, longitude: -86.912 },
-  { id: 's7', sport: 'Baseball', title: 'Baseball at Slater Hill', latitude: 40.416, longitude: -86.923 },
+  { id: 's1', sport: 'Pickleball', startsAt: '2026-04-12T18:00:00', location: 'Hildegard Park', latitude: 40.4237, longitude: -86.9212 },
+  { id: 's2', sport: 'Soccer', startsAt: '2026-04-12T17:30:00', location: 'Central Field', latitude: 40.431, longitude: -86.915 },
+  { id: 's3', sport: 'Basketball', startsAt: '2026-04-13T19:00:00', location: 'Co-Rec Courts', latitude: 40.428, longitude: -86.921 },
+  { id: 's4', sport: 'Tennis', startsAt: '2026-04-18T10:00:00', location: 'Riverside Courts', latitude: 40.419, longitude: -86.907 },
+  { id: 's5', sport: 'Volleyball', startsAt: '2026-04-12T20:15:00', location: 'Third Street Courts', latitude: 40.426, longitude: -86.93 },
+  { id: 's6', sport: 'Running', startsAt: '2026-04-16T18:30:00', location: 'Discovery Park Loop', latitude: 40.438, longitude: -86.912 },
+  { id: 's7', sport: 'Baseball', startsAt: '2026-04-17T17:45:00', location: 'Slater Hill', latitude: 40.416, longitude: -86.923 },
 ];
-const LIVE_QUERY = `{ getSessions(status: "upcoming") { id sport location locationPoint { coordinates } } }`;
 const useLiveData = process.env.EXPO_PUBLIC_LIVE_DATA === 'true';
 
 function SessionMarkerIcon({ sport, selected }) {
@@ -36,39 +36,52 @@ function SessionMarkerIcon({ sport, selected }) {
   );
 }
 
+function hasCoordinates(session) {
+  return Number.isFinite(session?.locationPoint?.coordinates?.[0]) && Number.isFinite(session?.locationPoint?.coordinates?.[1]);
+}
+
 export default function MapScreen({ navigation }) {
   const [region, setRegion] = useState(DEFAULT_REGION);
   const [loading, setLoading] = useState(true);
   const [sessions, setSessions] = useState(DEMO_SESSIONS);
   const [selectedSessionId, setSelectedSessionId] = useState(null);
+  const [origin, setOrigin] = useState(null);
 
   useEffect(() => {
     let mounted = true;
     async function locateUser() {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (permission.status === 'granted') {
-        const result = await Location.getCurrentPositionAsync({});
+      const location = await getDiscoveryOrigin();
+      if (location) {
         if (mounted) {
-          setRegion({ ...DEFAULT_REGION, latitude: result.coords.latitude, longitude: result.coords.longitude });
+          setOrigin(location);
+          setRegion({ ...DEFAULT_REGION, latitude: location.latitude, longitude: location.longitude });
         }
       }
       if (mounted) setLoading(false);
     }
-    locateUser().catch(() => mounted && setLoading(false));
+    locateUser().catch((error) => {
+      logger.warn('Could not determine map location:', error);
+      if (mounted) setLoading(false);
+    });
     return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
     if (!useLiveData) return undefined;
-    graphql(LIVE_QUERY).then((data) => setSessions((data.getSessions || []).map((session) => ({
+    loadDiscoverySessions({ origin }).then((data) => setSessions(data.filter(hasCoordinates).map((session) => ({
       id: session.id,
       sport: session.sport,
-      title: `${session.sport} at ${session.location}`,
+      startsAt: session.startsAt,
+      location: session.location,
+      skillLevel: session.skillLevel,
+      skillRange: session.skillRange,
+      maxParticipants: session.maxParticipants,
+      participants: session.participants,
       latitude: session.locationPoint.coordinates[1],
       longitude: session.locationPoint.coordinates[0],
-    })))).catch(() => {});
+    })))).catch((error) => logger.error('Could not load map sessions:', error));
     return undefined;
-  }, []);
+  }, [origin]);
 
   return (
     <View style={styles.container}>
@@ -84,12 +97,26 @@ export default function MapScreen({ navigation }) {
             key={session.id}
             coordinate={session}
             anchor={{ x: 0.5, y: 0.5 }}
-            accessibilityLabel={`${session.sport || 'Sport'} session at ${session.title}`}
+            title={session.sport}
+            description={`${formatSessionTime(session.startsAt)} · ${session.location}`}
+            accessibilityLabel={`${session.sport} session at ${session.location}`}
             onPress={() => setSelectedSessionId(session.id)}
           >
             <SessionMarkerIcon sport={session.sport} selected={session.id === selectedSessionId} />
-            <Callout onPress={() => navigation?.navigate('SessionDetails', { sessionId: session.id })}>
-              <Text>{session.title}{useLiveData ? '\nTap to view and join' : ''}</Text>
+            <Callout
+              tooltip
+              onPress={() => navigation?.navigate('SessionDetails', { sessionId: session.id })}
+              accessibilityLabel={`Open ${session.sport} session details`}
+            >
+              <View style={styles.calloutCard}>
+                <Text style={styles.calloutSport}>{session.sport}</Text>
+                <Text style={styles.calloutDetail}>{formatSessionTime(session.startsAt)}</Text>
+                <Text style={styles.calloutDetail}>{session.location}</Text>
+                {session.maxParticipants ? (
+                  <Text style={styles.calloutDetail}>{playersLabel(session)} • {skillLabel(session)}</Text>
+                ) : null}
+                <Text style={styles.calloutAction}>Tap for session details</Text>
+              </View>
             </Callout>
           </Marker>
         ))}
@@ -119,4 +146,8 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   markerInner: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  calloutCard: { width: 220, backgroundColor: '#fff', borderRadius: 12, padding: 14, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 6, elevation: 4 },
+  calloutSport: { color: '#1f2937', fontSize: 17, fontWeight: '700', marginBottom: 6 },
+  calloutDetail: { color: '#4b5563', fontSize: 14, lineHeight: 20 },
+  calloutAction: { color: '#5856d6', fontSize: 13, fontWeight: '600', marginTop: 10 },
 });

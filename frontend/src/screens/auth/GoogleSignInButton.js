@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Text, TouchableOpacity, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
@@ -57,7 +57,7 @@ function GoogleButton({ navigation, onError }) {
           onError(data.googleSignIn.message);
         } else {
           await startSession(data.googleSignIn);
-          if (active) navigation.reset({ index: 0, routes: [{ name: 'Main' }] });
+          if (active) navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
         }
       } catch (err) {
         onError(err.message);

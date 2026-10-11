@@ -14,10 +14,58 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Lint and build application
+  backend-test:
+    name: Backend test
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      mongodb:
+        image: mongo:8
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      CI: 'true'
+      MONGODB_URI: mongodb://127.0.0.1:27017/fieldday
+      PORT: '4000'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Set up Node.js 22.13
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22.13.x'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install locked workspace dependencies
+        run: npm ci
+      - name: Start backend and verify health
+        run: |
+          npm run start --workspace backend > backend.log 2>&1 &
+          backend_pid=$!
+          trap 'kill "$backend_pid" 2>/dev/null || true' EXIT
+          curl --fail --retry 20 --retry-all-errors --retry-delay 2 http://localhost:4000/health
+
+  checks:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Validate backend
+            command: npm run check:backend
+            artifact_path: ''
+          - name: Build frontend
+            command: npm run build
+            artifact_path: frontend/dist/
     env:
       CI: 'true'
       EXPO_NO_TELEMETRY: '1'
@@ -34,16 +82,13 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Install locked workspace dependencies
         run: npm ci
-      - name: Run ESLint
-        run: npm run lint
-      - name: Validate backend syntax and schema
-        run: npm run check:backend
-      - name: Build Expo production bundles for web, Android, and iOS
-        run: npm run build
+      - name: Run check
+        run: ${{ matrix.command }}
       - name: Upload application build artifacts
+        if: matrix.artifact_path != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: fieldday-bundles-${{ github.sha }}
-          path: frontend/dist/
+          path: ${{ matrix.artifact_path }}
           if-no-files-found: error
           retention-days: 7

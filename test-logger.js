@@ -1,9 +1,11 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import logger from './logger.js';
+import loggerModule from './logger.cjs';
+
+const logDir = path.resolve('logs/logger-test');
+const logger = loggerModule.createLogger({ logDir, service: 'fieldday-logger-test' });
 
 const marker = `logger-smoke-test-${Date.now()}`;
-const logDir = path.resolve('logs');
 
 logger.silly(`${marker} silly`);
 logger.debug(`${marker} debug`);

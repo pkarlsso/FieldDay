@@ -1,6 +1,6 @@
-const crypto = require('crypto');
-const AuthSession = require('../models/AuthSession');
-const User = require('../models/User');
+import crypto from 'node:crypto';
+import AuthSession from '../models/AuthSession.js';
+import User from '../models/User.js';
 
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
@@ -65,7 +65,7 @@ async function authenticateRequest(req) {
   return User.findById(session.user);
 }
 
-module.exports = {
+export {
   SESSION_TTL_MS,
   createAuthSession,
   restoreAuthSession,

@@ -27,10 +27,10 @@ With Node.js 22 installed, from the repository root:
 
 ```sh
 npm ci
-npm run lint
-npm run check:backend
-npm run build
+npm run check
 ```
+
+The check command runs ESLint, backend validation, and the frontend production build in the same order as CI. It does not run database-dependent integration tests or native-device tests.
 
 ## Build scope
 

@@ -1,19 +1,19 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { graphql } from '../../api';
-
-const QUERY = `{ getSessions(status: "upcoming") { id sport location locationPoint { coordinates } } }`;
+import { loadDiscoverySessions } from '../discovery';
+import { playersLabel, skillLabel } from '../sessionInfo';
+import logger from '../../logger';
 
 export default function MapScreen() {
   const [sessions, setSessions] = React.useState([]);
   React.useEffect(() => {
-    if (process.env.EXPO_PUBLIC_LIVE_DATA === 'true') graphql(QUERY).then((data) => setSessions(data.getSessions || [])).catch(() => {});
+    if (process.env.EXPO_PUBLIC_LIVE_DATA === 'true') loadDiscoverySessions({}).then(setSessions).catch((error) => logger.error('Could not load web map sessions:', error));
   }, []);
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Map testing is available on iOS.</Text>
       <Text style={styles.detail}>Run the native Expo app to test location permissions and map markers.</Text>
-      {sessions.map((session) => <Text key={session.id} style={styles.detail}>{session.sport} at {session.location}: {session.locationPoint.coordinates.join(', ')}</Text>)}
+      {sessions.map((session) => <Text key={session.id} style={styles.detail}>{session.sport} at {session.location} • {playersLabel(session)} • {skillLabel(session)}: {session.locationPoint.coordinates.join(', ')}</Text>)}
     </View>
   );
 }

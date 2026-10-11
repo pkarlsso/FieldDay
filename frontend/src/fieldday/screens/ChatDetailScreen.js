@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ScrollView, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar, Card, IconButton, NotificationButton, ScreenHeader } from '../components/ui';
 import { colors } from '../theme';
 import { conversations } from '../data/mockData';
+import { firstName, useCurrentUser } from '../useCurrentUser';
 
 export default function ChatDetailScreen({ route, navigation }) {
   const conversation = conversations.find((item) => item.id === route.params?.conversationId) || conversations[0];
   const [draft, setDraft] = useState('');
+  const user = useCurrentUser();
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
@@ -41,7 +43,7 @@ export default function ChatDetailScreen({ route, navigation }) {
               paddingVertical: 11,
             }}
           >
-            <Text style={{ color: message.mine ? colors.card : colors.purpleDark, fontWeight: '900', marginBottom: 4 }}>{message.author}</Text>
+            <Text style={{ color: message.mine ? colors.card : colors.purpleDark, fontWeight: '900', marginBottom: 4 }}>{message.mine ? firstName(user) || 'You' : message.author}</Text>
             <Text style={{ color: message.mine ? colors.card : colors.text, lineHeight: 20 }}>{message.body}</Text>
           </View>
         ))}
