@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { loadDiscoverySessions } from '../discovery';
+import { playersLabel, skillLabel } from '../sessionInfo';
 import logger from '../../logger';
 
 export default function MapScreen() {
@@ -12,7 +13,7 @@ export default function MapScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>Map testing is available on iOS.</Text>
       <Text style={styles.detail}>Run the native Expo app to test location permissions and map markers.</Text>
-      {sessions.map((session) => <Text key={session.id} style={styles.detail}>{session.sport} at {session.location}: {session.locationPoint.coordinates.join(', ')}</Text>)}
+      {sessions.map((session) => <Text key={session.id} style={styles.detail}>{session.sport} at {session.location} • {playersLabel(session)} • {skillLabel(session)}: {session.locationPoint.coordinates.join(', ')}</Text>)}
     </View>
   );
 }

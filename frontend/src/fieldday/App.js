@@ -12,14 +12,18 @@ import ChatDetailScreen from './screens/ChatDetailScreen';
 import CreateSessionScreen from './screens/CreateSessionScreen';
 import FriendsScreen from './screens/FriendsScreen';
 import HomeScreen from './screens/HomeScreen';
+import LiveHomeScreen from './screens/LiveHomeScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import MapScreen from './screens/MapScreen';
 import RateSessionScreen from './screens/RateSessionScreen';
+import LiveRateSessionScreen from './screens/LiveRateSessionScreen';
+import LiveNoShowScreen from './screens/LiveNoShowScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import SessionCompleteScreen from './screens/SessionCompleteScreen';
 import SessionDetailsScreen from './screens/SessionDetailsScreen';
 import LiveSessionDetailsScreen from './screens/LiveSessionDetailsScreen';
 import SessionsScreen from './screens/SessionsScreen';
+import LiveSessionsScreen from './screens/LiveSessionsScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import { colors } from './theme';
 import { restoreSession } from '../session';
@@ -70,10 +74,10 @@ function MainTabs() {
         ),
       })}
     >
-      <Tab.Screen name="HomeTab" component={HomeScreen} options={{ title: 'Home' }} />
+      <Tab.Screen name="HomeTab" component={useLiveData ? LiveHomeScreen : HomeScreen} options={{ title: 'Home' }} />
       <Tab.Screen name="Explore" component={useLiveData ? LiveExploreScreen : ExploreScreen} />
       <Tab.Screen name="Map" component={MapScreen} />
-      <Tab.Screen name="Sessions" component={SessionsScreen} />
+      <Tab.Screen name="Sessions" component={useLiveData ? LiveSessionsScreen : SessionsScreen} />
       <Tab.Screen name="Friends" component={FriendsScreen} />
       <Tab.Screen name="Create" component={CreateSessionScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
@@ -115,7 +119,8 @@ export default function App() {
         <Stack.Screen name="MainTabs" component={MainTabs} />
         <Stack.Screen name="EditProfile" component={EditProfileScreen} />
         <Stack.Screen name="SessionDetails" component={useLiveData ? LiveSessionDetailsScreen : SessionDetailsScreen} />
-        <Stack.Screen name="RateSession" component={RateSessionScreen} />
+        <Stack.Screen name="RateSession" component={useLiveData ? LiveRateSessionScreen : RateSessionScreen} />
+        <Stack.Screen name="ReportNoShows" component={LiveNoShowScreen} />
         <Stack.Screen name="SessionComplete" component={SessionCompleteScreen} />
         <Stack.Screen name="ChatDetail" component={ChatDetailScreen} />
         <Stack.Screen name="Notifications" component={NotificationsScreen} />
