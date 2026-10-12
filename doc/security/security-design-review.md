@@ -6,16 +6,16 @@ This page holds the diagrams referenced by the team's Security Design Review sub
 
 ```mermaid
 flowchart LR
-  U[FieldDay user\n(iOS app)]
-  F[Expo / React Native client]
-  G[API Gateway\nHTTPS boundary]
-  B[Node + Express + Apollo GraphQL API\nAWS Elastic Beanstalk]
-  M[(MongoDB Atlas\nusers, sessions, memberships, profiles)]
-  O[Google OAuth\nidentity provider]
-  P[Expo push service\nfuture notification delivery]
-  A[AWS / application operators]
+  U["FieldDay user - iOS app"]
+  F["Expo React Native client"]
+  G["API Gateway - HTTPS boundary"]
+  B["Node Express Apollo GraphQL API on Elastic Beanstalk"]
+  M[("MongoDB Atlas: users, sessions, memberships, profiles")]
+  O["Google OAuth identity provider"]
+  P["Expo push service - future delivery"]
+  A["AWS application operators"]
 
-  U -->|credentials, profile input,\nlocation and session actions| F
+  U -->|"credentials, profile input, location, session actions"| F
   F -->|Bearer token + GraphQL over HTTPS| G
   G -->|validated HTTPS request| B
   B -->|authenticated, authorized reads/writes| M
@@ -40,14 +40,14 @@ The most sensitive data is an account identity, email, authentication session/to
 
 ```mermaid
 flowchart TD
-  R[Goal: create, join, rate, or edit as another user]
-  R --> A[Forge a client-controlled user ID]
-  R --> B[Obtain or reuse a valid session token]
-  R --> C[Exploit an authorization gap in a resolver]
-  A --> A1[Mutation accepts userId/hostId/raterId as authority]
-  B --> B1[Token persists too long or is exposed on a device]
-  C --> C1[Resolver loads object without checking current user]
-  A1 --> X[Unauthorized write reaches MongoDB]
+  R["Goal: act as another FieldDay user"]
+  R --> A["Forge a client-controlled user ID"]
+  R --> B["Obtain or reuse a valid session token"]
+  R --> C["Exploit an authorization gap in a resolver"]
+  A --> A1["Mutation trusts userId, hostId, or raterId"]
+  B --> B1["Token persists too long or is exposed"]
+  C --> C1["Resolver skips current-user ownership check"]
+  A1 --> X["Unauthorized write reaches MongoDB"]
   B1 --> X
   C1 --> X
 ```
@@ -56,15 +56,15 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  R[Goal: learn where a FieldDay user will be]
-  R --> A[Read data beyond the viewer's allowed scope]
-  R --> B[Collect public-looking session data at scale]
-  R --> C[Abuse a leaked account session]
-  A --> A1[GraphQL resolver returns another user's profile or membership]
-  B --> B1[No query limits or rate controls]
-  B --> B2[Exact locations exposed before a user should see them]
-  C --> C1[Stolen device or poorly cleared local session]
-  A1 --> X[Location, participant, and schedule data exposed]
+  R["Goal: learn where a FieldDay user will be"]
+  R --> A["Read data beyond the viewer's allowed scope"]
+  R --> B["Collect session data at scale"]
+  R --> C["Abuse a leaked account session"]
+  A --> A1["GraphQL resolver returns another user's data"]
+  B --> B1["No query limits or rate controls"]
+  B --> B2["Exact locations exposed too early"]
+  C --> C1["Stolen device or uncleared local session"]
+  A1 --> X["Location, participant, and schedule data exposed"]
   B1 --> X
   B2 --> X
   C1 --> X
