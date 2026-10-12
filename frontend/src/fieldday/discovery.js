@@ -13,7 +13,7 @@ export const DEFAULT_DISCOVERY_FILTER = {
 const DISCOVERY_QUERY = `
   query Discovery($status: String, $filter: SessionDiscoveryFilterInput) {
     getSessions(status: $status, filter: $filter) {
-      id sport startsAt location skillRange tags distanceMiles
+      id sport startsAt location skillLevel skillRange tags distanceMiles
       locationPoint { coordinates }
       maxParticipants participants { id }
     }

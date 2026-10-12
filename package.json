@@ -17,6 +17,7 @@
     "test:chat": "npm run test:chat --workspace backend",
     "test:accounts": "node scripts/integration-accounts.mjs",
     "test:sport-preferences": "node scripts/test-sport-preferences.mjs",
+    "test:session-lifecycle": "node scripts/test-session-lifecycle.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
     "postinstall": "patch-package"
   },

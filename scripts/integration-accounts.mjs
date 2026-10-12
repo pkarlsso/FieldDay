@@ -235,8 +235,11 @@ try {
     return User.create({ name, email: emailFor(name), totalRatings: 2, ratingSum: 8, socialRating: 4 });
   }));
   const makeSession = async (status) => {
+    // Sessions end on their own once their end time passes, so an "upcoming"
+    // one has to actually be in the future.
+    const startsAt = status === 'upcoming' ? new Date(Date.now() + 24 * 60 * 60 * 1000) : new Date('2026-01-01T10:00:00Z');
     const session = await Session.create({
-      sport: 'Pickleball', date: '2026-01-01', time: '10:00', startsAt: new Date('2026-01-01T10:00:00Z'),
+      sport: 'Pickleball', date: '2026-01-01', time: '10:00', startsAt,
       location: 'Test Court', locationPoint: { type: 'Point', coordinates: [-86.9, 40.4] },
       participants: [host._id, guest._id, third._id], host: host._id, status
     });

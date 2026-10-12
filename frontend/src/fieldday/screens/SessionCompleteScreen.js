@@ -6,7 +6,10 @@ import { sessions } from '../data/mockData';
 
 export default function SessionCompleteScreen({ route, navigation }) {
   const session = sessions.find((item) => item.id === route.params?.sessionId) || sessions[0];
-  const { avgRatingGiven = 4.2, friendRequestsSent = 2, playersRated = 3 } = route.params || {};
+  const { avgRatingGiven = 4.2, friendRequestsSent = 2, playersRated = 3, title, ratedPlayers } = route.params || {};
+  // The live rating flow passes the players it rated; the mock flow does not.
+  const recap = ratedPlayers
+    || session.players.map((player, index) => ({ ...player, rating: index === 2 ? 3 : index === 1 ? 5 : 4 }));
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
@@ -21,7 +24,7 @@ export default function SessionCompleteScreen({ route, navigation }) {
             <Ionicons name="checkmark" size={54} color={colors.green} />
           </View>
           <Text style={{ color: colors.ink, fontSize: 28, fontWeight: '900', marginTop: 18 }}>Session Complete</Text>
-          <Text style={{ color: colors.muted, marginTop: 8 }}>{session.title}</Text>
+          <Text style={{ color: colors.muted, marginTop: 8 }}>{title || session.title}</Text>
           <View style={{ alignSelf: 'stretch', borderTopWidth: 1, borderTopColor: colors.line, marginTop: 22, paddingTop: 18, gap: 10 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Ionicons name="star" size={18} color={colors.gold} />
@@ -40,11 +43,11 @@ export default function SessionCompleteScreen({ route, navigation }) {
 
         <Card>
           <Text style={{ color: colors.ink, fontWeight: '900', fontSize: 18, marginBottom: 12 }}>Recap</Text>
-          {session.players.map((player, index) => (
+          {recap.map((player, index) => (
             <View key={player.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 9, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: colors.line }}>
               <Avatar name={player.name} color={colors.purple} size={38} />
               <Text style={{ flex: 1, marginLeft: 10, color: colors.ink, fontWeight: '800' }}>{player.name}</Text>
-              <Text style={{ color: colors.green, fontWeight: '900' }}>{index === 2 ? '3/5' : index === 1 ? '5/5' : '4/5'}</Text>
+              <Text style={{ color: colors.green, fontWeight: '900' }}>{player.rating}/5</Text>
             </View>
           ))}
         </Card>
