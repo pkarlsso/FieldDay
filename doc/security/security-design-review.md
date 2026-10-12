@@ -4,7 +4,7 @@ This page holds the diagrams referenced by the team's Security Design Review sub
 
 ## Data-flow diagram
 
-The editable [diagrams.net security-review diagram](https://app.diagrams.net/?url=https%3A%2F%2Fraw.githubusercontent.com%2Fpkarlsso%2FFieldDay%2Fsecurity-design-review%2Fdoc%2Fsecurity%2Ffieldday-security-review.drawio) contains the data-flow diagram and both attack trees. The source file is also kept in this repository as [`fieldday-security-review.drawio`](fieldday-security-review.drawio).
+The editable [diagrams.net security-review diagram](https://app.diagrams.net/?url=https%3A%2F%2Fraw.githubusercontent.com%2Fpkarlsso%2FFieldDay%2Fsecurity-design-review%2Fdoc%2Fsecurity%2Ffieldday-security-review-v2.drawio) contains the data-flow diagram and both attack trees. The source file is also kept in this repository as [`fieldday-security-review-v2.drawio`](fieldday-security-review-v2.drawio).
 
 **Trust boundaries.** User input reaches the mobile client first, but it remains untrusted until the API validates the request. The HTTPS edge between the app and API Gateway is a boundary because network traffic is outside our control. The backend-to-Atlas connection is another boundary because the API uses its database credentials and makes privileged reads and writes there. OAuth and push delivery are separate third-party boundaries; the mobile app should never hold their server secrets.
 
