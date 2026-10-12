@@ -5,16 +5,17 @@
 import assert from 'node:assert/strict';
 import mongoose from 'mongoose';
 import { ApolloServer } from '@apollo/server';
-import { getConfig } from '../backend/src/config.js';
-import typeDefs from '../backend/src/graphql/typeDefs.js';
-import resolvers from '../backend/src/graphql/resolvers.js';
-import mailer from '../backend/src/utils/mailer.js';
-import googleAuth from '../backend/src/utils/googleAuth.js';
-import { authenticateRequest } from '../backend/src/utils/authSession.js';
-import User from '../backend/src/models/User.js';
-import Session from '../backend/src/models/Session.js';
-import Rating from '../backend/src/models/Rating.js';
-import AuthSession from '../backend/src/models/AuthSession.js';
+import { getConfig } from '../src/config.js';
+import typeDefs from '../src/graphql/typeDefs.js';
+import resolvers from '../src/graphql/resolvers.js';
+import mailer from '../src/utils/mailer.js';
+import googleAuth from '../src/utils/googleAuth.js';
+import { authenticateRequest } from '../src/utils/authSession.js';
+import User from '../src/models/User.js';
+import Session from '../src/models/Session.js';
+import Rating from '../src/models/Rating.js';
+import AuthSession from '../src/models/AuthSession.js';
+import FriendRequest from '../src/models/FriendRequest.js';
 
 const tag = `accounts-${Date.now()}`;
 const emailFor = (name) => `${tag}-${name}@example.test`;
@@ -68,7 +69,7 @@ const sessionIds = [];
 
 try {
   await mongoose.connect(getConfig().mongoUri);
-  await Promise.all([User.init(), Rating.init(), AuthSession.init()]);
+  await Promise.all([User.init(), Rating.init(), AuthSession.init(), FriendRequest.init()]);
 
   // ---- #104 persistent sign-in -------------------------------------------
   const alice = await signUpAndVerify('alice');
@@ -274,7 +275,45 @@ try {
   assert.equal(guestAfter.totalRatings, 3);
   assert.equal(guestAfter.socialRating, 4.3, '(8 + 5) / 3 rounded to one decimal');
   assert.equal(await Rating.countDocuments({ session: session._id, rater: host._id }), 2, 'each rating is stored');
-  assert.deepEqual((await User.findById(guest._id)).friends.map(String), [ids.host], 'friendship is mutual');
+  assert.deepEqual((await User.findById(guest._id)).friends.map(String), [], 'rating opt-in waits for acceptance');
+  assert.deepEqual((await User.findById(host._id)).friends.map(String), []);
+  const request = await FriendRequest.findOne({ requester: host._id, recipient: guest._id });
+  assert.equal(request.status, 'pending');
+
+  const requestFields = 'id status requester { id name } recipient { id name }';
+  await fails(
+    `mutation($id:ID!){sendFriendRequest(recipientId:$id){${requestFields}}}`,
+    { id: ids.guest },
+    host,
+    'already pending'
+  );
+  await fails(
+    `mutation($id:ID!){acceptFriendRequest(requestId:$id){${requestFields}}}`,
+    { id: String(request._id) },
+    host,
+    'Only the recipient'
+  );
+  const accepted = await ok(
+    `mutation($id:ID!){acceptFriendRequest(requestId:$id){${requestFields}}}`,
+    { id: String(request._id) },
+    guest
+  );
+  assert.equal(accepted.acceptFriendRequest.status, 'accepted');
+  assert.deepEqual((await User.findById(guest._id)).friends.map(String), [ids.host], 'accepted friendship is mutual');
+  assert.deepEqual((await User.findById(host._id)).friends.map(String), [ids.guest]);
+
+  const declined = (await ok(
+    `mutation($id:ID!){sendFriendRequest(recipientId:$id){${requestFields}}}`,
+    { id: ids.outsider },
+    host
+  )).sendFriendRequest;
+  const decline = await ok(
+    `mutation($id:ID!){declineFriendRequest(requestId:$id){${requestFields}}}`,
+    { id: declined.id },
+    outsider
+  );
+  assert.equal(decline.declineFriendRequest.status, 'declined');
+  assert.deepEqual((await User.findById(outsider._id)).friends.map(String), []);
   assert.deepEqual((await User.findById(host._id)).friends.map(String), [ids.guest]);
 
   await fails(submit, rate(ids.host, [{ userId: ids.guest, rating: 1 }]), null, 'already rated');
@@ -296,6 +335,7 @@ try {
   assert.equal((await User.findById(host._id)).totalRatings, 4);
   assert.equal((await User.findById(host._id)).socialRating, 4, '(8 + 4 + 4) / 4');
 
+  // eslint-disable-next-line no-console
   console.log('Accounts integration test passed: sessions, password reset, Google, profile, ratings');
 } finally {
   const users = await User.find({ email: { $in: createdEmails } }, '_id');
@@ -304,6 +344,7 @@ try {
     Rating.deleteMany({ session: { $in: sessionIds } }),
     Session.deleteMany({ _id: { $in: sessionIds } }),
     AuthSession.deleteMany({ user: { $in: userIds } }),
+    FriendRequest.deleteMany({ $or: [{ requester: { $in: userIds } }, { recipient: { $in: userIds } }] }),
     User.deleteMany({ _id: { $in: userIds } })
   ]);
   await mongoose.disconnect();

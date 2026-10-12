@@ -14,6 +14,25 @@ const typeDefs = `#graphql
     friends: [User]
   }
 
+  type PublicUser {
+    id: ID!
+    name: String!
+    bio: String
+    hometown: String
+    profilePicture: String
+    sports: [String]
+    socialRating: Float
+  }
+
+  type FriendRequest {
+    id: ID!
+    requester: PublicUser!
+    recipient: PublicUser!
+    status: String!
+    createdAt: String!
+    updatedAt: String!
+  }
+
   type SportSkill {
     sport: String!
     skillLevel: Float!
@@ -183,6 +202,9 @@ const typeDefs = `#graphql
     getCompletedSessions(userId: ID!): [Session]
     getMySessions: MySessions!
     getFriends(userId: ID!): [User]
+    findUserById(id: ID!): PublicUser
+    getMyFriendRequests(status: String): [FriendRequest!]!
+    getFriendCandidates: [PublicUser!]!
     checkEmailExists(email: String!): EmailCheckResult!
     getRatingsForUser(userId: ID!): [Rating!]!
     getRatingsBySession(sessionId: ID!, raterId: ID!): [Rating!]!
@@ -197,6 +219,9 @@ const typeDefs = `#graphql
     reportNoShows(sessionId: ID!, noShowUserIds: [ID!]!): Session!
     submitRatings(sessionId: ID!, raterId: ID!, ratings: [RatingInput!]!): RatingResult
     addFriend(userId: ID!, friendId: ID!): User
+    sendFriendRequest(recipientId: ID!): FriendRequest!
+    acceptFriendRequest(requestId: ID!): FriendRequest!
+    declineFriendRequest(requestId: ID!): FriendRequest!
     signUp(email: String!, password: String!): AuthResult!
     login(email: String!, password: String!): AuthResult!
     resendTwoFactorCode(email: String!): AuthResult!
