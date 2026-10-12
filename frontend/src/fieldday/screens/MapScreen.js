@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 import MapView, { Callout, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { getDiscoveryOrigin, loadDiscoverySessions } from '../discovery';
+import { formatSessionTime, playersLabel, skillLabel } from '../sessionInfo';
 import logger from '../../logger';
 
 const useGoogleMaps = process.env.EXPO_PUBLIC_MAP_PROVIDER === 'google';
@@ -20,13 +21,6 @@ const DEMO_SESSIONS = [
   },
 ];
 const useLiveData = process.env.EXPO_PUBLIC_LIVE_DATA === 'true';
-
-function formatSessionTime(startsAt) {
-  const date = new Date(startsAt);
-  return Number.isNaN(date.getTime()) ? 'Time unavailable' : date.toLocaleString(undefined, {
-    weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-  });
-}
 
 function hasCoordinates(session) {
   return Number.isFinite(session?.locationPoint?.coordinates?.[0]) && Number.isFinite(session?.locationPoint?.coordinates?.[1]);
@@ -64,6 +58,10 @@ export default function MapScreen({ navigation }) {
       sport: session.sport,
       startsAt: session.startsAt,
       location: session.location,
+      skillLevel: session.skillLevel,
+      skillRange: session.skillRange,
+      maxParticipants: session.maxParticipants,
+      participants: session.participants,
       latitude: session.locationPoint.coordinates[1],
       longitude: session.locationPoint.coordinates[0],
     })))).catch((error) => logger.error('Could not load map sessions:', error));
@@ -96,6 +94,9 @@ export default function MapScreen({ navigation }) {
                 <Text style={styles.calloutSport}>{session.sport}</Text>
                 <Text style={styles.calloutDetail}>{formatSessionTime(session.startsAt)}</Text>
                 <Text style={styles.calloutDetail}>{session.location}</Text>
+                {session.maxParticipants ? (
+                  <Text style={styles.calloutDetail}>{playersLabel(session)} • {skillLabel(session)}</Text>
+                ) : null}
                 <Text style={styles.calloutAction}>Tap for session details</Text>
               </View>
             </Callout>
