@@ -3,6 +3,7 @@ import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-nativ
 import { Card, Pill, ScreenHeader, SportIcon } from '../components/ui';
 import { colors, sports } from '../theme';
 import { DEFAULT_DISCOVERY_FILTER, getDiscoveryOrigin, loadDiscoverySessions } from '../discovery';
+import { formatSessionTime, playersLabel, skillLabel } from '../sessionInfo';
 import logger from '../../logger';
 
 const sportOptions = Object.keys(sports);
@@ -82,7 +83,8 @@ export default function LiveExploreScreen({ navigation }) {
           <SportIcon sport={session.sport} size={48} />
           <View style={{ flex: 1 }}>
             <Text style={{ color: colors.ink, fontWeight: '900', fontSize: 16 }}>{session.sport} at {session.location}</Text>
-            <Text style={{ color: colors.muted, marginTop: 4 }}>{new Date(session.startsAt).toLocaleString()} • {session.participants.length}/{session.maxParticipants}{session.distanceMiles !== null ? ` • ${session.distanceMiles.toFixed(1)} mi` : ''}</Text>
+            <Text style={{ color: colors.muted, marginTop: 4 }}>{formatSessionTime(session.startsAt)}{session.distanceMiles !== null ? ` • ${session.distanceMiles.toFixed(1)} mi` : ''}</Text>
+            <Text style={{ color: colors.text, marginTop: 4, fontWeight: '700' }}>{playersLabel(session)} • {skillLabel(session)}</Text>
           </View>
         </Card>
       </TouchableOpacity>)}

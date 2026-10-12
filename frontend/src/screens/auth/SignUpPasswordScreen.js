@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { graphql } from '../../api';
 import PasswordChecklist, { isStrongPassword } from '../../components/PasswordChecklist';
+import { startSession } from '../../session';
 
 const PURPLE = '#7C7EFF';
 
@@ -12,6 +13,7 @@ const MUTATION = `
       message
       userId
       requiresTwoFactor
+      token
     }
   }
 `;
@@ -36,8 +38,11 @@ export default function SignUpPasswordScreen({ route, navigation }) {
       const data = await graphql(MUTATION, { email, password });
       if (!data.signUp.success) {
         setError(data.signUp.message);
-      } else {
+      } else if (data.signUp.requiresTwoFactor) {
         navigation.navigate('TwoFactor', { email, mode: 'signup' });
+      } else {
+        await startSession(data.signUp);
+        navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
       }
     } catch (err) {
       setError(err.message);
