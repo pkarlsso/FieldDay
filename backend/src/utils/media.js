@@ -5,13 +5,22 @@ const MAX_IMAGE_BYTES = 150 * 1024;
 const UNSAVED_UPLOAD_TTL_MS = 24 * 60 * 60 * 1000;
 const DATA_URI_PATTERN = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/;
 
-// The first bytes of each allowed format, so a file can't claim to be a JPEG
-// when it is something else.
-const SIGNATURES = {
-  'image/jpeg': (bytes) => bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff,
-  'image/png': (bytes) => bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
-  'image/webp': (bytes) => bytes.toString('latin1', 0, 4) === 'RIFF' && bytes.toString('latin1', 8, 12) === 'WEBP'
-};
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+// Checks the first bytes of the file, so a file can't claim to be a JPEG when
+// it is something else.
+function hasImageSignature(contentType, bytes) {
+  switch (contentType) {
+    case 'image/jpeg':
+      return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    case 'image/png':
+      return bytes.subarray(0, 8).equals(PNG_SIGNATURE);
+    case 'image/webp':
+      return bytes.toString('latin1', 0, 4) === 'RIFF' && bytes.toString('latin1', 8, 12) === 'WEBP';
+    default:
+      return false;
+  }
+}
 
 // Turns a base64 data URI into checked image bytes. Anything else, such as a
 // file path or a web address, is rejected.
@@ -24,7 +33,7 @@ function decodeImage(dataUri) {
   const [, contentType, base64] = match;
   const data = Buffer.from(base64, 'base64');
   if (data.length > MAX_IMAGE_BYTES) throw new Error('Profile photo is too large');
-  if (data.length < 12 || !SIGNATURES[contentType](data)) {
+  if (data.length < 12 || !hasImageSignature(contentType, data)) {
     throw new Error('Profile photo must be a JPEG, PNG or WebP image');
   }
   return { contentType, data };
