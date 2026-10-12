@@ -6,7 +6,8 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "seed": "node src/seed.js"
+    "seed": "node src/seed.js",
+    "test:chat": "node scripts/integration-chat.mjs"
   },
   "dependencies": {
     "@apollo/server": "^4.13.0",

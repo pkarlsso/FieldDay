@@ -1,14 +1,11 @@
 import mongoose from 'mongoose';
-import { createRequire } from 'node:module';
-
-const require = createRequire(import.meta.url);
-const { getConfig } = require('../backend/src/config.js');
-const User = require('../backend/src/models/User.js');
-const Session = require('../backend/src/models/Session.js');
-const Conversation = require('../backend/src/models/Conversation.js');
-const Message = require('../backend/src/models/Message.js');
-const AuthSession = require('../backend/src/models/AuthSession.js');
-const authSessions = require('../backend/src/utils/authSession.js');
+import { getConfig } from '../src/config.js';
+import User from '../src/models/User.js';
+import Session from '../src/models/Session.js';
+import Conversation from '../src/models/Conversation.js';
+import Message from '../src/models/Message.js';
+import AuthSession from '../src/models/AuthSession.js';
+import * as authSessions from '../src/utils/authSession.js';
 
 const endpoint = `http://localhost:${getConfig().port}/graphql`;
 const tag = `chat-integration-${Date.now()}`;
@@ -35,9 +32,9 @@ async function expectError(query, variables, token, expected) {
   }
 }
 
-const conversationsQuery = `query { getConversations { id } }`;
-const sendMutation = `mutation($conversationId:ID!,$body:String!,$clientMessageId:String!){sendMessage(conversationId:$conversationId,body:$body,clientMessageId:$clientMessageId){id body sender{id}}}`;
-const messagesQuery = `query($conversationId:ID!){getConversationMessages(conversationId:$conversationId){messages{id body sender{id}}}}`;
+const conversationsQuery = 'query { getConversations { id } }';
+const sendMutation = 'mutation($conversationId:ID!,$body:String!,$clientMessageId:String!){sendMessage(conversationId:$conversationId,body:$body,clientMessageId:$clientMessageId){id body sender{id}}}';
+const messagesQuery = 'query($conversationId:ID!){getConversationMessages(conversationId:$conversationId){messages{id body sender{id}}}}';
 
 try {
   await mongoose.connect(getConfig().mongoUri);
@@ -68,7 +65,7 @@ try {
   const history = await graphql(messagesQuery, { conversationId }, tokens.get(String(users[1]._id)));
   if (history.getConversationMessages.messages.length !== 1) throw new Error('former participant lost read access');
 
-  console.log('Integration chat test passed: authorization -> persistence -> retry -> read-only history');
+  process.stdout.write('Integration chat test passed: authorization -> persistence -> retry -> read-only history\n');
 } finally {
   if (conversationId) await Message.deleteMany({ conversation: conversationId });
   if (session) await Session.deleteOne({ _id: session._id });
