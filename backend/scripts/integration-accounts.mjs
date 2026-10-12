@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 // Exercises password reset, Google sign-in, persistent sign-in, profile editing
 // and ratings against the database in MONGODB_URI. It runs the GraphQL schema
 // in-process (no server needed), stubs out email and Google, and deletes every
@@ -5,18 +6,18 @@
 import assert from 'node:assert/strict';
 import mongoose from 'mongoose';
 import { ApolloServer } from '@apollo/server';
-import { getConfig } from '../backend/src/config.js';
-import typeDefs from '../backend/src/graphql/typeDefs.js';
-import resolvers from '../backend/src/graphql/resolvers.js';
-import mailer from '../backend/src/utils/mailer.js';
-import googleAuth from '../backend/src/utils/googleAuth.js';
-import { authenticateRequest } from '../backend/src/utils/authSession.js';
-import User from '../backend/src/models/User.js';
-import Session from '../backend/src/models/Session.js';
-import SessionRegistration from '../backend/src/models/SessionRegistration.mjs';
-import Rating from '../backend/src/models/Rating.js';
-import AuthSession from '../backend/src/models/AuthSession.js';
-import { getParticipationTier, recordRegistration } from '../backend/src/utils/participationLimits.js';
+import { getConfig } from '../src/config.js';
+import typeDefs from '../src/graphql/typeDefs.js';
+import resolvers from '../src/graphql/resolvers.js';
+import mailer from '../src/utils/mailer.js';
+import googleAuth from '../src/utils/googleAuth.js';
+import { authenticateRequest } from '../src/utils/authSession.js';
+import User from '../src/models/User.js';
+import Session from '../src/models/Session.js';
+import SessionRegistration from '../src/models/SessionRegistration.mjs';
+import Rating from '../src/models/Rating.js';
+import AuthSession from '../src/models/AuthSession.js';
+import { getParticipationTier, recordRegistration } from '../src/utils/participationLimits.mjs';
 
 const tag = `accounts-${Date.now()}`;
 const emailFor = (name) => `${tag}-${name}@example.test`;
