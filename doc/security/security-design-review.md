@@ -4,33 +4,7 @@ This page holds the diagrams referenced by the team's Security Design Review sub
 
 ## Data-flow diagram
 
-```mermaid
-flowchart LR
-  U["FieldDay user - iOS app"]
-  F["Expo React Native client"]
-  G["API Gateway - HTTPS boundary"]
-  B["Node Express Apollo GraphQL API on Elastic Beanstalk"]
-  M[("MongoDB Atlas: users, sessions, memberships, profiles")]
-  O["Google OAuth identity provider"]
-  P["Expo push service - future delivery"]
-  A["AWS application operators"]
-
-  U -->|"credentials, profile input, location, session actions"| F
-  F -->|Bearer token + GraphQL over HTTPS| G
-  G -->|validated HTTPS request| B
-  B -->|authenticated, authorized reads/writes| M
-  F -->|OAuth authorization flow| O
-  O -->|identity credential| F
-  B -->|notification payload, no database credential| P
-  A -->|deployment/configuration access| B
-
-  classDef boundary fill:#fff4e5,stroke:#c96,stroke-width:2px;
-  classDef store fill:#eef7ee,stroke:#397a3d,stroke-width:2px;
-  classDef service fill:#edf3ff,stroke:#3b6db3,stroke-width:2px;
-  class F,G,B boundary;
-  class M store;
-  class O,P service;
-```
+The editable [diagrams.net security-review diagram](https://app.diagrams.net/?url=https%3A%2F%2Fraw.githubusercontent.com%2Fpkarlsso%2FFieldDay%2Fsecurity-design-review%2Fdoc%2Fsecurity%2Ffieldday-security-review.drawio) contains the data-flow diagram and both attack trees. The source file is also kept in this repository as [`fieldday-security-review.drawio`](fieldday-security-review.drawio).
 
 **Trust boundaries.** User input reaches the mobile client first, but it remains untrusted until the API validates the request. The HTTPS edge between the app and API Gateway is a boundary because network traffic is outside our control. The backend-to-Atlas connection is another boundary because the API uses its database credentials and makes privileged reads and writes there. OAuth and push delivery are separate third-party boundaries; the mobile app should never hold their server secrets.
 
@@ -38,37 +12,13 @@ The most sensitive data is an account identity, email, authentication session/to
 
 ## Attack tree 1: act as another FieldDay user
 
-```mermaid
-flowchart TD
-  R["Goal: act as another FieldDay user"]
-  R --> A["Forge a client-controlled user ID"]
-  R --> B["Obtain or reuse a valid session token"]
-  R --> C["Exploit an authorization gap in a resolver"]
-  A --> A1["Mutation trusts userId, hostId, or raterId"]
-  B --> B1["Token persists too long or is exposed"]
-  C --> C1["Resolver skips current-user ownership check"]
-  A1 --> X["Unauthorized write reaches MongoDB"]
-  B1 --> X
-  C1 --> X
-```
+The editable diagrams.net file above includes this attack tree.
+
 
 ## Attack tree 2: collect users' session location and presence data
 
-```mermaid
-flowchart TD
-  R["Goal: learn where a FieldDay user will be"]
-  R --> A["Read data beyond the viewer's allowed scope"]
-  R --> B["Collect session data at scale"]
-  R --> C["Abuse a leaked account session"]
-  A --> A1["GraphQL resolver returns another user's data"]
-  B --> B1["No query limits or rate controls"]
-  B --> B2["Exact locations exposed too early"]
-  C --> C1["Stolen device or uncleared local session"]
-  A1 --> X["Location, participant, and schedule data exposed"]
-  B1 --> X
-  B2 --> X
-  C1 --> X
-```
+The editable diagrams.net file above includes this attack tree.
+
 
 ## Planned mitigation work
 
