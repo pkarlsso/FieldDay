@@ -35,6 +35,11 @@ const sessionSchema = new mongoose.Schema({
   maxParticipants: { type: Number, default: 6 },
   participants: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   host: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  // Who can find and join the session. Sessions stored before this field
+  // existed have none and are treated as PUBLIC.
+  visibility: { type: String, enum: ['PUBLIC', 'FRIENDS', 'INVITE_ONLY'], default: 'PUBLIC' },
+  // People the host invited. Only used by INVITE_ONLY sessions.
+  invitees: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   // Stored status is not updated when a session ends; the resolvers derive
   // "completed" from endsAt. Sessions stored as completed with no endsAt
   // predate no-show reports and keep the old rating rules.
@@ -58,5 +63,6 @@ sessionSchema.index({ locationPoint: '2dsphere' });
 sessionSchema.index({ sport: 1, startsAt: 1, status: 1 });
 sessionSchema.index({ participants: 1, startsAt: 1 });
 sessionSchema.index({ endsAt: 1 });
+sessionSchema.index({ invitees: 1 });
 
 export default mongoose.model('Session', sessionSchema);
