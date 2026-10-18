@@ -2,13 +2,17 @@ import mongoose from 'mongoose';
 import { getConfig } from '../backend/src/config.js';
 import User from '../backend/src/models/User.js';
 import Session from '../backend/src/models/Session.js';
+import SessionRegistration from '../backend/src/models/SessionRegistration.js';
+import { createAuthSession } from '../backend/src/utils/authSession.js';
 
 const endpoint = `http://localhost:${getConfig().port}/graphql`;
 
-async function graphql(query, variables) {
+async function graphql(query, variables, token) {
+  const headers = { 'content-type': 'application/json' };
+  if (token) headers.authorization = `Bearer ${token}`;
   const response = await fetch(endpoint, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers,
     body: JSON.stringify({ query, variables })
   });
   const body = await response.json();
@@ -38,10 +42,12 @@ async function expectGraphqlError(query, variables, expectedMessage) {
 try {
   await mongoose.connect(getConfig().mongoUri);
   [host, guest, overflowGuest] = await User.create([
-    { name: 'Integration Host', email: `${tag}-host@example.test` },
-    { name: 'Integration Guest', email: `${tag}-guest@example.test` },
-    { name: 'Integration Overflow Guest', email: `${tag}-overflow@example.test` }
+    { name: 'Integration Host', email: `${tag}-host@example.test`, socialRating: 4.5 },
+    { name: 'Integration Guest', email: `${tag}-guest@example.test`, socialRating: 4.5 },
+    { name: 'Integration Overflow Guest', email: `${tag}-overflow@example.test`, socialRating: 4.5 }
   ]);
+  const hostToken = await createAuthSession(host._id);
+  const guestToken = await createAuthSession(guest._id);
 
   await expectGraphqlError(
     'mutation($hostId:ID!,$input:CreateSessionInput!){createSession(hostId:$hostId,input:$input){id}}',
@@ -87,7 +93,8 @@ try {
         skillLevel: 2,
         maxParticipants: 2
       }
-    }
+    },
+    hostToken
   );
   sessionId = created.createSession.id;
   if (created.createSession.participants.length !== 1) throw new Error('host was not added');
@@ -98,7 +105,8 @@ try {
   try {
     await graphql(
       'mutation($sessionId:ID!,$userId:ID!){leaveSession(sessionId:$sessionId,userId:$userId){id}}',
-      { sessionId, userId: String(host._id) }
+      { sessionId, userId: String(host._id) },
+      hostToken
     );
     throw new Error('host was allowed to leave');
   } catch (error) {
@@ -107,7 +115,8 @@ try {
 
   const joined = await graphql(
     'mutation($sessionId:ID!,$userId:ID!){joinSession(sessionId:$sessionId,userId:$userId){participants{id}}}',
-    { sessionId, userId: String(guest._id) }
+    { sessionId, userId: String(guest._id) },
+    guestToken
   );
   if (joined.joinSession.participants.length !== 2) throw new Error('guest was not added');
 
@@ -119,13 +128,15 @@ try {
 
   const duplicate = await graphql(
     'mutation($sessionId:ID!,$userId:ID!){joinSession(sessionId:$sessionId,userId:$userId){participants{id}}}',
-    { sessionId, userId: String(guest._id) }
+    { sessionId, userId: String(guest._id) },
+    guestToken
   );
   if (duplicate.joinSession.participants.length !== 2) throw new Error('duplicate join changed roster');
 
   const left = await graphql(
     'mutation($sessionId:ID!,$userId:ID!){leaveSession(sessionId:$sessionId,userId:$userId){participants{id}}}',
-    { sessionId, userId: String(guest._id) }
+    { sessionId, userId: String(guest._id) },
+    guestToken
   );
   if (left.leaveSession.participants.length !== 1) throw new Error('guest was not removed');
 

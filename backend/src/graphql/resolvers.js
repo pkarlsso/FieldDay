@@ -1,6 +1,11 @@
 import User from '../models/User.js';
 import Session from '../models/Session.js';
 import Rating from '../models/Rating.js';
+let participationLimits;
+async function getParticipationLimits() {
+  participationLimits ||= await import('../utils/participationLimits.mjs');
+  return participationLimits;
+}
 import { validatePasswordStrength, PASSWORD_REQUIREMENTS, hashPassword, verifyPassword } from '../utils/password.js';
 import { generateCode, hashCode, CODE_TTL_MS, MAX_ATTEMPTS } from '../utils/twoFactor.js';
 import { RESET_CODE_TTL_MS } from '../utils/passwordReset.js';
@@ -481,7 +486,11 @@ const resolvers = {
   },
 
   Mutation: {
-    createSession: async (_, { hostId, input }) => {
+    createSession: async (_, { hostId, input }, context) => {
+      const currentUser = requireUser(context);
+      if (String(currentUser._id) !== String(hostId)) throw new Error('You can only create a session for yourself');
+      const { assertCanRegister, recordRegistration } = await getParticipationLimits();
+      await assertCanRegister(currentUser);
       const host = await User.findById(hostId);
       if (!host) throw new Error('Host not found');
       const session = await Session.create({
@@ -490,21 +499,40 @@ const resolvers = {
         participants: [hostId],
         status: 'upcoming'
       });
+      try {
+        await recordRegistration(session._id, hostId);
+      } catch (error) {
+        await Session.deleteOne({ _id: session._id });
+        throw error;
+      }
       return populatedSessionQuery(session._id);
     },
 
-    joinSession: async (_, { sessionId, userId }) => {
+    joinSession: async (_, { sessionId, userId }, context) => {
+      const currentUser = requireUser(context);
+      if (String(currentUser._id) !== String(userId)) throw new Error('You can only join a session for yourself');
       const [session, user] = await Promise.all([Session.findById(sessionId), User.findById(userId)]);
       if (!session || !user) throw new Error('Session or user not found');
       if (session.status !== 'upcoming' || hasEnded(session)) throw new Error('Only upcoming sessions can be joined');
       if (session.participants.some((id) => id.equals(userId))) return populatedSessionQuery(sessionId);
       if (session.participants.length >= session.maxParticipants) throw new Error('Session is full');
+      const { assertCanRegister, recordRegistration } = await getParticipationLimits();
+      await assertCanRegister(currentUser);
       session.participants.push(userId);
       await session.save();
+      try {
+        await recordRegistration(session._id, userId);
+      } catch (error) {
+        session.participants = session.participants.filter((id) => !id.equals(userId));
+        await session.save();
+        throw error;
+      }
       return populatedSessionQuery(sessionId);
     },
 
-    leaveSession: async (_, { sessionId, userId }) => {
+    leaveSession: async (_, { sessionId, userId }, context) => {
+      const currentUser = requireUser(context);
+      if (String(currentUser._id) !== String(userId)) throw new Error('You can only leave a session for yourself');
       const session = await Session.findById(sessionId);
       if (!session) throw new Error('Session not found');
       if (session.host && session.host.equals(userId)) throw new Error('The host cannot leave their session');
