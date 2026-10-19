@@ -2,8 +2,11 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Card, IconButton, PrimaryButton, ScreenHeader, StatusBadge } from '../components/ui';
+import CooldownNotice, { isCoolingDown } from '../components/CooldownNotice';
 import { colors } from '../theme';
 import { attendanceFor, formatSessionRange, formatSessionTime, needsNoShowCheck, playersLabel, sessionTitle, skillLabel } from '../sessionInfo';
+import { useCurrentUser } from '../useCurrentUser';
+import { affectsSessions, useSessionUpdates } from '../useSessionUpdates';
 import { graphql } from '../../api';
 import { CURRENT_USER_ID } from '../../config';
 
@@ -39,17 +42,29 @@ export default function LiveSessionDetailsScreen({ route, navigation }) {
 
   // Refetch on focus so no-show answers and ratings from the next screens show up here.
   useFocusEffect(useCallback(() => { load(); }, [load]));
+  // And whenever someone else joins or leaves, or the session starts or ends.
+  useSessionUpdates(useCallback((events) => {
+    if (affectsSessions(events, [sessionId])) load();
+  }, [load, sessionId]));
+
+  const me = useCurrentUser();
+  const [blockedUntil, setBlockedUntil] = useState(null);
+  const cooldownUntil = blockedUntil || me?.cooldownUntil;
 
   async function run(mutation, variables) {
     setBusy(true);
+    let message = '';
     try {
       await graphql(mutation, { sessionId: session.id, ...variables });
-      await load();
     } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
+      if (err.code === 'ACCOUNT_COOLDOWN') setBlockedUntil(err.extensions.cooldownUntil);
+      else message = err.message;
     }
+    // Refetch either way: a failed join usually means this screen was stale
+    // (someone took the last spot), so show what's actually there now.
+    await load();
+    if (message) setError(message);
+    setBusy(false);
   }
 
   if (!session) {
@@ -63,6 +78,8 @@ export default function LiveSessionDetailsScreen({ route, navigation }) {
   const isHost = session.host?.id === CURRENT_USER_ID;
   const joined = session.participants.some((user) => user.id === CURRENT_USER_ID);
   const ended = session.status === 'completed';
+  const full = session.participants.length >= session.maxParticipants;
+  const coolingDown = !joined && isCoolingDown(cooldownUntil);
   const owesNoShowCheck = joined && needsNoShowCheck(session);
   const canChangeNoShows = joined && ended && session.myNoShowReport
     && new Date(session.noShowDeadline) > new Date() && session.ratingEligibility.eligible;
@@ -81,11 +98,13 @@ export default function LiveSessionDetailsScreen({ route, navigation }) {
 
         {error ? <Text style={{ color: colors.coral }}>{error}</Text> : null}
 
-        {!ended && !isHost ? (
+        {!ended && !isHost && coolingDown ? <CooldownNotice until={cooldownUntil} /> : null}
+
+        {!ended && !isHost && !coolingDown ? (
           <PrimaryButton
-            label={joined ? 'Leave Session' : 'Join Session'}
+            label={joined ? 'Leave Session' : full ? 'Session is full' : 'Join Session'}
             variant={joined ? 'destructive' : undefined}
-            disabled={busy}
+            disabled={busy || (!joined && full)}
             onPress={() => run(joined ? LEAVE : JOIN, { userId: CURRENT_USER_ID })}
           />
         ) : null}

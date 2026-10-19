@@ -17,6 +17,8 @@
     "test:accounts": "node scripts/integration-accounts.mjs",
     "test:sport-preferences": "node scripts/test-sport-preferences.mjs",
     "test:session-lifecycle": "node scripts/test-session-lifecycle.mjs",
+    "test:realtime": "node scripts/test-realtime.mjs",
+    "test:cooldown": "node scripts/test-cooldown.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
     "postinstall": "patch-package"
   },

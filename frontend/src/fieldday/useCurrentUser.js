@@ -7,7 +7,7 @@ import logger from '../logger';
 const QUERY = `
   query CurrentUser($id: ID!) {
     getUser(id: $id) {
-      id name bio hometown profilePicture socialRating totalRatings
+      id name bio hometown profilePicture socialRating totalRatings cooldownUntil
       sportSkills { sport skillLevel }
       friends { id name profilePicture socialRating sports }
     }
