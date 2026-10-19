@@ -1,3 +1,4 @@
+import http from 'node:http';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@apollo/server/express4';
 import express from 'express';
@@ -8,18 +9,21 @@ import resolvers from './graphql/resolvers.js';
 import { getConfig } from './config.js';
 import { authenticateRequest } from './utils/authSession.js';
 import logger from './utils/logger.js';
+import { attachRealtime, startSessionClock } from './realtime.js';
 
-function csrfProtection(req, res, next) {
-  const origin = req.get('origin');
-  if (!origin) return next();
-
-  const requestOrigin = `${req.protocol}://${req.get('host')}`;
+// Requests without an Origin header (native apps, curl) are allowed; browser
+// requests must come from this server or an origin in CSRF_ALLOWED_ORIGINS.
+function isAllowedOrigin(origin, requestOrigin) {
+  if (!origin) return true;
   const configuredOrigins = (process.env.CSRF_ALLOWED_ORIGINS || '')
     .split(',')
     .map(value => value.trim())
     .filter(Boolean);
+  return origin === requestOrigin || configuredOrigins.includes(origin);
+}
 
-  if (origin !== requestOrigin && !configuredOrigins.includes(origin)) {
+function csrfProtection(req, res, next) {
+  if (!isAllowedOrigin(req.get('origin'), `${req.protocol}://${req.get('host')}`)) {
     return res.status(403).json({ error: 'Cross-origin request blocked' });
   }
   return next();
@@ -62,7 +66,15 @@ async function startServer() {
 
   app.get('/health', (_, res) => res.json({ status: 'ok' }));
 
-  app.listen(port, '0.0.0.0', () => {
+  // Socket.IO shares the HTTP server so live session updates use the same host
+  // and port as GraphQL (path /socket.io).
+  const httpServer = http.createServer(app);
+  attachRealtime(httpServer, {
+    allowOrigin: (origin, req) => isAllowedOrigin(origin, `${req.socket.encrypted ? 'https' : 'http'}://${req.headers.host}`)
+  });
+  startSessionClock();
+
+  httpServer.listen(port, '0.0.0.0', () => {
     logger.info(`GraphQL server running at http://localhost:${port}/graphql`);
   });
 }

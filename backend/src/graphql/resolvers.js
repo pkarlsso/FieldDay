@@ -1,3 +1,4 @@
+import { GraphQLError } from 'graphql';
 import User from '../models/User.js';
 import Session from '../models/Session.js';
 import Rating from '../models/Rating.js';
@@ -9,6 +10,7 @@ import * as authSessions from '../utils/authSession.js';
 import mailer from '../utils/mailer.js';
 import googleAuth from '../utils/googleAuth.js';
 import logger from '../utils/logger.js';
+import { publishSessionUpdate } from '../realtime.js';
 
 const PROFILE_LIMITS = { name: 50, bio: 300, hometown: 80, sport: 30, sportCount: 10, pictureChars: 200000 };
 const PICTURE_PATTERN = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
@@ -24,6 +26,9 @@ const MAX_SESSION_LENGTH_MS = 24 * HOUR_MS;
 // How long after a session ends players can answer "who didn't show up?".
 const NO_SHOW_WINDOW_MS = 48 * HOUR_MS;
 const COMPLETED_SESSIONS_LIMIT = 20;
+// FR-8: when a new rating pulls someone's social rating below 2, they can't
+// create or join sessions for 2 days.
+const SOCIAL_RATING_COOLDOWN = { threshold: 2, durationMs: 48 * HOUR_MS };
 
 function normalizeEmail(email) {
   return email.trim().toLowerCase();
@@ -47,6 +52,26 @@ async function createDemoAuthSession(user, message) {
 function requireUser(context) {
   if (!context.currentUser) throw new Error('You must be signed in to do that.');
   return context.currentUser;
+}
+
+// When the user's social-rating cooldown ends, or null if they aren't in one.
+function activeCooldownUntil(user, now = new Date()) {
+  const until = user?.cooldownUntil ? new Date(user.cooldownUntil) : null;
+  return until && until > now ? until : null;
+}
+
+// Rejects create/join for anyone in a cooldown. Checked for both the signed-in
+// user and the user the request names, so neither can stand in for the other.
+function assertNotInCooldown(...users) {
+  for (const user of users) {
+    const until = activeCooldownUntil(user);
+    if (until) {
+      throw new GraphQLError(
+        `Your social rating dropped below ${SOCIAL_RATING_COOLDOWN.threshold}, so you can't create or join sessions until ${until.toISOString()}.`,
+        { extensions: { code: 'ACCOUNT_COOLDOWN', cooldownUntil: until.toISOString() } }
+      );
+    }
+  }
 }
 
 // Trims an optional profile text field and enforces its length. Returns
@@ -186,9 +211,34 @@ function validateRatingSubmission(session, raterId, ratings) {
 // Atomically folds a new rating into the user's running average, so
 // concurrent submissions can't overwrite each other's counts. Mongoose 9
 // rejects update pipelines unless updatePipeline is set explicitly.
+//
+// The same update starts a cooldown when this rating pulls the average (rounded,
+// as the app shows it) below the threshold. A rating that raises the average
+// never starts one and an active cooldown is not extended, so once a cooldown
+// ends the user is free until another rating drags them down again.
 function applyRatingToUser(userId, value) {
+  const { threshold, durationMs } = SOCIAL_RATING_COOLDOWN;
+  const newRating = {
+    $round: [{ $divide: [{ $add: ['$ratingSum', value] }, { $add: ['$totalRatings', 1] }] }, 1]
+  };
+  const lowersAverage = {
+    $or: [{ $eq: ['$totalRatings', 0] }, { $lt: [{ $multiply: [value, '$totalRatings'] }, '$ratingSum'] }]
+  };
+  const inCooldown = { $gt: [{ $ifNull: ['$cooldownUntil', null] }, '$$NOW'] };
   return User.updateOne({ _id: userId }, [
-    { $set: { ratingSum: { $add: ['$ratingSum', value] }, totalRatings: { $add: ['$totalRatings', 1] } } },
+    {
+      $set: {
+        ratingSum: { $add: ['$ratingSum', value] },
+        totalRatings: { $add: ['$totalRatings', 1] },
+        cooldownUntil: {
+          $cond: [
+            { $and: [{ $lt: [newRating, threshold] }, lowersAverage, { $not: [inCooldown] }] },
+            { $add: ['$$NOW', durationMs] },
+            { $ifNull: ['$cooldownUntil', null] }
+          ]
+        }
+      }
+    },
     { $set: { socialRating: { $round: [{ $divide: ['$ratingSum', '$totalRatings'] }, 1] } } }
   ], { updatePipeline: true });
 }
@@ -357,6 +407,18 @@ function distanceMiles(session, origin) {
   return 3958.7613 * 2 * Math.atan2(Math.sqrt(first), Math.sqrt(1 - first));
 }
 
+// Matches sessions that haven't ended (see hasEnded). Older sessions without
+// an end time end 2 hours after they start.
+function notEndedFilter(now = new Date()) {
+  return {
+    status: { $ne: 'completed' },
+    $or: [
+      { endsAt: { $gt: now } },
+      { endsAt: null, startsAt: { $gt: new Date(now.getTime() - DEFAULT_SESSION_LENGTH_MS) } }
+    ]
+  };
+}
+
 function populatedSessionQuery(id) {
   return Session.findById(id).populate('participants').populate('host');
 }
@@ -393,6 +455,11 @@ const resolvers = {
   },
 
   User: {
+    // Only shown to the user themselves.
+    cooldownUntil: (user, _, context) => {
+      if (!context.currentUser || String(context.currentUser._id) !== String(user._id)) return null;
+      return activeCooldownUntil(user)?.toISOString() ?? null;
+    },
     // Accounts created before per-sport skill levels only have `sports` and one
     // overall `skillLevel`, so fall back to those.
     sportSkills: (user) => (user.sportSkills && user.sportSkills.length > 0
@@ -481,26 +548,47 @@ const resolvers = {
   },
 
   Mutation: {
-    createSession: async (_, { hostId, input }) => {
+    createSession: async (_, { hostId, input }, context) => {
       const host = await User.findById(hostId);
       if (!host) throw new Error('Host not found');
+      assertNotInCooldown(context.currentUser, host);
       const session = await Session.create({
         ...formatSessionInput(input),
         host: hostId,
         participants: [hostId],
         status: 'upcoming'
       });
+      publishSessionUpdate(session._id, 'created');
       return populatedSessionQuery(session._id);
     },
 
-    joinSession: async (_, { sessionId, userId }) => {
+    joinSession: async (_, { sessionId, userId }, context) => {
       const [session, user] = await Promise.all([Session.findById(sessionId), User.findById(userId)]);
       if (!session || !user) throw new Error('Session or user not found');
+      assertNotInCooldown(context.currentUser, user);
       if (session.status !== 'upcoming' || hasEnded(session)) throw new Error('Only upcoming sessions can be joined');
-      if (session.participants.some((id) => id.equals(userId))) return populatedSessionQuery(sessionId);
-      if (session.participants.length >= session.maxParticipants) throw new Error('Session is full');
-      session.participants.push(userId);
-      await session.save();
+      if (isParticipant(session, user._id)) return populatedSessionQuery(sessionId);
+
+      // The open-spot and not-ended checks are part of the update's filter, so
+      // checking and writing are one step: two people can't both take the last
+      // spot, even if both saw it open on a stale screen.
+      const joined = await Session.findOneAndUpdate(
+        {
+          _id: session._id,
+          participants: { $ne: user._id },
+          $expr: { $lt: [{ $size: { $ifNull: ['$participants', []] } }, '$maxParticipants'] },
+          ...notEndedFilter()
+        },
+        { $push: { participants: user._id } },
+        { returnDocument: 'after' }
+      );
+      if (!joined) {
+        const latest = await Session.findById(sessionId);
+        if (latest && isParticipant(latest, user._id)) return populatedSessionQuery(sessionId);
+        if (!latest || hasEnded(latest)) throw new Error('Only upcoming sessions can be joined');
+        throw new Error('Session is full');
+      }
+      publishSessionUpdate(sessionId, 'joined');
       return populatedSessionQuery(sessionId);
     },
 
@@ -509,8 +597,11 @@ const resolvers = {
       if (!session) throw new Error('Session not found');
       if (session.host && session.host.equals(userId)) throw new Error('The host cannot leave their session');
       if (hasEnded(session)) throw new Error('You cannot leave a session that has ended');
-      session.participants = session.participants.filter((id) => !id.equals(userId));
-      await session.save();
+      if (!isParticipant(session, userId)) return populatedSessionQuery(sessionId);
+      // $pull rather than saving a filtered copy, so a join landing at the same
+      // moment isn't overwritten.
+      await Session.updateOne({ _id: session._id }, { $pull: { participants: userId } });
+      publishSessionUpdate(sessionId, 'left');
       return populatedSessionQuery(sessionId);
     },
 

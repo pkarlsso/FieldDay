@@ -15,7 +15,11 @@ export async function graphql(query, variables = {}) {
     });
     const json = await res.json();
     if (!res.ok) throw new Error(`GraphQL request failed with HTTP ${res.status}`);
-    if (json.errors) throw new Error(json.errors[0].message);
+    if (json.errors) {
+      // Keep the server's error code (e.g. ACCOUNT_COOLDOWN) so screens can react to it.
+      const [first] = json.errors;
+      throw Object.assign(new Error(first.message), { code: first.extensions?.code, extensions: first.extensions || {} });
+    }
     return json.data;
   } catch (error) {
     logger.error('GraphQL request failed', error);
