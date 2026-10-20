@@ -6,7 +6,8 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "seed": "node src/seed.js"
+    "seed": "node src/seed.js",
+    "test:chat": "node scripts/integration-chat.mjs"
   },
   "dependencies": {
     "@apollo/server": "^4.13.0",
@@ -17,6 +18,7 @@
     "google-auth-library": "^11.1.0",
     "graphql": "^16.10.0",
     "mongoose": "^8.24.4",
-    "nodemailer": "^6.10.1"
+    "nodemailer": "^6.10.1",
+    "socket.io": "^4.8.4"
   }
 }

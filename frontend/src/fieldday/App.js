@@ -9,6 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import ExploreScreen from './screens/ExploreScreen';
 import LiveExploreScreen from './screens/LiveExploreScreen';
 import ChatDetailScreen from './screens/ChatDetailScreen';
+import ChatScreen from './screens/ChatScreen';
 import CreateSessionScreen from './screens/CreateSessionScreen';
 import FriendsScreen from './screens/FriendsScreen';
 import HomeScreen from './screens/HomeScreen';
@@ -45,6 +46,7 @@ const tabIcons = {
   Map: 'map-outline',
   Sessions: 'calendar-check-outline',
   Friends: 'account-group-outline',
+  Chat: 'chat-processing-outline',
   Profile: 'account-circle-outline',
   Create: 'plus-circle-outline',
 };
@@ -79,6 +81,7 @@ function MainTabs() {
       <Tab.Screen name="Map" component={MapScreen} />
       <Tab.Screen name="Sessions" component={useLiveData ? LiveSessionsScreen : SessionsScreen} />
       <Tab.Screen name="Friends" component={FriendsScreen} />
+      <Tab.Screen name="Chat" component={ChatScreen} />
       <Tab.Screen name="Create" component={CreateSessionScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
