@@ -98,6 +98,8 @@ async function createFriendRequest(requesterId, recipientId) {
     if (err.code === 11000) throw new Error('A friend request is already pending');
     throw err;
   }
+}
+
 // Hidden sessions get the same answer as missing ones, so nobody can find out
 // that a private session exists.
 function sessionNotFound() {
@@ -758,30 +760,6 @@ const resolvers = {
       return populatedSessionQuery(sessionId);
     },
 
-    inviteToSession: async (_, { sessionId, userIds }, context) => {
-      const user = requireUser(context);
-      const session = await findVisibleSession(sessionId, user);
-      if (!sameId(session.host, user._id)) throw new Error('Only the host can invite people');
-      if (visibilityOf(session) !== 'INVITE_ONLY') throw new Error('Invites are only used for invite-only sessions');
-      if (hasEnded(session)) throw new Error('This session has ended');
-      const invitees = await cleanInvitees(userIds, user);
-      if (new Set([...session.invitees.map(String), ...invitees]).size > MAX_INVITEES) {
-        throw new Error(`You can invite at most ${MAX_INVITEES} people`);
-      }
-      await Session.updateOne({ _id: session._id }, { $addToSet: { invitees: { $each: invitees } } });
-      return populatedSessionQuery(session._id);
-    },
-
-    uninviteFromSession: async (_, { sessionId, userId }, context) => {
-      const user = requireUser(context);
-      const session = await findVisibleSession(sessionId, user);
-      if (!sameId(session.host, user._id)) throw new Error('Only the host can change invites');
-      if (mongoose.isValidObjectId(userId)) {
-        await Session.updateOne({ _id: session._id }, { $pull: { invitees: userId } });
-      }
-      return populatedSessionQuery(session._id);
-    },
-
     reportNoShows: async (_, { sessionId, noShowUserIds }, context) => {
       const user = requireUser(context);
       const session = await Session.findById(sessionId);
@@ -825,7 +803,6 @@ const resolvers = {
           value: rating
         })));
       } catch (err) {
-        // The unique (session, rater, ratee) index caught a duplicate.
         if (err.code === 11000) throw new Error('You have already rated this session');
         throw err;
       }
@@ -876,13 +853,6 @@ const resolvers = {
       };
     },
 
-    addFriend: async (_, { userId, friendId }, context) => {
-      const user = requireUser(context);
-      if (String(user._id) !== String(userId)) throw new Error('You can only add friends for yourself');
-      await createFriendRequest(user._id, friendId);
-      return User.findById(user._id).populate('friends');
-    },
-
     sendFriendRequest: async (_, { recipientId }, context) => {
       const user = requireUser(context);
       return createFriendRequest(user._id, recipientId);
@@ -914,6 +884,8 @@ const resolvers = {
       request.status = 'declined';
       await request.save();
       return populatedFriendRequestQuery(request._id);
+    },
+
     // Friends can see each other's friends-only sessions, so this is limited
     // to people you have actually played with.
     addFriend: async (_, { friendId }, context) => {

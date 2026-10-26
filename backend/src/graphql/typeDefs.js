@@ -293,8 +293,6 @@ const typeDefs = `#graphql
     # Participants only, after the session ends and before noShowDeadline.
     # Pass an empty list if everyone showed up. Can be changed until you rate.
     reportNoShows(sessionId: ID!, noShowUserIds: [ID!]!): Session!
-    submitRatings(sessionId: ID!, raterId: ID!, ratings: [RatingInput!]!): RatingResult
-    addFriend(userId: ID!, friendId: ID!): User
     sendFriendRequest(recipientId: ID!): FriendRequest!
     acceptFriendRequest(requestId: ID!): FriendRequest!
     declineFriendRequest(requestId: ID!): FriendRequest!
