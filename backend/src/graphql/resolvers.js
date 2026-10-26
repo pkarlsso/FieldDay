@@ -778,6 +778,30 @@ const resolvers = {
       return populatedSessionQuery(sessionId);
     },
 
+    inviteToSession: async (_, { sessionId, userIds }, context) => {
+      const user = requireUser(context);
+      const session = await findVisibleSession(sessionId, user);
+      if (!sameId(session.host, user._id)) throw new Error('Only the host can invite people');
+      if (visibilityOf(session) !== 'INVITE_ONLY') throw new Error('Invites are only used for invite-only sessions');
+      if (hasEnded(session)) throw new Error('This session has ended');
+      const invitees = await cleanInvitees(userIds, user);
+      if (new Set([...session.invitees.map(String), ...invitees]).size > MAX_INVITEES) {
+        throw new Error(`You can invite at most ${MAX_INVITEES} people`);
+      }
+      await Session.updateOne({ _id: session._id }, { $addToSet: { invitees: { $each: invitees } } });
+      return populatedSessionQuery(session._id);
+    },
+
+    uninviteFromSession: async (_, { sessionId, userId }, context) => {
+      const user = requireUser(context);
+      const session = await findVisibleSession(sessionId, user);
+      if (!sameId(session.host, user._id)) throw new Error('Only the host can change invites');
+      if (mongoose.isValidObjectId(userId)) {
+        await Session.updateOne({ _id: session._id }, { $pull: { invitees: userId } });
+      }
+      return populatedSessionQuery(session._id);
+    },
+
     reportNoShows: async (_, { sessionId, noShowUserIds }, context) => {
       const user = requireUser(context);
       const session = await Session.findById(sessionId);
