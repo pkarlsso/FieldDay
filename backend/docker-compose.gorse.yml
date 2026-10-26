@@ -1,0 +1,38 @@
+services:
+  gorse-mongo:
+    image: mongo:6.0
+    restart: unless-stopped
+    command: ["mongod", "--bind_ip_all"]
+    volumes:
+      - gorse-mongo-data:/data/db
+    networks:
+      - gorse-internal
+
+  gorse:
+    image: zhenghaoz/gorse-in-one:0.5.11
+    restart: unless-stopped
+    depends_on:
+      - gorse-mongo
+    working_dir: /var/lib/gorse
+    entrypoint: ["/usr/bin/gorse-in-one", "-c", "/var/lib/gorse/config.toml"]
+    ports:
+      - "127.0.0.1:8088:8088"
+    environment:
+      GORSE_CACHE_STORE: mongodb://gorse-mongo:27017/gorse?connect=direct
+      GORSE_DATA_STORE: mongodb://gorse-mongo:27017/gorse?connect=direct
+    command: ["--log-path", "/var/log/gorse/master.log", "--cache-path", "/var/lib/gorse/master_cache.data"]
+    volumes:
+      - ./gorse/config.toml:/var/lib/gorse/config.toml:ro
+      - gorse-logs:/var/log/gorse
+      - gorse-cache:/var/lib/gorse
+    networks:
+      - gorse-internal
+
+networks:
+  gorse-internal:
+    internal: true
+
+volumes:
+  gorse-mongo-data:
+  gorse-logs:
+  gorse-cache:

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Card, Pill, ScreenHeader, SportIcon } from '../components/ui';
 import { colors, sports } from '../theme';
-import { DEFAULT_DISCOVERY_FILTER, getDiscoveryOrigin, loadDiscoverySessions } from '../discovery';
+import { DEFAULT_DISCOVERY_FILTER, getDiscoveryOrigin, loadDiscoverySessions, loadRecommendedSessions } from '../discovery';
 import { formatSessionTime, playersLabel, skillLabel } from '../sessionInfo';
 import logger from '../../logger';
 
@@ -17,13 +17,22 @@ const skillOptions = [
 
 export default function LiveExploreScreen({ navigation }) {
   const [sessions, setSessions] = useState([]);
+  const [recommendations, setRecommendations] = useState([]);
   const [error, setError] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [locating, setLocating] = useState(true);
   const [origin, setOrigin] = useState(null);
   const [draft, setDraft] = useState(DEFAULT_DISCOVERY_FILTER);
   const load = useCallback(async (nextFilter) => {
-    try { setSessions(await loadDiscoverySessions(nextFilter)); setError(''); }
+    try {
+      const [discovered, recommended] = await Promise.all([
+        loadDiscoverySessions(nextFilter),
+        loadRecommendedSessions({ origin: nextFilter.origin, maxDistanceMiles: nextFilter.maxDistanceMiles, limit: 5 }),
+      ]);
+      setSessions(discovered);
+      setRecommendations(recommended);
+      setError('');
+    }
     catch (err) { setError(err.message); }
   }, []);
 
@@ -32,13 +41,13 @@ export default function LiveExploreScreen({ navigation }) {
       setOrigin(location);
       const next = { ...DEFAULT_DISCOVERY_FILTER, origin: location || undefined };
       setDraft(next);
-      await loadDiscoverySessions(next).then(setSessions);
+      await load(next);
     }).catch(async (error) => {
       logger.warn('Could not determine discovery location:', error);
       setOrigin(null);
       const next = { ...DEFAULT_DISCOVERY_FILTER, origin: undefined };
       setDraft(next);
-      await loadDiscoverySessions(next).then(setSessions);
+      await load(next);
     }).finally(() => setLocating(false));
   }, [load]);
 
@@ -77,6 +86,22 @@ export default function LiveExploreScreen({ navigation }) {
         <View style={{ flexDirection: 'row', gap: 10 }}><TouchableOpacity onPress={clearFilters} style={{ flex: 1, padding: 12, alignItems: 'center' }}><Text style={{ color: colors.muted, fontWeight: '900' }}>Clear</Text></TouchableOpacity><TouchableOpacity onPress={applyFilters} style={{ flex: 1, backgroundColor: colors.purple, borderRadius: 12, padding: 12, alignItems: 'center' }}><Text style={{ color: colors.card, fontWeight: '900' }}>Apply</Text></TouchableOpacity></View>
       </Card> : null}
       {error ? <Text style={{ color: colors.coral }}>{error}</Text> : null}
+      {recommendations.length ? <View style={{ gap: 10 }}>
+        <View>
+          <Text style={{ color: colors.ink, fontSize: 21, fontWeight: '900' }}>Recommended for you</Text>
+          <Text style={{ color: colors.muted, marginTop: 3 }}>Picked from your sports, skill level, and nearby open sessions.</Text>
+        </View>
+        {recommendations.map(({ session, reasons }) => <TouchableOpacity key={`recommended-${session.id}`} onPress={() => navigation.navigate('SessionDetails', { sessionId: session.id })}>
+          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12, borderColor: colors.purpleSoft, borderWidth: 1 }}>
+            <SportIcon sport={session.sport} size={48} />
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.ink, fontWeight: '900', fontSize: 16 }}>{session.sport} at {session.location}</Text>
+              <Text style={{ color: colors.muted, marginTop: 4 }}>{formatSessionTime(session.startsAt)}{session.distanceMiles !== null ? ` • ${session.distanceMiles.toFixed(1)} mi` : ''}</Text>
+              <Text style={{ color: colors.purpleDark, marginTop: 4, fontWeight: '700' }}>{reasons.join(' · ')}</Text>
+            </View>
+          </Card>
+        </TouchableOpacity>)}
+      </View> : null}
       {!sessions.length && !error && !locating ? <Text style={{ color: colors.muted }}>No sessions match these filters.</Text> : null}
       {sessions.map((session) => <TouchableOpacity key={session.id} onPress={() => navigation.navigate('SessionDetails', { sessionId: session.id })}>
         <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>

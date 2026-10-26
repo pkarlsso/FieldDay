@@ -10,6 +10,18 @@ import { RESET_CODE_TTL_MS } from '../utils/passwordReset.js';
 import * as authSessions from '../utils/authSession.js';
 import { createMediaLoader, storeProfilePhoto, toDataUri } from '../utils/media.js';
 import { VISIBILITIES, canViewSession, visibleSessionsFilter, visibilityOf } from '../utils/sessionAccess.js';
+import { recommendSessions, recommendationQuery, validateRecommendationOptions } from '../services/recommendations.js';
+import {
+  bestEffort as bestEffortGorse,
+  gorseConfig,
+  gorseId,
+  recommendedSessionIds,
+  recordJoin as recordGorseJoin,
+  recordRecommendationReads,
+  syncItems as syncGorseItems,
+  syncRecommendationsForUser,
+  syncUser as syncGorseUser,
+} from '../services/gorse.js';
 // Called through the module objects (not destructured) so tests can stub them.
 import mailer from '../utils/mailer.js';
 import googleAuth from '../utils/googleAuth.js';
@@ -587,6 +599,47 @@ const resolvers = {
         });
     },
 
+    recommendedSessions: async (_, options, context) => {
+      const authenticatedUser = requireUser(context);
+      const user = await User.findById(authenticatedUser._id).select('sports sportSkills skillLevel friends');
+      if (!user) throw new GraphQLError('You must be signed in to do that.', { extensions: { code: 'UNAUTHENTICATED' } });
+      const { origin, maxDistanceMiles, limit } = validateRecommendationOptions(options);
+      const candidates = await Session.find(recommendationQuery(user, origin, maxDistanceMiles))
+        .populate('participants')
+        .populate('host')
+        .limit(300);
+      const baseline = recommendSessions(candidates, user, origin, limit);
+      if (candidates.length === 0) return baseline;
+      try {
+        const config = gorseConfig();
+        if (!config) return baseline;
+        await syncRecommendationsForUser(user, candidates);
+        const rankedIds = await recommendedSessionIds(user, 300);
+        if (!rankedIds?.length) return baseline;
+        const byGorseId = new Map(candidates.map((session) => [
+          gorseId('session', session._id, config.idSecret),
+          session,
+        ]));
+        const baselineById = new Map(baseline.map((entry) => [String(entry.session._id), entry]));
+        const ranked = rankedIds
+          .map((id) => byGorseId.get(id))
+          .filter(Boolean)
+          .slice(0, limit)
+          .map((session) => {
+            const entry = baselineById.get(String(session._id))
+              || { session, score: 0, reasons: [] };
+            return { ...entry, reasons: [...entry.reasons, 'Ranked by Gorse'] };
+          });
+        if (ranked.length) {
+          await recordRecommendationReads(user, ranked.map(({ session }) => session));
+        }
+        return ranked.length ? ranked : baseline;
+      } catch (error) {
+        console.warn(`Gorse recommendations unavailable; using profile ranking: ${error.message}`);
+        return baseline;
+      }
+    },
+
     getCompletedSessions: async (_, __, context) => {
       const userId = requireUser(context)._id;
       return Session.find({
@@ -637,6 +690,7 @@ const resolvers = {
         participants: [host._id],
         status: 'upcoming'
       });
+      bestEffortGorse(() => syncGorseItems([session]));
       return populatedSessionQuery(session._id);
     },
 
@@ -659,6 +713,7 @@ const resolvers = {
         { returnDocument: 'after' }
       );
       if (!joined) throw joinRejection(await Session.findById(sessionId), user);
+      bestEffortGorse(() => recordGorseJoin(user, joined));
       return populatedSessionQuery(sessionId);
     },
 
@@ -1038,6 +1093,7 @@ const resolvers = {
       }
 
       await user.save();
+      bestEffortGorse(() => syncGorseUser(user));
       if (user.profilePhoto) await Media.updateOne({ _id: user.profilePhoto }, { $set: { expiresAt: null } });
       if (replacedPhoto) await Media.deleteOne({ _id: replacedPhoto, owner: user._id });
       return User.findById(user._id).populate('friends');

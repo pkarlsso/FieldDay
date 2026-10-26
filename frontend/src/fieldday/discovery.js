@@ -20,6 +20,18 @@ const DISCOVERY_QUERY = `
   }
 `;
 
+const RECOMMENDATIONS_QUERY = `
+  query Recommendations($origin: LocationPointInput, $maxDistanceMiles: Float, $limit: Int) {
+    recommendedSessions(origin: $origin, maxDistanceMiles: $maxDistanceMiles, limit: $limit) {
+      score reasons
+      session {
+        id sport startsAt endsAt location skillLevel skillRange distanceMiles
+        maxParticipants participants { id }
+      }
+    }
+  }
+`;
+
 export function cleanDiscoveryFilter(filter) {
   return Object.fromEntries(Object.entries(filter).filter(([, value]) => {
     if (value === undefined || value === null || value === '') return false;
@@ -34,6 +46,15 @@ export async function loadDiscoverySessions(filter) {
     filter: cleanDiscoveryFilter(filter),
   });
   return data.getSessions || [];
+}
+
+export async function loadRecommendedSessions({ origin, maxDistanceMiles = 50, limit = 5 } = {}) {
+  const data = await graphql(RECOMMENDATIONS_QUERY, {
+    origin: origin || undefined,
+    maxDistanceMiles,
+    limit,
+  });
+  return data.recommendedSessions || [];
 }
 
 export async function getDiscoveryOrigin() {
