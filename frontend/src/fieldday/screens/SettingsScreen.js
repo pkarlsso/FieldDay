@@ -3,6 +3,7 @@ import { ScrollView, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, IconButton, ScreenHeader } from '../components/ui';
 import { colors } from '../theme';
+import { APP_VERSION } from '../../version';
 
 const settings = [
   { id: 'push', label: 'Session reminders', detail: 'Start times, group updates, and rating prompts.' },
@@ -50,6 +51,7 @@ export default function SettingsScreen({ navigation }) {
             />
           </Card>
         ))}
+        <Text style={{ color: colors.muted, textAlign: 'center', fontSize: 13 }}>FieldDay version {APP_VERSION}</Text>
       </ScrollView>
     </View>
   );

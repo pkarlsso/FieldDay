@@ -17,6 +17,8 @@
     "test:sport-preferences": "node scripts/test-sport-preferences.mjs",
     "test:session-lifecycle": "node scripts/test-session-lifecycle.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
+    "export:shaped": "node backend/scripts/export-shaped-data.mjs",
+    "test:shaped-export": "node scripts/test-shaped-export.mjs",
     "postinstall": "patch-package"
   },
   "devDependencies": {
