@@ -3,6 +3,11 @@ import { GraphQLError } from 'graphql';
 import User from '../models/User.js';
 import Session from '../models/Session.js';
 import Rating from '../models/Rating.js';
+let participationLimits;
+async function getParticipationLimits() {
+  participationLimits ||= await import('../utils/participationLimits.mjs');
+  return participationLimits;
+}
 import Media from '../models/Media.js';
 import Notification from '../models/Notification.js';
 import DeviceToken from '../models/DeviceToken.js';
@@ -665,6 +670,8 @@ const resolvers = {
   Mutation: {
     createSession: async (_, { input }, context) => {
       const host = requireUser(context);
+      const { assertCanRegister, recordRegistration } = await getParticipationLimits();
+      await assertCanRegister(host);
       const fields = formatSessionInput(input);
       const invitees = await cleanInvitees(input.inviteeIds, host);
       const session = await Session.create({
@@ -674,14 +681,19 @@ const resolvers = {
         participants: [host._id],
         status: 'upcoming'
       });
+      try {
+        await recordRegistration(session._id, host._id);
+      } catch (error) {
+        await Session.deleteOne({ _id: session._id });
+        throw error;
+      }
       return populatedSessionQuery(session._id);
     },
 
-    // Every rule is part of the update's filter, so the check and the write
-    // happen as one step: two people can't both take the last spot, and a
-    // rejected join leaves the stored session untouched.
     joinSession: async (_, { sessionId }, context) => {
       const user = requireUser(context);
+      const { assertCanRegister, recordRegistration } = await getParticipationLimits();
+      await assertCanRegister(user);
       if (!mongoose.isValidObjectId(sessionId)) throw sessionNotFound();
       const joined = await Session.findOneAndUpdate(
         {
@@ -696,6 +708,12 @@ const resolvers = {
         { returnDocument: 'after' }
       );
       if (!joined) throw joinRejection(await Session.findById(sessionId), user);
+      try {
+        await recordRegistration(joined._id, user._id);
+      } catch (error) {
+        await Session.updateOne({ _id: joined._id }, { $pull: { participants: user._id } });
+        throw error;
+      }
       return populatedSessionQuery(sessionId);
     },
 
