@@ -282,7 +282,6 @@ const typeDefs = `#graphql
     getFriends(userId: ID!): [User]
     checkEmailExists(email: String!): EmailCheckResult!
     getRatingsForUser(userId: ID!): [Rating!]!
-    getRatingsBySession(sessionId: ID!, raterId: ID!): [Rating!]!
     getNotifications(limit: Int = 30, before: String): [Notification!]!
     getUnreadNotificationCount: Int!
     getNotificationPreferences: NotificationPreferences!

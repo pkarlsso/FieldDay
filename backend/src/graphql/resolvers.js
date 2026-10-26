@@ -20,7 +20,6 @@ import logger from '../utils/logger.js';
 
 
 const PROFILE_LIMITS = { name: 50, bio: 300, hometown: 80, sport: 30, sportCount: 10, pictureChars: 200000 };
-const PICTURE_PATTERN = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 const WEEKDAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 const DAY_PERIODS = ['MORNING', 'AFTERNOON', 'EVENING'];
 const MAX_INVITEES = 49;
