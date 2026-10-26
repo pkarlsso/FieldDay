@@ -19,7 +19,6 @@ import googleAuth from '../utils/googleAuth.js';
 import logger from '../utils/logger.js';
 
 const PROFILE_LIMITS = { name: 50, bio: 300, hometown: 80, sport: 30, sportCount: 10, pictureChars: 200000 };
-const PICTURE_PATTERN = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
 const MESSAGE_MAX_LENGTH = 2000;
 const MESSAGE_PAGE_SIZE = 50;
 const WEEKDAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
@@ -65,10 +64,6 @@ function requireUser(context) {
     throw new GraphQLError('You must be signed in to do that.', { extensions: { code: 'UNAUTHENTICATED' } });
   }
   return context.currentUser;
-}
-
-function sameId(left, right) {
-  return String(left) === String(right);
 }
 
 function hasParticipant(conversation, userId) {
@@ -135,6 +130,8 @@ async function conversationView(conversation, user) {
     unreadCount,
     lastMessageAt: conversation.lastMessageAt ? conversation.lastMessageAt.toISOString() : null
   };
+}
+
 // Hidden sessions get the same answer as missing ones, so nobody can find out
 // that a private session exists.
 function sessionNotFound() {
@@ -671,7 +668,6 @@ const resolvers = {
       };
     },
 
-    getSession: async (_, { id }) => populatedSessionQuery(id),
     getSession: async (_, { id }, context) => {
       const session = await findVisibleSession(id, context.currentUser);
       return populatedSessionQuery(session._id);
