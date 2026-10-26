@@ -1,6 +1,6 @@
 import { Image, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { colors, shadow, sports } from '../theme';
+import { colors, getSportConfig, shadow } from '../theme';
 
 export function ScreenHeader({ eyebrow, title, subtitle, left, right }) {
   return (
@@ -59,7 +59,7 @@ export function Pill({ label, active, color = colors.purple, onPress }) {
 }
 
 export function SportIcon({ sport, size = 52 }) {
-  const config = sports[sport] || { icon: 'run-fast', color: colors.purple };
+  const config = getSportConfig(sport);
   return (
     <View
       style={{
