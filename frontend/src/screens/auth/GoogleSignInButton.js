@@ -4,7 +4,7 @@ import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { graphql } from '../../api';
 import { GOOGLE_CLIENT_IDS } from '../../config';
-import { startSession } from '../../session';
+import { startSession, screenAfterSignIn } from '../../session';
 
 // Lets the web sign-in popup hand its result back to the app.
 WebBrowser.maybeCompleteAuthSession();
@@ -57,7 +57,8 @@ function GoogleButton({ navigation, onError }) {
           onError(data.googleSignIn.message);
         } else {
           await startSession(data.googleSignIn);
-          if (active) navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+          const next = await screenAfterSignIn();
+          if (active) navigation.reset({ index: 0, routes: [{ name: next }] });
         }
       } catch (err) {
         onError(err.message);

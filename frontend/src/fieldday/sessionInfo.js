@@ -9,6 +9,13 @@ export const SKILL_LEVELS = [
 
 export const CAPACITY_LIMITS = { min: 2, max: 50 };
 
+// Mirrors the backend's SessionVisibility.
+export const VISIBILITY_OPTIONS = [
+  { value: 'PUBLIC', label: 'Anyone', detail: 'Anyone can find this session on Explore and the map.' },
+  { value: 'FRIENDS', label: 'Friends', detail: 'Only your friends can find and join this session.' },
+  { value: 'INVITE_ONLY', label: 'Invite only', detail: 'Only the friends you pick below can find and join this session.' },
+];
+
 // Mirrors the backend: sessions default to 2 hours and last at most 24.
 export const DEFAULT_SESSION_LENGTH_MS = 2 * 60 * 60 * 1000;
 export const MAX_SESSION_LENGTH_MS = 24 * 60 * 60 * 1000;
@@ -49,7 +56,7 @@ export function formatSessionRange(startsAt, endsAt) {
 
 // Client-side copy of the createSession rules, so the form can point at the
 // exact field to fix before anything is sent.
-export function validateSessionForm({ sport, startsAt, endsAt, location, locationConfirmed, maxParticipants, skillLevel }) {
+export function validateSessionForm({ sport, startsAt, endsAt, location, locationConfirmed, maxParticipants, skillLevel, visibility = 'PUBLIC', inviteeIds = [] }) {
   const errors = {};
   if (!sport) errors.sport = 'Choose a sport.';
   if (!(startsAt instanceof Date) || Number.isNaN(startsAt.getTime())) errors.startsAt = 'Choose a date and time.';
@@ -62,6 +69,7 @@ export function validateSessionForm({ sport, startsAt, endsAt, location, locatio
     errors.maxParticipants = `Choose ${CAPACITY_LIMITS.min} to ${CAPACITY_LIMITS.max} players.`;
   }
   if (!SKILL_LEVELS.some((level) => level.value === skillLevel)) errors.skillLevel = 'Choose a skill level.';
+  if (visibility === 'INVITE_ONLY' && inviteeIds.length === 0) errors.visibility = 'Pick at least one friend to invite.';
   return errors;
 }
 
