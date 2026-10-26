@@ -118,6 +118,7 @@ export default function App() {
         <Stack.Screen name="TwoFactor" component={TwoFactorScreen} />
         <Stack.Screen name="MainTabs" component={MainTabs} />
         <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+        <Stack.Screen name="EditSession" component={CreateSessionScreen} />
         <Stack.Screen name="SessionDetails" component={useLiveData ? LiveSessionDetailsScreen : SessionDetailsScreen} />
         <Stack.Screen name="RateSession" component={useLiveData ? LiveRateSessionScreen : RateSessionScreen} />
         <Stack.Screen name="ReportNoShows" component={LiveNoShowScreen} />

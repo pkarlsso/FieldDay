@@ -4,7 +4,7 @@ import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
 import typeDefs from './graphql/typeDefs.js';
-import resolvers from './graphql/resolvers.js';
+import resolvers, { settleNoShowRatings } from './graphql/resolvers.js';
 import { getConfig } from './config.js';
 import { authenticateRequest } from './utils/authSession.js';
 import logger from './utils/logger.js';
@@ -61,6 +61,15 @@ async function startServer() {
   }));
 
   app.get('/health', (_, res) => res.json({ status: 'ok' }));
+
+  // No-shows get their automatic rating of 1 once attendance is final. Set
+  // DISABLE_NO_SHOW_RATINGS_JOB=true when a local server shares a database with
+  // the deployed one, so only one server hands these out.
+  if (process.env.DISABLE_NO_SHOW_RATINGS_JOB !== 'true') {
+    setInterval(() => {
+      settleNoShowRatings().catch((err) => logger.error('Failed to apply no-show ratings', { error: err.message }));
+    }, 60 * 1000);
+  }
 
   app.listen(port, '0.0.0.0', () => {
     logger.info(`GraphQL server running at http://localhost:${port}/graphql`);

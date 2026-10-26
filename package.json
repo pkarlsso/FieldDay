@@ -17,6 +17,7 @@
     "test:accounts": "node scripts/integration-accounts.mjs",
     "test:sport-preferences": "node scripts/test-sport-preferences.mjs",
     "test:session-lifecycle": "node scripts/test-session-lifecycle.mjs",
+    "test:attendance": "node scripts/test-attendance-and-host-changes.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
     "export:shaped": "node backend/scripts/export-shaped-data.mjs",
     "test:shaped-export": "node scripts/test-shaped-export.mjs",

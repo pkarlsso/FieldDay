@@ -49,7 +49,9 @@ export function formatSessionRange(startsAt, endsAt) {
 
 // Client-side copy of the createSession rules, so the form can point at the
 // exact field to fix before anything is sent.
-export function validateSessionForm({ sport, startsAt, endsAt, location, locationConfirmed, maxParticipants, skillLevel }) {
+// When editing, `joinedCount` is how many players have already joined, since
+// capacity can't drop below that.
+export function validateSessionForm({ sport, startsAt, endsAt, location, locationConfirmed, maxParticipants, skillLevel, joinedCount = 0 }) {
   const errors = {};
   if (!sport) errors.sport = 'Choose a sport.';
   if (!(startsAt instanceof Date) || Number.isNaN(startsAt.getTime())) errors.startsAt = 'Choose a date and time.';
@@ -60,6 +62,8 @@ export function validateSessionForm({ sport, startsAt, endsAt, location, locatio
   else if (!locationConfirmed) errors.location = 'Pick a suggestion, tap Find address, or tap the map so players can find it.';
   if (!Number.isInteger(maxParticipants) || maxParticipants < CAPACITY_LIMITS.min || maxParticipants > CAPACITY_LIMITS.max) {
     errors.maxParticipants = `Choose ${CAPACITY_LIMITS.min} to ${CAPACITY_LIMITS.max} players.`;
+  } else if (maxParticipants < joinedCount) {
+    errors.maxParticipants = `${joinedCount} players have already joined, so choose at least ${joinedCount}.`;
   }
   if (!SKILL_LEVELS.some((level) => level.value === skillLevel)) errors.skillLevel = 'Choose a skill level.';
   return errors;
@@ -67,10 +71,10 @@ export function validateSessionForm({ sport, startsAt, endsAt, location, locatio
 
 const SESSION_FIELDS = `
   id sport startsAt endsAt location skillLevel skillRange maxParticipants status createdAt completedAt
-  noShowDeadline
+  noShowDeadline cancelledAt checkInRequired checkInClosesAt myCheckIn
   host { id name }
   participants { id name profilePicture }
-  attendance { user { id } status noShowReports }
+  attendance { user { id } status noShowReports checkedInAt }
   myNoShowReport { noShows reportedAt }
   ratingEligibility { eligible reason }
 `;
@@ -102,17 +106,32 @@ export function needsNoShowCheck(session, now = new Date()) {
     && new Date(session.noShowDeadline) > now;
 }
 
+// True while the session's check-in window is open (its first 10 minutes).
+export function checkInOpen(session, now = new Date()) {
+  return Boolean(session.checkInRequired)
+    && session.status !== 'cancelled'
+    && new Date(session.startsAt) <= now
+    && now <= new Date(session.checkInClosesAt);
+}
+
+export function isCancelled(session) {
+  return session.status === 'cancelled';
+}
+
 // Groups the signed-in user's sessions for Home and My Sessions. The server
-// already moves sessions to `completed` once their end time passes.
+// already moves sessions to `completed` once their end time passes. Cancelled
+// sessions stay in the Hosting/Joined lists (marked) until they would have
+// started, but never count as upcoming or happening now.
 export function groupMySessions(mySessions, now = new Date()) {
   const { hosted = [], joined = [], completed = [] } = mySessions || {};
   const started = (session) => new Date(session.startsAt) <= now;
   const byStart = (a, b) => new Date(a.startsAt) - new Date(b.startsAt);
+  const active = [...hosted, ...joined].filter((session) => !isCancelled(session));
   return {
-    upcoming: [...hosted, ...joined].filter((session) => !started(session)).sort(byStart),
+    upcoming: active.filter((session) => !started(session)).sort(byStart),
     hostedUpcoming: hosted.filter((session) => !started(session)),
     joinedUpcoming: joined.filter((session) => !started(session)),
-    happeningNow: [...hosted, ...joined].filter(started).sort(byStart),
+    happeningNow: active.filter(started).sort(byStart),
     completed,
     needsNoShowCheck: completed.filter((session) => needsNoShowCheck(session, now)),
     needsRating: completed.filter((session) => session.ratingEligibility.eligible),
