@@ -631,15 +631,10 @@ const resolvers = {
   },
 
   Mutation: {
-    createSession: async (_, { hostId, input }, context) => {
-      const currentUser = requireUser(context);
-      if (String(currentUser._id) !== String(hostId)) throw new Error('You can only create a session for yourself');
-      const { assertCanRegister, recordRegistration } = await getParticipationLimits();
-      await assertCanRegister(currentUser);
-      const host = await User.findById(hostId);
-      if (!host) throw new Error('Host not found');
     createSession: async (_, { input }, context) => {
       const host = requireUser(context);
+      const { assertCanRegister, recordRegistration } = await getParticipationLimits();
+      await assertCanRegister(host);
       const fields = formatSessionInput(input);
       const invitees = await cleanInvitees(input.inviteeIds, host);
       const session = await Session.create({
@@ -650,7 +645,7 @@ const resolvers = {
         status: 'upcoming'
       });
       try {
-        await recordRegistration(session._id, hostId);
+        await recordRegistration(session._id, host._id);
       } catch (error) {
         await Session.deleteOne({ _id: session._id });
         throw error;
@@ -658,42 +653,10 @@ const resolvers = {
       return populatedSessionQuery(session._id);
     },
 
-    joinSession: async (_, { sessionId, userId }, context) => {
-      const currentUser = requireUser(context);
-      if (String(currentUser._id) !== String(userId)) throw new Error('You can only join a session for yourself');
-      const [session, user] = await Promise.all([Session.findById(sessionId), User.findById(userId)]);
-      if (!session || !user) throw new Error('Session or user not found');
-      if (session.status !== 'upcoming' || hasEnded(session)) throw new Error('Only upcoming sessions can be joined');
-      if (session.participants.some((id) => id.equals(userId))) return populatedSessionQuery(sessionId);
-      if (session.participants.length >= session.maxParticipants) throw new Error('Session is full');
-      const { assertCanRegister, recordRegistration } = await getParticipationLimits();
-      await assertCanRegister(currentUser);
-      session.participants.push(userId);
-      await session.save();
-      try {
-        await recordRegistration(session._id, userId);
-      } catch (error) {
-        session.participants = session.participants.filter((id) => !id.equals(userId));
-        await session.save();
-        throw error;
-      }
-      return populatedSessionQuery(sessionId);
-    },
-
-    leaveSession: async (_, { sessionId, userId }, context) => {
-      const currentUser = requireUser(context);
-      if (String(currentUser._id) !== String(userId)) throw new Error('You can only leave a session for yourself');
-      const session = await Session.findById(sessionId);
-      if (!session) throw new Error('Session not found');
-      if (session.host && session.host.equals(userId)) throw new Error('The host cannot leave their session');
-      if (hasEnded(session)) throw new Error('You cannot leave a session that has ended');
-      session.participants = session.participants.filter((id) => !id.equals(userId));
-      await session.save();
-    // Every rule is part of the update's filter, so the check and the write
-    // happen as one step: two people can't both take the last spot, and a
-    // rejected join leaves the stored session untouched.
     joinSession: async (_, { sessionId }, context) => {
       const user = requireUser(context);
+      const { assertCanRegister, recordRegistration } = await getParticipationLimits();
+      await assertCanRegister(user);
       if (!mongoose.isValidObjectId(sessionId)) throw sessionNotFound();
       const joined = await Session.findOneAndUpdate(
         {
@@ -708,6 +671,12 @@ const resolvers = {
         { returnDocument: 'after' }
       );
       if (!joined) throw joinRejection(await Session.findById(sessionId), user);
+      try {
+        await recordRegistration(joined._id, user._id);
+      } catch (error) {
+        await Session.updateOne({ _id: joined._id }, { $pull: { participants: user._id } });
+        throw error;
+      }
       return populatedSessionQuery(sessionId);
     },
 

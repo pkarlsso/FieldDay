@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node src/index.js",
     "seed": "node src/seed.js",
-    "test:accounts": "node scripts/integration-accounts.mjs"
+    "test:accounts": "node scripts/integration-accounts.mjs",
+    "test:integration": "node scripts/integration-session.mjs"
   },
   "dependencies": {
     "@apollo/server": "^4.13.0",
