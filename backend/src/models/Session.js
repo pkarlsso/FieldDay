@@ -37,8 +37,24 @@ const sessionSchema = new mongoose.Schema({
   host: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   // Stored status is not updated when a session ends; the resolvers derive
   // "completed" from endsAt. Sessions stored as completed with no endsAt
-  // predate no-show reports and keep the old rating rules.
-  status: { type: String, enum: ['upcoming', 'in_progress', 'completed'], default: 'completed' },
+  // predate no-show reports and keep the old rating rules. "cancelled" is set
+  // by the host and is final.
+  status: { type: String, enum: ['upcoming', 'in_progress', 'completed', 'cancelled'], default: 'completed' },
+  cancelledAt: { type: Date },
+  // Sessions created once location check-in existed take attendance from
+  // check-ins: anyone who hasn't checked in by 10 minutes after the start is a
+  // no-show. Older sessions (false) still use the peer no-show reports below.
+  checkInRequired: { type: Boolean, default: false },
+  checkIns: [{
+    _id: false,
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    checkedInAt: { type: Date, default: Date.now }
+  }],
+  // Players who have already been given the automatic no-show rating of 1, so
+  // it is never applied twice. noShowRatingsSettled flips once attendance is
+  // final and every rating owed has been applied.
+  noShowRated: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  noShowRatingsSettled: { type: Boolean, default: false },
   // After the session ends, each participant answers "who didn't show up?"
   // once. A player is a no-show when most of the others who answered say so.
   noShowReports: [{
@@ -58,5 +74,6 @@ sessionSchema.index({ locationPoint: '2dsphere' });
 sessionSchema.index({ sport: 1, startsAt: 1, status: 1 });
 sessionSchema.index({ participants: 1, startsAt: 1 });
 sessionSchema.index({ endsAt: 1 });
+sessionSchema.index({ noShowRatingsSettled: 1, startsAt: 1 });
 
 export default mongoose.model('Session', sessionSchema);
