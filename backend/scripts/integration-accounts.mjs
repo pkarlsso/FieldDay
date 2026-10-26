@@ -213,17 +213,20 @@ try {
   await fails(update, { i: { sportSkills: [{ sport: 'Golf', skillLevel: 2 }, { sport: 'golf', skillLevel: 3 }] } }, await fresh(), 'more than once');
   assert.equal((await fresh()).name, 'Alice Ace', 'a rejected update changes nothing');
 
+  // Upload validation is covered in detail by test-profile-setup.mjs.
   const pictureUpdate = `mutation($i:UpdateProfileInput!){updateProfile(input:$i){ name profilePicture }}`;
+  const upload = 'mutation($p:String!){uploadProfilePhoto(image:$p){id}}';
   const tinyJpeg = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2w==';
-  const pictured = (await ok(pictureUpdate, { i: { profilePicture: tinyJpeg } }, await fresh())).updateProfile;
+  const photoId = (await ok(upload, { p: tinyJpeg }, await fresh())).uploadProfilePhoto.id;
+  const pictured = (await ok(pictureUpdate, { i: { profilePhotoId: photoId } }, await fresh())).updateProfile;
   assert.equal(pictured.profilePicture, tinyJpeg);
   assert.equal(pictured.name, 'Alice Ace', 'setting a picture leaves other fields alone');
-  await fails(pictureUpdate, { i: { profilePicture: 'https://example.com/me.jpg' } }, await fresh(), 'JPEG, PNG or WebP');
-  await fails(pictureUpdate, { i: { profilePicture: 'data:image/svg+xml;base64,PHN2Zz4=' } }, await fresh(), 'JPEG, PNG or WebP');
-  await fails(pictureUpdate, { i: { profilePicture: `data:image/jpeg;base64,${'A'.repeat(200001)}` } }, await fresh(), 'too large');
-  assert.equal((await fresh()).profilePicture, tinyJpeg, 'a rejected picture keeps the old one');
-  const cleared = (await ok(pictureUpdate, { i: { profilePicture: '' } }, await fresh())).updateProfile;
-  assert.equal(cleared.profilePicture, '', 'an empty string removes the picture');
+  await fails(upload, { p: 'https://example.com/me.jpg' }, await fresh(), 'JPEG, PNG or WebP');
+  await fails(upload, { p: 'data:image/svg+xml;base64,PHN2Zz4=' }, await fresh(), 'JPEG, PNG or WebP');
+  await fails(upload, { p: `data:image/jpeg;base64,${'A'.repeat(400001)}` }, await fresh(), 'too large');
+  assert.equal(String((await fresh()).profilePhoto), photoId, 'a rejected picture keeps the old one');
+  const cleared = (await ok(pictureUpdate, { i: { profilePhotoId: '' } }, await fresh())).updateProfile;
+  assert.equal(cleared.profilePicture, '', 'an empty id removes the picture');
 
   const legacy = await User.create({ name: 'Legacy', email: emailFor('legacy'), sports: ['Soccer'], skillLevel: 2 });
   createdEmails.push(emailFor('legacy'));
@@ -249,25 +252,26 @@ try {
   };
   const session = await makeSession('completed');
   const sid = String(session._id);
-  const submit = `mutation($s:ID!,$r:ID!,$x:[RatingInput!]!){submitRatings(sessionId:$s,raterId:$r,ratings:$x){
+  const submit = `mutation($s:ID!,$x:[RatingInput!]!){submitRatings(sessionId:$s,ratings:$x){
     success avgRatingGiven friendRequestsSent updatedUsers{id socialRating totalRatings} }}`;
   const ids = { host: String(host._id), guest: String(guest._id), third: String(third._id), outsider: String(outsider._id) };
-  const rate = (raterId, ratings) => ({ s: sid, r: raterId, x: ratings });
+  const rate = (ratings) => ({ s: sid, x: ratings });
+  const players = { host, guest, third, outsider };
 
-  await fails(submit, rate(ids.host, [{ userId: ids.guest, rating: 6 }]), null, 'whole numbers from 1 to 5');
-  await fails(submit, rate(ids.host, [{ userId: ids.guest, rating: 0 }]), null, 'whole numbers from 1 to 5');
-  await fails(submit, rate(ids.host, [{ userId: ids.host, rating: 5 }]), null, 'cannot rate yourself');
-  await fails(submit, rate(ids.host, [{ userId: ids.outsider, rating: 5 }]), null, 'only rate people who played');
-  await fails(submit, rate(ids.outsider, [{ userId: ids.host, rating: 5 }]), null, 'played in the session');
-  await fails(submit, rate(ids.host, [{ userId: ids.guest, rating: 5 }, { userId: ids.guest, rating: 4 }]), null, 'only be rated once');
+  await fails(submit, rate([{ userId: ids.guest, rating: 6 }]), players.host, 'whole numbers from 1 to 5');
+  await fails(submit, rate([{ userId: ids.guest, rating: 0 }]), players.host, 'whole numbers from 1 to 5');
+  await fails(submit, rate([{ userId: ids.host, rating: 5 }]), players.host, 'cannot rate yourself');
+  await fails(submit, rate([{ userId: ids.outsider, rating: 5 }]), players.host, 'only rate people who played');
+  await fails(submit, rate([{ userId: ids.host, rating: 5 }]), players.outsider, 'played in the session');
+  await fails(submit, rate([{ userId: ids.guest, rating: 5 }, { userId: ids.guest, rating: 4 }]), players.host, 'only be rated once');
   const upcoming = await makeSession('upcoming');
-  await fails(submit, { s: String(upcoming._id), r: ids.host, x: [{ userId: ids.guest, rating: 5 }] }, null, 'completed sessions');
+  await fails(submit, { s: String(upcoming._id), x: [{ userId: ids.guest, rating: 5 }] }, host, 'completed sessions');
   assert.equal(await Rating.countDocuments({ session: session._id }), 0, 'rejected submissions store nothing');
 
-  const first = (await ok(submit, rate(ids.host, [
+  const first = (await ok(submit, rate([
     { userId: ids.guest, rating: 5, addFriend: true },
     { userId: ids.third, rating: 3 }
-  ]))).submitRatings;
+  ]), host)).submitRatings;
   assert.equal(first.success, true);
   assert.equal(first.avgRatingGiven, 4);
   assert.equal(first.friendRequestsSent, 1);
@@ -278,21 +282,21 @@ try {
   assert.deepEqual((await User.findById(guest._id)).friends.map(String), [ids.host], 'friendship is mutual');
   assert.deepEqual((await User.findById(host._id)).friends.map(String), [ids.guest]);
 
-  await fails(submit, rate(ids.host, [{ userId: ids.guest, rating: 1 }]), null, 'already rated');
+  await fails(submit, rate([{ userId: ids.guest, rating: 1 }]), players.host, 'already rated');
   assert.equal((await User.findById(guest._id)).totalRatings, 3, 'a repeat submission changes no averages');
 
   const received = (await ok('query($id:ID!){getRatingsForUser(userId:$id){value session ratee createdAt}}', { id: ids.guest })).getRatingsForUser;
   assert.deepEqual(received.map(({ value, session: s, ratee }) => [value, s, ratee]), [[5, sid, ids.guest]]);
-  const given = (await ok('query($s:ID!,$r:ID!){getRatingsBySession(sessionId:$s,raterId:$r){value ratee}}', { s: sid, r: ids.host })).getRatingsBySession;
+  const given = (await ok('query($s:ID!){getRatingsBySession(sessionId:$s){value ratee}}', { s: sid }, host)).getRatingsBySession;
   assert.equal(given.length, 2);
 
-  const pending = async (userId) => (await ok('query($u:ID!){getCompletedSessions(userId:$u){id rated}}', { u: userId })).getCompletedSessions.map((entry) => entry.id);
-  assert.ok(!(await pending(ids.host)).includes(sid), 'rated session leaves the rater\'s to-do list');
-  assert.ok((await pending(ids.guest)).includes(sid), 'other players can still rate it');
+  const pending = async (user) => (await ok('query{getCompletedSessions{id rated}}', {}, user)).getCompletedSessions.map((entry) => entry.id);
+  assert.ok(!(await pending(host)).includes(sid), 'rated session leaves the rater\'s to-do list');
+  assert.ok((await pending(guest)).includes(sid), 'other players can still rate it');
   assert.equal((await Session.findById(sid)).rated, false);
 
-  await ok(submit, rate(ids.guest, [{ userId: ids.host, rating: 4 }]));
-  await ok(submit, rate(ids.third, [{ userId: ids.host, rating: 4 }, { userId: ids.guest, rating: 2 }]));
+  await ok(submit, rate([{ userId: ids.host, rating: 4 }]), players.guest);
+  await ok(submit, rate([{ userId: ids.host, rating: 4 }, { userId: ids.guest, rating: 2 }]), players.third);
   assert.equal((await Session.findById(sid)).rated, true, 'rated once everyone has rated');
   assert.equal((await User.findById(host._id)).totalRatings, 4);
   assert.equal((await User.findById(host._id)).socialRating, 4, '(8 + 4 + 4) / 4');

@@ -27,7 +27,7 @@ import LiveSessionsScreen from './screens/LiveSessionsScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import { colors } from './theme';
 import { NotificationProvider } from '../notifications';
-import { restoreSession } from '../session';
+import { restoreSession, screenAfterSignIn } from '../session';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import SignUpEmailScreen from '../screens/auth/SignUpEmailScreen';
 import SignUpPasswordScreen from '../screens/auth/SignUpPasswordScreen';
@@ -92,9 +92,9 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
-    restoreSession().then((signedIn) => {
-      if (active) setInitialRoute(signedIn ? 'MainTabs' : 'SignUpEmail');
-    });
+    restoreSession()
+      .then((signedIn) => (signedIn ? screenAfterSignIn() : 'SignUpEmail'))
+      .then((route) => { if (active) setInitialRoute(route); });
     return () => { active = false; };
   }, []);
 
@@ -118,6 +118,8 @@ export default function App() {
         <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
         <Stack.Screen name="TwoFactor" component={TwoFactorScreen} />
         <Stack.Screen name="MainTabs" component={MainTabs} />
+        {/* First-run setup: the same form as Edit Profile, shown after sign-in until it is complete. */}
+        <Stack.Screen name="ProfileSetup" component={EditProfileScreen} initialParams={{ onboarding: true }} />
         <Stack.Screen name="EditProfile" component={EditProfileScreen} />
         <Stack.Screen name="SessionDetails" component={useLiveData ? LiveSessionDetailsScreen : SessionDetailsScreen} />
         <Stack.Screen name="RateSession" component={useLiveData ? LiveRateSessionScreen : RateSessionScreen} />
