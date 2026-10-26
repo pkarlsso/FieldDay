@@ -5,6 +5,7 @@ import { Card, IconButton, ScreenHeader } from '../components/ui';
 import { colors } from '../theme';
 import { graphql } from '../../api';
 import logger from '../../logger';
+import { APP_VERSION } from '../../version';
 
 const settings = [
   { id: 'session', label: 'Session updates', detail: 'Start times, group updates, and session changes.' },
@@ -74,6 +75,7 @@ export default function SettingsScreen({ navigation }) {
             />
           </Card>
         ))}
+        <Text style={{ color: colors.muted, textAlign: 'center', fontSize: 13 }}>FieldDay version {APP_VERSION}</Text>
       </ScrollView>
     </View>
   );
