@@ -6,14 +6,14 @@ import MapView, { Marker } from 'react-native-maps';
 import { addResultsListener, isAvailable as hasAppleSearch, resolve, search } from '../../../modules/apple-search-completer/src';
 import { Card, IconButton, Pill, PrimaryButton, ScreenHeader } from '../components/ui';
 import { colors, sports } from '../theme';
-import { CAPACITY_LIMITS, DEFAULT_SESSION_LENGTH_MS, SKILL_LEVELS, validateSessionForm } from '../sessionInfo';
+import { CAPACITY_LIMITS, DEFAULT_SESSION_LENGTH_MS, SKILL_LEVELS, VISIBILITY_OPTIONS, validateSessionForm } from '../sessionInfo';
+import { useCurrentUser } from '../useCurrentUser';
 import { graphql } from '../../api';
-import { CURRENT_USER_ID } from '../../config';
 import logger from '../../logger';
 
 const MUTATION = `
-  mutation CreateSession($hostId: ID!, $input: CreateSessionInput!) {
-    createSession(hostId: $hostId, input: $input) { id sport startsAt location }
+  mutation CreateSession($input: CreateSessionInput!) {
+    createSession(input: $input) { id sport startsAt location visibility }
   }
 `;
 
@@ -64,7 +64,11 @@ export default function CreateSessionScreen({ navigation }) {
   const [locationConfirmed, setLocationConfirmed] = useState(true);
   const [maxParticipants, setMaxParticipants] = useState(DEFAULT_CAPACITY);
   const [skillLevel, setSkillLevel] = useState(null);
+  const [visibility, setVisibility] = useState('PUBLIC');
+  const [inviteeIds, setInviteeIds] = useState([]);
   const [errors, setErrors] = useState({});
+  // Friends are who an invite-only session can be offered to.
+  const friends = useCurrentUser()?.friends || [];
   const mapRef = useRef(null);
   const [suggestions, setSuggestions] = useState([]);
   const [geocoding, setGeocoding] = useState(false);
@@ -165,6 +169,10 @@ export default function CreateSessionScreen({ navigation }) {
     setMaxParticipants((value) => Math.min(CAPACITY_LIMITS.max, Math.max(CAPACITY_LIMITS.min, value + delta)));
   }
 
+  function toggleInvitee(id) {
+    setInviteeIds((ids) => (ids.includes(id) ? ids.filter((value) => value !== id) : [...ids, id]));
+  }
+
   function resetForm() {
     setSport(null);
     const start = defaultStartAt();
@@ -175,11 +183,13 @@ export default function CreateSessionScreen({ navigation }) {
     setLocationConfirmed(true);
     setMaxParticipants(DEFAULT_CAPACITY);
     setSkillLevel(null);
+    setVisibility('PUBLIC');
+    setInviteeIds([]);
     setErrors({});
   }
 
   async function create() {
-    const formErrors = validateSessionForm({ sport, startsAt, endsAt, location, locationConfirmed, maxParticipants, skillLevel });
+    const formErrors = validateSessionForm({ sport, startsAt, endsAt, location, locationConfirmed, maxParticipants, skillLevel, visibility, inviteeIds });
     setErrors(formErrors);
     if (Object.keys(formErrors).length) {
       Alert.alert('Check the session details', Object.values(formErrors).join('\n'));
@@ -188,7 +198,6 @@ export default function CreateSessionScreen({ navigation }) {
     setLoading(true);
     try {
       const data = await graphql(MUTATION, {
-        hostId: CURRENT_USER_ID,
         input: {
           sport,
           startsAt: startsAt.toISOString(),
@@ -197,6 +206,8 @@ export default function CreateSessionScreen({ navigation }) {
           locationPoint,
           maxParticipants,
           skillLevel,
+          visibility,
+          ...(visibility === 'INVITE_ONLY' ? { inviteeIds } : {}),
         },
       });
       Alert.alert('Session created', `${data.createSession.sport} at ${data.createSession.location}`);
@@ -270,6 +281,25 @@ export default function CreateSessionScreen({ navigation }) {
             ))}
           </View>
           <FieldError message={errors.skillLevel} />
+          <Text style={styles.label}>Who can find and join</Text>
+          <View style={styles.pillRow}>
+            {VISIBILITY_OPTIONS.map((option) => (
+              <Pill key={option.value} label={option.label} active={visibility === option.value} onPress={() => setVisibility(option.value)} />
+            ))}
+          </View>
+          <Text style={{ color: colors.muted }}>{VISIBILITY_OPTIONS.find((option) => option.value === visibility).detail}</Text>
+          {visibility === 'INVITE_ONLY' ? (
+            friends.length ? (
+              <View style={styles.pillRow}>
+                {friends.map((friend) => (
+                  <Pill key={friend.id} label={friend.name} active={inviteeIds.includes(friend.id)} onPress={() => toggleInvitee(friend.id)} />
+                ))}
+              </View>
+            ) : (
+              <Text style={{ color: colors.muted }}>You have no friends to invite yet. Add the people you play with when you rate a session.</Text>
+            )
+          ) : null}
+          <FieldError message={errors.visibility} />
           <Text style={styles.label}>Location</Text>
           <TextInput value={location} onChangeText={editLocation} style={styles.input} placeholder="Search for an address" />
           {suggestions.map((result, index) => <Text key={`${result.title || result.name}-${index}`} onPress={() => chooseSuggestion(result)} style={styles.suggestion}>
