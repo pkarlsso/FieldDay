@@ -6,7 +6,7 @@ import mongoose from 'mongoose';
 import typeDefs from './graphql/typeDefs.js';
 import resolvers from './graphql/resolvers.js';
 import { getConfig } from './config.js';
-import { authenticateRequest } from './utils/authSession.js';
+import { authenticateRequest, demoAuthBypassEnabled } from './utils/authSession.js';
 import logger from './utils/logger.js';
 
 function csrfProtection(req, res, next) {
@@ -34,6 +34,9 @@ async function startServer() {
 
   await mongoose.connect(mongoUri);
   logger.info('Connected to MongoDB Atlas');
+  if (demoAuthBypassEnabled()) {
+    logger.warn('AUTH_DEMO_BYPASS is on: sign up and login skip the emailed 2FA code. Turn it off for real users.');
+  }
 
   const server = new ApolloServer({
     typeDefs,

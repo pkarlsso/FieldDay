@@ -1,18 +1,25 @@
+import mongoose from 'mongoose';
+import { GraphQLError } from 'graphql';
 import User from '../models/User.js';
 import Session from '../models/Session.js';
 import Rating from '../models/Rating.js';
 import FriendRequest from '../models/FriendRequest.js';
+import Media from '../models/Media.js';
 import { validatePasswordStrength, PASSWORD_REQUIREMENTS, hashPassword, verifyPassword } from '../utils/password.js';
 import { generateCode, hashCode, CODE_TTL_MS, MAX_ATTEMPTS } from '../utils/twoFactor.js';
 import { RESET_CODE_TTL_MS } from '../utils/passwordReset.js';
 import * as authSessions from '../utils/authSession.js';
+import { createMediaLoader, storeProfilePhoto, toDataUri } from '../utils/media.js';
+import { VISIBILITIES, canViewSession, visibleSessionsFilter, visibilityOf } from '../utils/sessionAccess.js';
 // Called through the module objects (not destructured) so tests can stub them.
 import mailer from '../utils/mailer.js';
 import googleAuth from '../utils/googleAuth.js';
 import logger from '../utils/logger.js';
 
-const PROFILE_LIMITS = { name: 50, bio: 300, hometown: 80, sport: 30, sportCount: 10, pictureChars: 200000 };
-const PICTURE_PATTERN = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/;
+const PROFILE_LIMITS = { name: 50, bio: 300, hometown: 80, sport: 30, sportCount: 10 };
+const WEEKDAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+const DAY_PERIODS = ['MORNING', 'AFTERNOON', 'EVENING'];
+const MAX_INVITEES = 49;
 const DEFAULT_DISCOVERY_RADIUS_MILES = 25;
 const MILES_TO_METERS = 1609.344;
 const SESSION_LIMITS = { sport: 30, location: 120, minParticipants: 2, maxParticipants: 50 };
@@ -40,13 +47,18 @@ async function issueTwoFactorCode(user) {
 }
 
 async function createDemoAuthSession(user, message) {
-  if (process.env.AUTH_DEMO_BYPASS !== 'true') return null;
+  if (!authSessions.demoAuthBypassEnabled()) return null;
   const token = await authSessions.createAuthSession(user._id);
   return authSuccess(user, message, { token, requiresTwoFactor: false });
 }
 
+// The signed-in user, taken from the request's bearer token. Every operation
+// that acts for a user goes through this rather than trusting an ID the
+// client sends.
 function requireUser(context) {
-  if (!context.currentUser) throw new Error('You must be signed in to do that.');
+  if (!context.currentUser) {
+    throw new GraphQLError('You must be signed in to do that.', { extensions: { code: 'UNAUTHENTICATED' } });
+  }
   return context.currentUser;
 }
 
@@ -86,6 +98,17 @@ async function createFriendRequest(requesterId, recipientId) {
     if (err.code === 11000) throw new Error('A friend request is already pending');
     throw err;
   }
+// Hidden sessions get the same answer as missing ones, so nobody can find out
+// that a private session exists.
+function sessionNotFound() {
+  return new GraphQLError('Session not found', { extensions: { code: 'NOT_FOUND' } });
+}
+
+async function findVisibleSession(sessionId, user) {
+  if (!mongoose.isValidObjectId(sessionId)) throw sessionNotFound();
+  const session = await Session.findById(sessionId);
+  if (!session || !canViewSession(session, user)) throw sessionNotFound();
+  return session;
 }
 
 // Trims an optional profile text field and enforces its length. Returns
@@ -98,14 +121,51 @@ function cleanProfileText(value, label, maxLength, { required = false } = {}) {
   return trimmed;
 }
 
-// Accepts a base64 image data URI (the app sends a 256px JPEG) or '' to remove
-// the picture. Returns undefined when the field was not supplied.
-function cleanProfilePicture(value) {
-  if (value === undefined || value === null) return undefined;
-  if (value === '') return '';
-  if (value.length > PROFILE_LIMITS.pictureChars) throw new Error('Profile picture is too large');
-  if (!PICTURE_PATTERN.test(value)) throw new Error('Profile picture must be a JPEG, PNG or WebP image');
-  return value;
+// Merges repeated days, drops empty ones and sorts Monday first, so the stored
+// schedule has one entry per day the user is free.
+function cleanAvailability(availability) {
+  const byDay = new Map();
+  for (const { day, periods } of availability) {
+    const merged = byDay.get(day) || new Set();
+    periods.forEach((period) => merged.add(period));
+    byDay.set(day, merged);
+  }
+  return WEEKDAYS
+    .filter((day) => byDay.get(day)?.size)
+    .map((day) => ({ day, periods: DAY_PERIODS.filter((period) => byDay.get(day).has(period)) }));
+}
+
+function sportSkillsOf(user) {
+  return user.sportSkills && user.sportSkills.length > 0
+    ? user.sportSkills
+    : (user.sports || []).map((sport) => ({ sport, skillLevel: user.skillLevel }));
+}
+
+// What first-run setup asks for. A photo, bio and hometown are optional.
+const PROFILE_SETUP_REQUIREMENTS = [
+  ['name', (user) => Boolean(user.name?.trim())],
+  ['sports', (user) => sportSkillsOf(user).length > 0],
+  ['availability', (user) => (user.availability || []).some(({ periods }) => periods.length > 0)]
+];
+
+function profileSetupMissing(user) {
+  return PROFILE_SETUP_REQUIREMENTS.filter(([, isSet]) => !isSet(user)).map(([field]) => field);
+}
+
+// Points the profile at a newly uploaded photo ('' removes it). Returns the
+// photo it replaced, to delete once the profile is saved.
+async function applyProfilePhoto(user, profilePhotoId) {
+  const previous = user.profilePhoto;
+  if (profilePhotoId === '') {
+    user.profilePhoto = null;
+  } else {
+    const media = mongoose.isValidObjectId(profilePhotoId)
+      && await Media.findOne({ _id: profilePhotoId, owner: user._id, purpose: 'profile-photo' }, '_id');
+    if (!media) throw new Error('That photo upload has expired. Choose the photo again.');
+    user.profilePhoto = media._id;
+  }
+  user.profilePicture = '';
+  return previous && String(previous) !== String(user.profilePhoto) ? previous : null;
 }
 
 function cleanSportSkills(sportSkills) {
@@ -127,6 +187,10 @@ function cleanSportSkills(sportSkills) {
 // Works whether a reference is a raw ObjectId or a populated document.
 function idOf(value) {
   return String(value?._id ?? value);
+}
+
+function sameId(a, b) {
+  return idOf(a) === idOf(b);
 }
 
 function isParticipant(session, userId) {
@@ -273,6 +337,12 @@ function formatSessionInput(input) {
   const skillBand = SKILL_LEVEL_RANGES[input.skillLevel];
   if (!skillBand) throw new Error('Skill level must be 1 (beginner), 2 (intermediate) or 3 (advanced)');
 
+  const visibility = input.visibility || 'PUBLIC';
+  if (!VISIBILITIES.includes(visibility)) throw new Error('Choose who can see this session');
+  if (input.inviteeIds?.length && visibility !== 'INVITE_ONLY') {
+    throw new Error('Invites are only used for invite-only sessions');
+  }
+
   return {
     sport,
     location,
@@ -286,8 +356,66 @@ function formatSessionInput(input) {
     skillMax: skillBand.max,
     skillRange: `${skillBand.min.toFixed(1)}-${skillBand.max.toFixed(1)}`,
     tags: input.tags || [],
-    maxParticipants: input.maxParticipants
+    maxParticipants: input.maxParticipants,
+    visibility
   };
+}
+
+// Checks a list of people a host wants to invite and returns their ids.
+async function cleanInvitees(userIds, host) {
+  const ids = [...new Set((userIds || []).map(String))].filter((id) => id !== String(host._id));
+  if (ids.length > MAX_INVITEES) throw new Error(`You can invite at most ${MAX_INVITEES} people`);
+  if (!ids.every((id) => mongoose.isValidObjectId(id))
+    || await User.countDocuments({ _id: { $in: ids } }) !== ids.length) {
+    throw new Error('Some of the people you invited could not be found');
+  }
+  return ids;
+}
+
+// A session is open to join or leave until it starts.
+function openSessionFilter(now = new Date()) {
+  return { status: 'upcoming', startsAt: { $gt: now } };
+}
+
+function isOpen(session, now = new Date()) {
+  return session.status === 'upcoming' && new Date(session.startsAt) > now;
+}
+
+// Says why joinSession's guarded update matched nothing.
+function joinRejection(session, user) {
+  if (!session || !canViewSession(session, user)) return sessionNotFound();
+  if (sameId(session.host, user._id)) return new Error('You are hosting this session, so you are already in it');
+  if (isParticipant(session, user._id)) return new Error('You have already joined this session');
+  if (!isOpen(session)) return new Error('Only upcoming sessions can be joined');
+  if (session.participants.length >= session.maxParticipants) return new Error('Session is full');
+  return new Error('Could not join this session. Please try again.');
+}
+
+function leaveRejection(session, user) {
+  if (!session || !canViewSession(session, user)) return sessionNotFound();
+  if (sameId(session.host, user._id)) return new Error('The host cannot leave their session');
+  if (!isParticipant(session, user._id)) return new Error('You are not in this session');
+  if (hasEnded(session)) return new Error('You cannot leave a session that has ended');
+  if (!isOpen(session)) return new Error('You cannot leave a session that has already started');
+  return new Error('Could not leave this session. Please try again.');
+}
+
+// Matches sessions that have ended: by status, by stored end time, or (older
+// sessions) 2 hours after they started.
+function endedSessionsFilter(now = new Date()) {
+  return {
+    $or: [
+      { status: 'completed' },
+      { endsAt: { $lte: now } },
+      { endsAt: { $exists: false }, startsAt: { $lte: new Date(now.getTime() - DEFAULT_SESSION_LENGTH_MS) } }
+    ]
+  };
+}
+
+// Two people may become friends once they have played a session together.
+// Being on the roster of one that hasn't happened yet isn't enough.
+async function havePlayedTogether(userId, otherId) {
+  return Boolean(await Session.exists({ participants: { $all: [userId, otherId] }, ...endedSessionsFilter() }));
 }
 
 function parseSkillRange(skillRange) {
@@ -342,9 +470,9 @@ function validateDiscoveryFilter(filter = {}) {
   return normalized;
 }
 
-function discoveryQuery(status, input) {
+function discoveryQuery(status, input, user) {
   const filter = validateDiscoveryFilter(input);
-  const query = { status: status || 'upcoming' };
+  const query = { status: status || 'upcoming', ...visibleSessionsFilter(user) };
   if (query.status === 'upcoming') query.startsAt = { $gte: new Date() };
   if (filter.sports?.length) query.sport = { $in: filter.sports };
   if (filter.startsAfter || filter.startsBefore) {
@@ -428,15 +556,27 @@ const resolvers = {
         ? { noShows: report.noShows.map(idOf), reportedAt: new Date(report.reportedAt).toISOString() }
         : null;
     },
-    ratingEligibility: (session, _, context) => ratingEligibility(session, context.currentUser?._id)
+    ratingEligibility: (session, _, context) => ratingEligibility(session, context.currentUser?._id),
+    visibility: (session) => visibilityOf(session),
+    invitees: async (session, _, context) => {
+      if (!context.currentUser || !sameId(session.host, context.currentUser._id)) return [];
+      return User.find({ _id: { $in: session.invitees || [] } });
+    }
   },
 
   User: {
     // Accounts created before per-sport skill levels only have `sports` and one
     // overall `skillLevel`, so fall back to those.
-    sportSkills: (user) => (user.sportSkills && user.sportSkills.length > 0
-      ? user.sportSkills
-      : (user.sports || []).map((sport) => ({ sport, skillLevel: user.skillLevel })))
+    sportSkills: (user) => sportSkillsOf(user),
+    availability: (user) => user.availability || [],
+    profilePicture: async (user, _, context) => {
+      if (!user.profilePhoto) return user.profilePicture || '';
+      context.loadMedia ||= createMediaLoader();
+      const media = await context.loadMedia(idOf(user.profilePhoto));
+      return media ? toDataUri(media) : '';
+    },
+    profileComplete: (user) => profileSetupMissing(user).length === 0,
+    profileSetupMissing: (user) => profileSetupMissing(user)
   },
 
   Rating: {
@@ -459,11 +599,19 @@ const resolvers = {
   },
 
   Query: {
+    me: async (_, __, context) => (context.currentUser ? User.findById(context.currentUser._id).populate('friends') : null),
+
     getRatingsForUser: async (_, { userId }) => Rating.find({ ratee: userId }).sort({ createdAt: -1 }),
 
-    getRatingsBySession: async (_, { sessionId, raterId }) => Rating.find({ session: sessionId, rater: raterId }),
+    getRatingsBySession: async (_, { sessionId }, context) => {
+      const user = requireUser(context);
+      return Rating.find({ session: sessionId, rater: user._id });
+    },
 
-    getSession: async (_, { id }) => populatedSessionQuery(id),
+    getSession: async (_, { id }, context) => {
+      const session = await findVisibleSession(id, context.currentUser);
+      return populatedSessionQuery(session._id);
+    },
     getUser: async (_, { id }) => {
       return User.findById(id).populate('friends');
     },
@@ -475,8 +623,8 @@ const resolvers = {
         : { exists: false, message: null };
     },
 
-    getSessions: async (_, { status, filter: input }) => {
-      const { query, filter } = discoveryQuery(status, input);
+    getSessions: async (_, { status, filter: input }, context) => {
+      const { query, filter } = discoveryQuery(status, input, context.currentUser);
       const sessions = await Session.find(query)
         .populate('participants')
         .populate('host')
@@ -489,15 +637,10 @@ const resolvers = {
         });
     },
 
-    getCompletedSessions: async (_, { userId }) => {
-      const now = new Date();
+    getCompletedSessions: async (_, __, context) => {
+      const userId = requireUser(context)._id;
       return Session.find({
-        // Ended by status, by stored end time, or (older sessions) 2h after start.
-        $or: [
-          { status: 'completed' },
-          { endsAt: { $lte: now } },
-          { endsAt: { $exists: false }, startsAt: { $lte: new Date(now.getTime() - DEFAULT_SESSION_LENGTH_MS) } }
-        ],
+        ...endedSessionsFilter(),
         participants: userId,
         rated: { $ne: true },
         ratedBy: { $ne: userId }
@@ -567,37 +710,76 @@ const resolvers = {
   },
 
   Mutation: {
-    createSession: async (_, { hostId, input }) => {
-      const host = await User.findById(hostId);
-      if (!host) throw new Error('Host not found');
+    createSession: async (_, { input }, context) => {
+      const host = requireUser(context);
+      const fields = formatSessionInput(input);
+      const invitees = await cleanInvitees(input.inviteeIds, host);
       const session = await Session.create({
-        ...formatSessionInput(input),
-        host: hostId,
-        participants: [hostId],
+        ...fields,
+        invitees,
+        host: host._id,
+        participants: [host._id],
         status: 'upcoming'
       });
       return populatedSessionQuery(session._id);
     },
 
-    joinSession: async (_, { sessionId, userId }) => {
-      const [session, user] = await Promise.all([Session.findById(sessionId), User.findById(userId)]);
-      if (!session || !user) throw new Error('Session or user not found');
-      if (session.status !== 'upcoming' || hasEnded(session)) throw new Error('Only upcoming sessions can be joined');
-      if (session.participants.some((id) => id.equals(userId))) return populatedSessionQuery(sessionId);
-      if (session.participants.length >= session.maxParticipants) throw new Error('Session is full');
-      session.participants.push(userId);
-      await session.save();
+    // Every rule is part of the update's filter, so the check and the write
+    // happen as one step: two people can't both take the last spot, and a
+    // rejected join leaves the stored session untouched.
+    joinSession: async (_, { sessionId }, context) => {
+      const user = requireUser(context);
+      if (!mongoose.isValidObjectId(sessionId)) throw sessionNotFound();
+      const joined = await Session.findOneAndUpdate(
+        {
+          $and: [
+            { _id: sessionId, host: { $ne: user._id }, participants: { $ne: user._id } },
+            openSessionFilter(),
+            { $expr: { $lt: [{ $size: '$participants' }, '$maxParticipants'] } },
+            visibleSessionsFilter(user)
+          ]
+        },
+        { $push: { participants: user._id } },
+        { returnDocument: 'after' }
+      );
+      if (!joined) throw joinRejection(await Session.findById(sessionId), user);
       return populatedSessionQuery(sessionId);
     },
 
-    leaveSession: async (_, { sessionId, userId }) => {
-      const session = await Session.findById(sessionId);
-      if (!session) throw new Error('Session not found');
-      if (session.host && session.host.equals(userId)) throw new Error('The host cannot leave their session');
-      if (hasEnded(session)) throw new Error('You cannot leave a session that has ended');
-      session.participants = session.participants.filter((id) => !id.equals(userId));
-      await session.save();
+    leaveSession: async (_, { sessionId }, context) => {
+      const user = requireUser(context);
+      if (!mongoose.isValidObjectId(sessionId)) throw sessionNotFound();
+      const left = await Session.findOneAndUpdate(
+        { _id: sessionId, participants: user._id, host: { $ne: user._id }, ...openSessionFilter() },
+        { $pull: { participants: user._id } },
+        { returnDocument: 'after' }
+      );
+      if (!left) throw leaveRejection(await Session.findById(sessionId), user);
       return populatedSessionQuery(sessionId);
+    },
+
+    inviteToSession: async (_, { sessionId, userIds }, context) => {
+      const user = requireUser(context);
+      const session = await findVisibleSession(sessionId, user);
+      if (!sameId(session.host, user._id)) throw new Error('Only the host can invite people');
+      if (visibilityOf(session) !== 'INVITE_ONLY') throw new Error('Invites are only used for invite-only sessions');
+      if (hasEnded(session)) throw new Error('This session has ended');
+      const invitees = await cleanInvitees(userIds, user);
+      if (new Set([...session.invitees.map(String), ...invitees]).size > MAX_INVITEES) {
+        throw new Error(`You can invite at most ${MAX_INVITEES} people`);
+      }
+      await Session.updateOne({ _id: session._id }, { $addToSet: { invitees: { $each: invitees } } });
+      return populatedSessionQuery(session._id);
+    },
+
+    uninviteFromSession: async (_, { sessionId, userId }, context) => {
+      const user = requireUser(context);
+      const session = await findVisibleSession(sessionId, user);
+      if (!sameId(session.host, user._id)) throw new Error('Only the host can change invites');
+      if (mongoose.isValidObjectId(userId)) {
+        await Session.updateOne({ _id: session._id }, { $pull: { invitees: userId } });
+      }
+      return populatedSessionQuery(session._id);
     },
 
     reportNoShows: async (_, { sessionId, noShowUserIds }, context) => {
@@ -629,7 +811,8 @@ const resolvers = {
       return populatedSessionQuery(session._id);
     },
 
-    submitRatings: async (_, { sessionId, raterId, ratings }) => {
+    submitRatings: async (_, { sessionId, ratings }, context) => {
+      const raterId = requireUser(context)._id;
       const session = await Session.findById(sessionId);
       if (!session) throw new Error('Session not found');
       validateRatingSubmission(session, raterId, ratings);
@@ -731,6 +914,22 @@ const resolvers = {
       request.status = 'declined';
       await request.save();
       return populatedFriendRequestQuery(request._id);
+    // Friends can see each other's friends-only sessions, so this is limited
+    // to people you have actually played with.
+    addFriend: async (_, { friendId }, context) => {
+      const user = requireUser(context);
+      if (sameId(friendId, user._id)) throw new Error('You cannot add yourself as a friend');
+      const friend = mongoose.isValidObjectId(friendId) && await User.findById(friendId);
+      if (!friend) throw new Error('User not found');
+      if (!(await havePlayedTogether(user._id, friend._id))) {
+        throw new Error('You can only add people you have played a session with');
+      }
+
+      await Promise.all([
+        User.updateOne({ _id: user._id }, { $addToSet: { friends: friend._id } }),
+        User.updateOne({ _id: friend._id }, { $addToSet: { friends: user._id } })
+      ]);
+      return User.findById(user._id).populate('friends');
     },
 
     signUp: async (_, { email, password }) => {
@@ -752,7 +951,7 @@ const resolvers = {
         passwordHash
       });
 
-      if (process.env.AUTH_DEMO_BYPASS === 'true') {
+      if (authSessions.demoAuthBypassEnabled()) {
         await user.save();
         return createDemoAuthSession(user, 'Account created for demo testing.');
       }
@@ -931,19 +1130,28 @@ const resolvers = {
       return { success: true, message: 'Signed out.' };
     },
 
+    uploadProfilePhoto: async (_, { image }, context) => {
+      const user = requireUser(context);
+      const media = await storeProfilePhoto(user._id, image);
+      return { id: String(media._id), contentType: media.contentType };
+    },
+
     updateProfile: async (_, { input }, context) => {
       const user = requireUser(context);
 
       const name = cleanProfileText(input.name, 'Name', PROFILE_LIMITS.name, { required: true });
       const bio = cleanProfileText(input.bio, 'Bio', PROFILE_LIMITS.bio);
       const hometown = cleanProfileText(input.hometown, 'Hometown', PROFILE_LIMITS.hometown);
-      const profilePicture = cleanProfilePicture(input.profilePicture);
       const sportSkills = input.sportSkills ? cleanSportSkills(input.sportSkills) : undefined;
+      const availability = input.availability ? cleanAvailability(input.availability) : undefined;
+      const replacedPhoto = input.profilePhotoId !== undefined && input.profilePhotoId !== null
+        ? await applyProfilePhoto(user, input.profilePhotoId)
+        : null;
 
       if (name !== undefined) user.name = name;
       if (bio !== undefined) user.bio = bio;
       if (hometown !== undefined) user.hometown = hometown;
-      if (profilePicture !== undefined) user.profilePicture = profilePicture;
+      if (availability !== undefined) user.availability = availability;
       if (sportSkills !== undefined) {
         user.sportSkills = sportSkills;
         // Keep the older flat fields in step for screens that still read them.
@@ -955,6 +1163,8 @@ const resolvers = {
       }
 
       await user.save();
+      if (user.profilePhoto) await Media.updateOne({ _id: user.profilePhoto }, { $set: { expiresAt: null } });
+      if (replacedPhoto) await Media.deleteOne({ _id: replacedPhoto, owner: user._id });
       return User.findById(user._id).populate('friends');
     }
   }

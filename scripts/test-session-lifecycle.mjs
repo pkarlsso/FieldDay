@@ -36,17 +36,17 @@ async function fails(query, variables, currentUser, expected) {
   assert.ok(message.includes(expected), `expected "${message}" to include "${expected}"`);
 }
 
-const CREATE = `mutation($hostId:ID!,$input:CreateSessionInput!){createSession(hostId:$hostId,input:$input){
+const CREATE = `mutation($input:CreateSessionInput!){createSession(input:$input){
   id sport location startsAt endsAt skillLevel skillRange maxParticipants status participants{id} }}`;
-const JOIN = 'mutation($s:ID!,$u:ID!){joinSession(sessionId:$s,userId:$u){id}}';
-const LEAVE = 'mutation($s:ID!,$u:ID!){leaveSession(sessionId:$s,userId:$u){id}}';
+const JOIN = 'mutation($s:ID!){joinSession(sessionId:$s){id}}';
+const LEAVE = 'mutation($s:ID!){leaveSession(sessionId:$s){id}}';
 const REPORT = `mutation($s:ID!,$n:[ID!]!){reportNoShows(sessionId:$s,noShowUserIds:$n){
   id myNoShowReport{noShows} ratingEligibility{eligible reason} }}`;
 const GET = `query($id:ID!){getSession(id:$id){
   id status endsAt completedAt noShowDeadline rated
   attendance{user{id} status noShowReports} myNoShowReport{noShows reportedAt}
   ratingEligibility{eligible reason} }}`;
-const SUBMIT = 'mutation($s:ID!,$r:ID!,$x:[RatingInput!]!){submitRatings(sessionId:$s,raterId:$r,ratings:$x){success}}';
+const SUBMIT = 'mutation($s:ID!,$x:[RatingInput!]!){submitRatings(sessionId:$s,ratings:$x){success}}';
 const MINE = `query{getMySessions{
   hosted{id} joined{id} completed{id ratingEligibility{eligible}} }}`;
 
@@ -81,32 +81,31 @@ try {
   const hostId = idOf(host);
 
   // ---- #206 creation inputs, plus end times ------------------------------
-  await fails(CREATE, { hostId, input: validInput({ skillLevel: null }) }, host, 'Choose a skill level');
-  await fails(CREATE, { hostId, input: validInput({ maxParticipants: null }) }, host, 'Choose how many players');
-  await fails(CREATE, { hostId, input: validInput({ skillLevel: 0 }) }, host, 'Skill level must be 1');
-  await fails(CREATE, { hostId, input: validInput({ skillLevel: 4 }) }, host, 'Skill level must be 1');
-  await fails(CREATE, { hostId, input: validInput({ maxParticipants: 1 }) }, host, 'from 2 to 50');
-  await fails(CREATE, { hostId, input: validInput({ maxParticipants: 51 }) }, host, 'from 2 to 50');
-  await fails(CREATE, { hostId, input: validInput({ sport: '   ' }) }, host, 'Sport cannot be empty');
-  await fails(CREATE, { hostId, input: validInput({ location: '' }) }, host, 'Location cannot be empty');
-  await fails(CREATE, { hostId, input: validInput({ startsAt: new Date(Date.now() - HOUR).toISOString() }) }, host, 'in the future');
-  await fails(CREATE, { hostId, input: validInput({ startsAt: 'not-a-date' }) }, host, 'valid ISO date');
+  await fails(CREATE, { input: validInput({ skillLevel: null }) }, host, 'Choose a skill level');
+  await fails(CREATE, { input: validInput({ maxParticipants: null }) }, host, 'Choose how many players');
+  await fails(CREATE, { input: validInput({ skillLevel: 0 }) }, host, 'Skill level must be 1');
+  await fails(CREATE, { input: validInput({ skillLevel: 4 }) }, host, 'Skill level must be 1');
+  await fails(CREATE, { input: validInput({ maxParticipants: 1 }) }, host, 'from 2 to 50');
+  await fails(CREATE, { input: validInput({ maxParticipants: 51 }) }, host, 'from 2 to 50');
+  await fails(CREATE, { input: validInput({ sport: '   ' }) }, host, 'Sport cannot be empty');
+  await fails(CREATE, { input: validInput({ location: '' }) }, host, 'Location cannot be empty');
+  await fails(CREATE, { input: validInput({ startsAt: new Date(Date.now() - HOUR).toISOString() }) }, host, 'in the future');
+  await fails(CREATE, { input: validInput({ startsAt: 'not-a-date' }) }, host, 'valid ISO date');
   const start = new Date(Date.now() + 24 * HOUR);
   start.setUTCSeconds(0, 0);
-  await fails(CREATE, { hostId, input: validInput({ startsAt: start.toISOString(), endsAt: start.toISOString() }) }, host, 'end time must be after');
-  await fails(CREATE, { hostId, input: validInput({ startsAt: start.toISOString(), endsAt: new Date(start - HOUR).toISOString() }) }, host, 'end time must be after');
-  await fails(CREATE, { hostId, input: validInput({ startsAt: start.toISOString(), endsAt: new Date(+start + 25 * HOUR).toISOString() }) }, host, 'at most 24 hours');
-  await fails(CREATE, { hostId, input: validInput({ endsAt: 'soon' }) }, host, 'endsAt must be a valid ISO date');
+  await fails(CREATE, { input: validInput({ startsAt: start.toISOString(), endsAt: start.toISOString() }) }, host, 'end time must be after');
+  await fails(CREATE, { input: validInput({ startsAt: start.toISOString(), endsAt: new Date(start - HOUR).toISOString() }) }, host, 'end time must be after');
+  await fails(CREATE, { input: validInput({ startsAt: start.toISOString(), endsAt: new Date(+start + 25 * HOUR).toISOString() }) }, host, 'at most 24 hours');
+  await fails(CREATE, { input: validInput({ endsAt: 'soon' }) }, host, 'endsAt must be a valid ISO date');
   assert.equal(await Session.countDocuments({ host: host._id }), 0, 'invalid requests create nothing');
   console.log('✓ Invalid session inputs and end times are rejected without creating a session');
 
-  const defaulted = (await ok(CREATE, { hostId, input: validInput({ startsAt: start.toISOString() }) }, host)).createSession;
+  const defaulted = (await ok(CREATE, { input: validInput({ startsAt: start.toISOString() }) }, host)).createSession;
   assert.equal(new Date(defaulted.endsAt) - new Date(defaulted.startsAt), 2 * HOUR, 'end defaults to 2 hours after start');
   assert.equal((await Session.findById(defaulted.id)).endsAt.getTime(), +start + 2 * HOUR, 'default end is stored');
   await Session.deleteOne({ _id: defaulted.id });
 
   const created = (await ok(CREATE, {
-    hostId,
     input: validInput({ sport: ' Pickleball ', skillLevel: 3, maxParticipants: 4, startsAt: start.toISOString(), endsAt: new Date(+start + 90 * 60000).toISOString() })
   }, host)).createSession;
   assert.equal(created.sport, 'Pickleball', 'sport is trimmed');
@@ -135,10 +134,10 @@ try {
 
   // ---- #204 automatic ending ---------------------------------------------
   const sid = created.id;
-  for (const user of [a, b, c]) await ok(JOIN, { s: sid, u: idOf(user) });
-  await fails(JOIN, { s: sid, u: idOf(outsider) }, null, 'Session is full');
+  for (const user of [a, b, c]) await ok(JOIN, { s: sid }, user);
+  await fails(JOIN, { s: sid }, outsider, 'Session is full');
 
-  await fails(SUBMIT, { s: sid, r: idOf(a), x: [{ userId: hostId, rating: 5 }] }, null, 'completed sessions');
+  await fails(SUBMIT, { s: sid, x: [{ userId: hostId, rating: 5 }] }, a, 'completed sessions');
   await fails(REPORT, { s: sid, n: [] }, a, 'once the session has ended');
 
   await moveSession(sid, 1, 1);
@@ -155,10 +154,10 @@ try {
   assert.equal(ended.completedAt, ended.endsAt);
   assert.equal(new Date(ended.noShowDeadline) - new Date(ended.endsAt), 48 * HOUR);
   assert.equal((await Session.findById(sid)).status, 'upcoming', 'nothing had to be written to end it');
-  await fails(JOIN, { s: sid, u: idOf(outsider) }, null, 'Only upcoming sessions');
-  await fails(LEAVE, { s: sid, u: idOf(a) }, null, 'has ended');
+  await fails(JOIN, { s: sid }, outsider, 'Only upcoming sessions');
+  await fails(LEAVE, { s: sid }, a, 'has ended');
   assert.match(ended.ratingEligibility.reason, /who didn't show up/);
-  await fails(SUBMIT, { s: sid, r: idOf(a), x: [{ userId: hostId, rating: 5 }] }, null, 'who didn\'t show up');
+  await fails(SUBMIT, { s: sid, x: [{ userId: hostId, rating: 5 }] }, a, 'who didn\'t show up');
   console.log('✓ Sessions end automatically at their end time');
 
   // ---- #204 no-show reports ----------------------------------------------
@@ -186,7 +185,7 @@ try {
     'one report out of three is not a majority'
   );
   assert.match(tally.ratingEligibility.reason, /reported that you didn't show up/);
-  await fails(SUBMIT, { s: sid, r: idOf(c), x: [{ userId: hostId, rating: 1 }] }, null, 'didn\'t show up');
+  await fails(SUBMIT, { s: sid, x: [{ userId: hostId, rating: 1 }] }, c, 'didn\'t show up');
   assert.equal((await Session.findById(sid)).noShowReports.length, 4, 'one stored answer per player');
 
   const bChanged = (await ok(REPORT, { s: sid, n: [idOf(c)] }, b)).reportNoShows;
@@ -194,19 +193,19 @@ try {
   assert.equal((await Session.findById(sid)).noShowReports.length, 4, 'changing an answer replaces it');
   console.log('✓ Players report no-shows and the majority decides');
 
-  await fails(SUBMIT, { s: sid, r: idOf(a), x: [{ userId: idOf(c), rating: 1 }] }, null, 'reported as a no-show');
-  await ok(SUBMIT, { s: sid, r: idOf(a), x: [{ userId: hostId, rating: 5 }, { userId: idOf(b), rating: 4 }] });
+  await fails(SUBMIT, { s: sid, x: [{ userId: idOf(c), rating: 1 }] }, a, 'reported as a no-show');
+  await ok(SUBMIT, { s: sid, x: [{ userId: hostId, rating: 5 }, { userId: idOf(b), rating: 4 }] }, a);
   await fails(REPORT, { s: sid, n: [] }, a, 'can no longer change');
   assert.match((await ok(GET, { id: sid }, a)).getSession.ratingEligibility.reason, /already rated/);
-  await ok(SUBMIT, { s: sid, r: hostId, x: [{ userId: idOf(a), rating: 4 }, { userId: idOf(b), rating: 4 }] });
+  await ok(SUBMIT, { s: sid, x: [{ userId: idOf(a), rating: 4 }, { userId: idOf(b), rating: 4 }] }, host);
   assert.equal((await Session.findById(sid)).rated, false, 'b has not rated yet');
-  await ok(SUBMIT, { s: sid, r: idOf(b), x: [{ userId: hostId, rating: 4 }, { userId: idOf(a), rating: 5 }] });
+  await ok(SUBMIT, { s: sid, x: [{ userId: hostId, rating: 4 }, { userId: idOf(a), rating: 5 }] }, b);
   assert.equal((await Session.findById(sid)).rated, true, 'rated once everyone who showed up has rated');
   console.log('✓ Rating skips no-shows and players you reported');
 
   // ---- No-show window and older sessions ----------------------------------
-  const late = (await ok(CREATE, { hostId, input: validInput() }, host)).createSession;
-  await ok(JOIN, { s: late.id, u: idOf(a) });
+  const late = (await ok(CREATE, { input: validInput() }, host)).createSession;
+  await ok(JOIN, { s: late.id }, a);
   await moveSession(late.id, 52, -50);
   const lateView = (await ok(GET, { id: late.id }, a)).getSession;
   assert.ok(new Date(lateView.noShowDeadline) < new Date(), 'deadline has passed');
@@ -225,8 +224,8 @@ try {
   console.log('✓ The no-show check closes after 48 hours; older sessions are unaffected');
 
   // ---- #203 My Sessions ---------------------------------------------------
-  const upcoming = (await ok(CREATE, { hostId, input: validInput({ skillLevel: 1 }) }, host)).createSession;
-  await ok(JOIN, { s: upcoming.id, u: idOf(b) });
+  const upcoming = (await ok(CREATE, { input: validInput({ skillLevel: 1 }) }, host)).createSession;
+  await ok(JOIN, { s: upcoming.id }, b);
   const hostView = (await ok(MINE, {}, host)).getMySessions;
   assert.deepEqual(hostView.hosted.map((s) => s.id), [upcoming.id]);
   assert.deepEqual(hostView.joined, []);
@@ -234,7 +233,7 @@ try {
   const bView = (await ok(MINE, {}, b)).getMySessions;
   assert.deepEqual(bView.joined.map((s) => s.id), [upcoming.id]);
   assert.equal(bView.completed.find((s) => s.id === sid).ratingEligibility.eligible, false, 'already rated');
-  await ok(LEAVE, { s: upcoming.id, u: idOf(b) });
+  await ok(LEAVE, { s: upcoming.id }, b);
   assert.deepEqual((await ok(MINE, {}, b)).getMySessions.joined, [], 'leaving removes it from My Sessions');
   assert.deepEqual(await ok(MINE, {}, outsider), { getMySessions: { hosted: [], joined: [], completed: [] } });
   await fails(MINE, {}, null, 'signed in');

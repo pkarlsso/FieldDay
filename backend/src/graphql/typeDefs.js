@@ -5,13 +5,47 @@ const typeDefs = `#graphql
     email: String!
     bio: String
     hometown: String
+    # An image URI ready for <Image source={{ uri }}>, or '' when unset.
     profilePicture: String
     sports: [String]
     sportSkills: [SportSkill!]!
     skillLevel: Float
+    availability: [Availability!]!
     socialRating: Float
     totalRatings: Int
     friends: [User]
+    # True once the first-run setup has everything it needs.
+    profileComplete: Boolean!
+    # What first-run setup still needs: any of "name", "sports" and
+    # "availability". Empty when profileComplete is true. A photo is optional.
+    profileSetupMissing: [String!]!
+  }
+
+  enum Weekday {
+    MON
+    TUE
+    WED
+    THU
+    FRI
+    SAT
+    SUN
+  }
+
+  enum DayPeriod {
+    MORNING
+    AFTERNOON
+    EVENING
+  }
+
+  # The parts of one weekday the user is usually free to play.
+  type Availability {
+    day: Weekday!
+    periods: [DayPeriod!]!
+  }
+
+  input AvailabilityInput {
+    day: Weekday!
+    periods: [DayPeriod!]!
   }
 
   type PublicUser {
@@ -47,8 +81,25 @@ const typeDefs = `#graphql
     name: String
     bio: String
     hometown: String
-    profilePicture: String
+    # An id from uploadProfilePhoto, or '' to remove the photo.
+    profilePhotoId: ID
     sportSkills: [SportSkillInput!]
+    # Replaces the whole weekly schedule. Days with no periods are dropped.
+    availability: [AvailabilityInput!]
+  }
+
+  type UploadedMedia {
+    id: ID!
+    contentType: String!
+  }
+
+  enum SessionVisibility {
+    # Anyone can find and join it.
+    PUBLIC
+    # Only the host's friends can find and join it.
+    FRIENDS
+    # Only people the host invited can find and join it.
+    INVITE_ONLY
   }
 
   type Session {
@@ -69,6 +120,9 @@ const typeDefs = `#graphql
     maxParticipants: Int
     participants: [User]
     host: User
+    visibility: SessionVisibility!
+    # Who the host invited. Only the host sees this list; everyone else gets [].
+    invitees: [User!]!
     # "upcoming", "in_progress" (started, not ended) or "completed" (ended).
     # Derived from the clock, so sessions end without anyone marking them.
     status: String
@@ -156,6 +210,10 @@ const typeDefs = `#graphql
     tags: [String!]
     # Required: total players including the host.
     maxParticipants: Int
+    # Defaults to PUBLIC.
+    visibility: SessionVisibility
+    # People to invite. Only allowed for INVITE_ONLY sessions.
+    inviteeIds: [ID!]
   }
 
   type RatingResult {
@@ -195,11 +253,19 @@ const typeDefs = `#graphql
     token: String
   }
 
+  # Operations that act for a user take who they are from the signed-in
+  # request (the "Authorization: Bearer <token>" header), never from an
+  # argument, and fail with code UNAUTHENTICATED when nobody is signed in.
   type Query {
+    # The signed-in user, or null when signed out.
+    me: User
     getUser(id: ID!): User
+    # Fails with "Session not found" for sessions the caller can't see.
     getSession(id: ID!): Session
+    # Only returns sessions the caller is allowed to see.
     getSessions(status: String, filter: SessionDiscoveryFilterInput): [Session]
-    getCompletedSessions(userId: ID!): [Session]
+    # Ended sessions the signed-in user still has to rate.
+    getCompletedSessions: [Session]
     getMySessions: MySessions!
     getFriends(userId: ID!): [User]
     findUserById(id: ID!): PublicUser
@@ -207,13 +273,23 @@ const typeDefs = `#graphql
     getFriendCandidates: [PublicUser!]!
     checkEmailExists(email: String!): EmailCheckResult!
     getRatingsForUser(userId: ID!): [Rating!]!
-    getRatingsBySession(sessionId: ID!, raterId: ID!): [Rating!]!
+    # The ratings the signed-in user gave in a session.
+    getRatingsBySession(sessionId: ID!): [Rating!]!
   }
 
   type Mutation {
-    createSession(hostId: ID!, input: CreateSessionInput!): Session
-    joinSession(sessionId: ID!, userId: ID!): Session
-    leaveSession(sessionId: ID!, userId: ID!): Session
+    # The signed-in user becomes the host and first participant.
+    createSession(input: CreateSessionInput!): Session
+    # Fails if you host the session, already joined, it is full, it has
+    # started, or you are not allowed to see it.
+    joinSession(sessionId: ID!): Session
+    # Only before the session starts. The host can't leave.
+    leaveSession(sessionId: ID!): Session
+    # Host only, before the session ends. For INVITE_ONLY sessions.
+    inviteToSession(sessionId: ID!, userIds: [ID!]!): Session!
+    # Host only. Stops the person finding or joining the session; if they
+    # already joined, they keep their spot.
+    uninviteFromSession(sessionId: ID!, userId: ID!): Session!
     # Participants only, after the session ends and before noShowDeadline.
     # Pass an empty list if everyone showed up. Can be changed until you rate.
     reportNoShows(sessionId: ID!, noShowUserIds: [ID!]!): Session!
@@ -222,6 +298,9 @@ const typeDefs = `#graphql
     sendFriendRequest(recipientId: ID!): FriendRequest!
     acceptFriendRequest(requestId: ID!): FriendRequest!
     declineFriendRequest(requestId: ID!): FriendRequest!
+    submitRatings(sessionId: ID!, ratings: [RatingInput!]!): RatingResult
+    # Only with someone you have played a session with.
+    addFriend(friendId: ID!): User
     signUp(email: String!, password: String!): AuthResult!
     login(email: String!, password: String!): AuthResult!
     resendTwoFactorCode(email: String!): AuthResult!
@@ -231,6 +310,10 @@ const typeDefs = `#graphql
     googleSignIn(idToken: String!): AuthResult!
     restoreSession(token: String!): AuthResult!
     logout(token: String!): AuthResult!
+    # Stores a photo for the signed-in user and returns its id for
+    # updateProfile(input: { profilePhotoId }). Takes a JPEG, PNG or WebP data
+    # URI of at most 150 KB. Uploads that are never saved are deleted after a day.
+    uploadProfilePhoto(image: String!): UploadedMedia!
     updateProfile(input: UpdateProfileInput!): User!
   }
 `;
