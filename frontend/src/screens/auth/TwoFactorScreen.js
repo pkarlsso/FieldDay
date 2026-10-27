@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { graphql } from '../../api';
-import { startSession } from '../../session';
+import { finishSignIn } from '../../session';
 
 const PURPLE = '#7C7EFF';
 
@@ -47,8 +47,7 @@ export default function TwoFactorScreen({ route, navigation }) {
       if (!data.verifyTwoFactorCode.success) {
         setError(data.verifyTwoFactorCode.message);
       } else {
-        await startSession(data.verifyTwoFactorCode);
-        navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+        await finishSignIn(navigation, data.verifyTwoFactorCode);
       }
     } catch (err) {
       setError(err.message);
