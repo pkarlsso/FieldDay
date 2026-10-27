@@ -1,9 +1,15 @@
-// This will be updated after seeding the database with your actual user ID
-export let CURRENT_USER_ID = '69db4924fa3cb80a64df2953';
+// The signed-in user's ID, set at sign-in and cleared at sign-out. Screens use
+// it only to tell which rows are "you" (host badge, your own player row). It is
+// never sent as proof of who you are: the server works that out from the
+// session token in the Authorization header.
+export let CURRENT_USER_ID = null;
 
-// Your machine's local IP — update if needed
-// Run `ipconfig getifaddr en0` in terminal to find your IP
-export const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.4.205:4000/graphql';
+// The shared AWS API is the normal backend for Expo development and installed
+// builds. Set EXPO_PUBLIC_API_URL locally only when intentionally testing a
+// backend running on your own machine.
+export const API_URL =
+  process.env.EXPO_PUBLIC_API_URL ||
+  'https://sgbtn5pq84.execute-api.us-east-2.amazonaws.com/graphql';
 
 // Google OAuth client IDs (public identifiers, not secrets). "Sign in with
 // Google" only appears once the ID for the platform being run is set.
