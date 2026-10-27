@@ -37,4 +37,13 @@ export const sports = {
   Volleyball: { icon: 'volleyball', color: colors.coral },
   Running: { icon: 'run-fast', color: colors.purple },
   Baseball: { icon: 'baseball', color: '#E24A4A' },
+  Golf: { icon: 'golf', color: colors.greenDark },
 };
+
+// Sessions can be created with a custom sport name, so use a neutral athletic
+// treatment rather than suggesting that an unknown sport is a running session.
+export const fallbackSport = { icon: 'dumbbell', color: colors.purple };
+
+export function getSportConfig(sport) {
+  return sports[sport] || fallbackSport;
+}

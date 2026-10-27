@@ -3,7 +3,7 @@
     "name": "frontend",
     "slug": "frontend",
     "scheme": "fieldday",
-    "version": "1.0.0",
+    "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -25,6 +25,7 @@
     },
     "plugins": [
       "expo-status-bar",
+      "expo-notifications",
       [
         "expo-splash-screen",
         {
@@ -36,6 +37,14 @@
       "@react-native-community/datetimepicker",
       "expo-secure-store",
       "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "FieldDay uses your photo library so you can choose a profile picture.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
       "./plugins/withQuotedReactNativeXcodeScript",
       [
         "expo-build-properties",

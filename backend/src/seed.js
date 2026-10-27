@@ -1,7 +1,8 @@
-const mongoose = require('mongoose');
-const User = require('./models/User');
-const Session = require('./models/Session');
-const { getConfig } = require('./config');
+import mongoose from 'mongoose';
+import User from './models/User.js';
+import Session from './models/Session.js';
+import { getConfig } from './config.js';
+import logger from './utils/logger.js';
 
 const users = [
   { name: 'Gabriel Ogbalor', email: 'gogbalor@purdue.edu', sports: ['Pickleball', 'Basketball'], skillLevel: 3.5, bio: 'Love pickup games!' },
@@ -19,14 +20,14 @@ const users = [
 async function seed() {
   const { mongoUri } = getConfig();
   await mongoose.connect(mongoUri);
-  console.log('Connected to MongoDB Atlas');
+  logger.info('Connected to MongoDB Atlas');
 
   await User.deleteMany({});
   await Session.deleteMany({});
-  console.log('Cleared existing data');
+  logger.info('Cleared existing data');
 
   const createdUsers = await User.insertMany(users);
-  console.log(`Created ${createdUsers.length} users`);
+  logger.info('Created users', { count: createdUsers.length });
 
   const gabriel = createdUsers[0];
   const josh = createdUsers[1];
@@ -96,16 +97,14 @@ async function seed() {
   ];
 
   const createdSessions = await Session.insertMany(sessions);
-  console.log(`Created ${createdSessions.length} sessions`);
+  logger.info('Created sessions', { count: createdSessions.length });
 
-  console.log('\n--- Seed Complete ---');
-  console.log(`Your user ID (Gabriel): ${gabriel._id}`);
-  console.log('Use this ID in the frontend config.\n');
+  logger.info('Seed complete', { gabrielUserId: String(gabriel._id), nextStep: 'Use this ID in the frontend config.' });
 
   await mongoose.disconnect();
 }
 
 seed().catch(err => {
-  console.error('Seed failed:', err);
+  logger.error('Seed failed', { error: err.message, stack: err.stack });
   process.exit(1);
 });

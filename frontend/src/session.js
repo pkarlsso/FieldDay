@@ -3,6 +3,8 @@ import * as SecureStore from 'expo-secure-store';
 import { graphql } from './api';
 import { setCurrentUserId } from './config';
 import { getAuthToken, setAuthToken } from './authToken';
+import { registerNotificationDevice, unregisterNotificationDevice } from './notifications';
+import logger from './logger';
 
 // Keeps the user signed in across app launches. The server issues a token that
 // is good for 30 days (and renewed each time the app reopens); we store it in
@@ -15,7 +17,8 @@ async function readStored() {
       ? localStorage.getItem(STORAGE_KEY)
       : await SecureStore.getItemAsync(STORAGE_KEY);
     return raw ? JSON.parse(raw) : null;
-  } catch {
+  } catch (error) {
+    logger.warn('Could not read stored session:', error);
     return null;
   }
 }
@@ -31,13 +34,19 @@ async function writeStored(value) {
       await SecureStore.deleteItemAsync(STORAGE_KEY);
     }
   } catch (err) {
-    console.log('Could not update stored session:', err.message);
+    logger.warn('Could not update stored session:', err);
   }
 }
 
 const RESTORE_MUTATION = `
   mutation RestoreSession($token: String!) {
     restoreSession(token: $token) { success userId token }
+  }
+`;
+
+const SETUP_QUERY = `
+  query ProfileSetupStatus {
+    me { id profileComplete }
   }
 `;
 
@@ -52,6 +61,7 @@ export async function startSession({ userId, token }) {
   setAuthToken(token);
   setCurrentUserId(userId);
   await writeStored({ userId, token });
+  registerNotificationDevice().catch((err) => logger.log('Could not register notifications:', err.message));
 }
 
 // Called at launch. Returns true if a saved login is still valid.
@@ -64,26 +74,48 @@ export async function restoreSession() {
     if (result.success) {
       setAuthToken(stored.token);
       setCurrentUserId(result.userId);
+      registerNotificationDevice().catch((err) => logger.log('Could not register notifications:', err.message));
       return true;
     }
     // The server says this login has expired or been revoked.
     await writeStored(null);
   } catch (err) {
     // Server unreachable: leave the saved login in place for the next launch.
-    console.log('Could not restore session:', err.message);
+    logger.warn('Could not restore session:', err);
   }
   return false;
 }
 
+// The first screen to show once signed in: first-run profile setup until the
+// profile has everything it needs, then the main app.
+export async function screenAfterSignIn() {
+  try {
+    const { me } = await graphql(SETUP_QUERY);
+    return me && !me.profileComplete ? 'ProfileSetup' : 'MainTabs';
+  } catch (err) {
+    // Don't lock someone out of the app because this check failed.
+    logger.warn('Could not check profile setup:', err);
+    return 'MainTabs';
+  }
+}
+
+// Call once a login (2FA, Google or demo) succeeds, then show the right screen.
+export async function finishSignIn(navigation, result) {
+  await startSession(result);
+  navigation.reset({ index: 0, routes: [{ name: await screenAfterSignIn() }] });
+}
+
 export async function endSession() {
   const token = getAuthToken();
+  await unregisterNotificationDevice();
   setAuthToken(null);
+  setCurrentUserId(null);
   await writeStored(null);
   if (token) {
     try {
       await graphql(LOGOUT_MUTATION, { token });
     } catch (err) {
-      console.log('Logout request failed:', err.message);
+      logger.warn('Logout request failed:', err);
     }
   }
 }
