@@ -1,17 +1,3 @@
-export const currentUser = {
-  id: 'u1',
-  name: 'Alex Morgan',
-  email: 'alex@purdue.edu',
-  initials: 'AM',
-  verifiedStudent: true,
-  bio: 'Weekend pickleball regular, casual soccer player, always down for evening games.',
-  socialRating: 4.2,
-  totalRatings: 18,
-  skillLevel: 3.5,
-  sports: ['Pickleball', 'Basketball', 'Soccer'],
-  availability: ['Mon 6-9 PM', 'Wed 5-8 PM', 'Sat mornings'],
-};
-
 export const players = [
   { id: 'u2', name: 'Josh', initials: 'JS', skill: 3.5, rating: 4.6, sports: ['Pickleball', 'Tennis'], present: true },
   { id: 'u3', name: 'Jacob', initials: 'JB', skill: 3.0, rating: 4.1, sports: ['Basketball', 'Soccer'], present: false },
@@ -32,7 +18,7 @@ export const sessions = [
     skillRange: '3.0 - 4.0',
     maxParticipants: 4,
     joined: 3,
-    host: 'Alex M.',
+    host: 'You',
     recommended: true,
     matchReason: 'Best fit for your after-work, friendly-game preference.',
     vibe: 'Friendly',

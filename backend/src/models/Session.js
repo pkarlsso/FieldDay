@@ -1,10 +1,13 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const sessionSchema = new mongoose.Schema({
   sport: { type: String, required: true },
   date: { type: String, required: true },
   time: { type: String, required: true },
   startsAt: { type: Date, required: true },
+  // The session counts as ended once this passes; there is no manual "complete"
+  // step. Older sessions without one are treated as ending 2 hours after start.
+  endsAt: { type: Date },
   location: { type: String, required: true },
   locationPoint: {
     type: {
@@ -23,10 +26,32 @@ const sessionSchema = new mongoose.Schema({
     }
   },
   skillRange: { type: String, default: '3.0-4.0' },
+  skillMin: { type: Number },
+  skillMax: { type: Number },
+  // The host's required level: 1 beginner, 2 intermediate, 3 advanced. Older
+  // sessions only have skillRange/skillMin/skillMax.
+  skillLevel: { type: Number, min: 1, max: 3 },
+  tags: { type: [String], default: [] },
   maxParticipants: { type: Number, default: 6 },
   participants: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   host: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  // Who can find and join the session. Sessions stored before this field
+  // existed have none and are treated as PUBLIC.
+  visibility: { type: String, enum: ['PUBLIC', 'FRIENDS', 'INVITE_ONLY'], default: 'PUBLIC' },
+  // People the host invited. Only used by INVITE_ONLY sessions.
+  invitees: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  // Stored status is not updated when a session ends; the resolvers derive
+  // "completed" from endsAt. Sessions stored as completed with no endsAt
+  // predate no-show reports and keep the old rating rules.
   status: { type: String, enum: ['upcoming', 'in_progress', 'completed'], default: 'completed' },
+  // After the session ends, each participant answers "who didn't show up?"
+  // once. A player is a no-show when most of the others who answered say so.
+  noShowReports: [{
+    _id: false,
+    reporter: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    noShows: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    reportedAt: { type: Date, default: Date.now }
+  }],
   // `ratedBy` tracks who has submitted ratings; `rated` flips to true once
   // every participant has (and is also true on older, pre-ratedBy sessions).
   ratedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
@@ -35,5 +60,9 @@ const sessionSchema = new mongoose.Schema({
 });
 
 sessionSchema.index({ locationPoint: '2dsphere' });
+sessionSchema.index({ sport: 1, startsAt: 1, status: 1 });
+sessionSchema.index({ participants: 1, startsAt: 1 });
+sessionSchema.index({ endsAt: 1 });
+sessionSchema.index({ invitees: 1 });
 
-module.exports = mongoose.model('Session', sessionSchema);
+export default mongoose.model('Session', sessionSchema);

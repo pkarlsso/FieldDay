@@ -1,13 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, RefreshControl } from 'react-native';
 import { graphql } from '../api';
-import { CURRENT_USER_ID } from '../config';
 
 const PURPLE = '#7C7EFF';
 
 const QUERY = `
-  query GetCompletedSessions($userId: ID!) {
-    getCompletedSessions(userId: $userId) {
+  query GetCompletedSessions {
+    getCompletedSessions {
       id sport date time location skillRange rated
       participants { id name skillLevel socialRating }
       host { id name }
@@ -23,7 +22,7 @@ export default function HomeScreen({ navigation }) {
   const fetchSessions = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await graphql(QUERY, { userId: CURRENT_USER_ID });
+      const data = await graphql(QUERY);
       setSessions(data.getCompletedSessions || []);
       setError(null);
     } catch (err) {
