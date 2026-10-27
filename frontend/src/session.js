@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import { graphql } from './api';
 import { setCurrentUserId } from './config';
 import { getAuthToken, setAuthToken } from './authToken';
+import { registerNotificationDevice, unregisterNotificationDevice } from './notifications';
 import logger from './logger';
 
 // Keeps the user signed in across app launches. The server issues a token that
@@ -43,6 +44,12 @@ const RESTORE_MUTATION = `
   }
 `;
 
+const SETUP_QUERY = `
+  query ProfileSetupStatus {
+    me { id profileComplete }
+  }
+`;
+
 const LOGOUT_MUTATION = `
   mutation Logout($token: String!) {
     logout(token: $token) { success }
@@ -54,6 +61,7 @@ export async function startSession({ userId, token }) {
   setAuthToken(token);
   setCurrentUserId(userId);
   await writeStored({ userId, token });
+  registerNotificationDevice().catch((err) => logger.log('Could not register notifications:', err.message));
 }
 
 // Called at launch. Returns true if a saved login is still valid.
@@ -66,6 +74,7 @@ export async function restoreSession() {
     if (result.success) {
       setAuthToken(stored.token);
       setCurrentUserId(result.userId);
+      registerNotificationDevice().catch((err) => logger.log('Could not register notifications:', err.message));
       return true;
     }
     // The server says this login has expired or been revoked.
@@ -77,9 +86,30 @@ export async function restoreSession() {
   return false;
 }
 
+// The first screen to show once signed in: first-run profile setup until the
+// profile has everything it needs, then the main app.
+export async function screenAfterSignIn() {
+  try {
+    const { me } = await graphql(SETUP_QUERY);
+    return me && !me.profileComplete ? 'ProfileSetup' : 'MainTabs';
+  } catch (err) {
+    // Don't lock someone out of the app because this check failed.
+    logger.warn('Could not check profile setup:', err);
+    return 'MainTabs';
+  }
+}
+
+// Call once a login (2FA, Google or demo) succeeds, then show the right screen.
+export async function finishSignIn(navigation, result) {
+  await startSession(result);
+  navigation.reset({ index: 0, routes: [{ name: await screenAfterSignIn() }] });
+}
+
 export async function endSession() {
   const token = getAuthToken();
+  await unregisterNotificationDevice();
   setAuthToken(null);
+  setCurrentUserId(null);
   await writeStored(null);
   if (token) {
     try {

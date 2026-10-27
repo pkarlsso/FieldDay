@@ -8,18 +8,23 @@ import { graphql } from '../../api';
 import { CURRENT_USER_ID } from '../../config';
 
 const QUERY = `query($id:ID!){ getSession(id:$id){
-  id sport startsAt endsAt location locationPoint{coordinates} skillLevel skillRange maxParticipants status
+  id sport startsAt endsAt location locationPoint{coordinates} skillLevel skillRange maxParticipants status visibility
   completedAt noShowDeadline participants{id name} host{id name}
   attendance{ user{id} status noShowReports } myNoShowReport{ noShows reportedAt }
   ratingEligibility{ eligible reason }
 } }`;
-const JOIN = `mutation($sessionId:ID!,$userId:ID!){joinSession(sessionId:$sessionId,userId:$userId){id participants{id name}}}`;
-const LEAVE = `mutation($sessionId:ID!,$userId:ID!){leaveSession(sessionId:$sessionId,userId:$userId){id participants{id name}}}`;
+const JOIN = `mutation($sessionId:ID!){joinSession(sessionId:$sessionId){id participants{id name}}}`;
+const LEAVE = `mutation($sessionId:ID!){leaveSession(sessionId:$sessionId){id participants{id name}}}`;
 
 const statusBadges = {
   upcoming: { label: 'Upcoming', icon: 'calendar-outline', color: colors.purple },
   in_progress: { label: 'Happening now', icon: 'play-circle-outline', color: colors.gold },
   completed: { label: 'Ended', icon: 'checkmark-done', color: colors.green },
+};
+
+const visibilityBadges = {
+  FRIENDS: { label: 'Friends only', icon: 'people-outline', color: colors.blue },
+  INVITE_ONLY: { label: 'Invite only', icon: 'lock-closed-outline', color: colors.blue },
 };
 
 export default function LiveSessionDetailsScreen({ route, navigation }) {
@@ -40,10 +45,10 @@ export default function LiveSessionDetailsScreen({ route, navigation }) {
   // Refetch on focus so no-show answers and ratings from the next screens show up here.
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  async function run(mutation, variables) {
+  async function run(mutation) {
     setBusy(true);
     try {
-      await graphql(mutation, { sessionId: session.id, ...variables });
+      await graphql(mutation, { sessionId: session.id });
       await load();
     } catch (err) {
       setError(err.message);
@@ -72,7 +77,10 @@ export default function LiveSessionDetailsScreen({ route, navigation }) {
       <ScreenHeader title="Session Details" left={<IconButton icon="chevron-back" onPress={() => navigation.goBack()} />} />
       <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 120, gap: 14 }}>
         <Card style={{ gap: 8 }}>
-          <View style={{ flexDirection: 'row' }}><StatusBadge {...(statusBadges[session.status] || statusBadges.upcoming)} /></View>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <StatusBadge {...(statusBadges[session.status] || statusBadges.upcoming)} />
+            {visibilityBadges[session.visibility] ? <StatusBadge {...visibilityBadges[session.visibility]} /> : null}
+          </View>
           <Text style={{ color: colors.ink, fontSize: 22, fontWeight: '900' }}>{sessionTitle(session)}</Text>
           <Text style={{ color: colors.text }}>{formatSessionRange(session.startsAt, session.endsAt)}</Text>
           <Text style={{ color: colors.text }}>{playersLabel(session)} • {skillLabel(session)}</Text>
@@ -86,7 +94,7 @@ export default function LiveSessionDetailsScreen({ route, navigation }) {
             label={joined ? 'Leave Session' : 'Join Session'}
             variant={joined ? 'destructive' : undefined}
             disabled={busy}
-            onPress={() => run(joined ? LEAVE : JOIN, { userId: CURRENT_USER_ID })}
+            onPress={() => run(joined ? LEAVE : JOIN)}
           />
         ) : null}
 
