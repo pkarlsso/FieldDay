@@ -13,6 +13,8 @@
     "build": "npm run build --workspace frontend",
     "check:backend": "node scripts/check-backend.mjs",
     "check": "node scripts/check.mjs",
+    "test:integration": "node scripts/integration-session.mjs",
+    "test:accounts": "npm run test:accounts --workspace backend",
     "test:sport-preferences": "node scripts/test-sport-preferences.mjs",
     "test:session-lifecycle": "node scripts/test-session-lifecycle.mjs",
     "test:session-membership": "node scripts/test-session-membership.mjs",

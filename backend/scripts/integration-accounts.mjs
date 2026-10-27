@@ -14,9 +14,10 @@ import googleAuth from '../src/utils/googleAuth.js';
 import { authenticateRequest } from '../src/utils/authSession.js';
 import User from '../src/models/User.js';
 import Session from '../src/models/Session.js';
-import SessionRegistration from '../src/models/SessionRegistration.mjs';
 import Rating from '../src/models/Rating.js';
 import AuthSession from '../src/models/AuthSession.js';
+import logger from '../src/utils/logger.js';
+import SessionRegistration from '../src/models/SessionRegistration.mjs';
 import { getParticipationTier, recordRegistration } from '../src/utils/participationLimits.mjs';
 
 const tag = `accounts-${Date.now()}`;
@@ -351,7 +352,7 @@ try {
   assert.equal((await User.findById(host._id)).totalRatings, 4);
   assert.equal((await User.findById(host._id)).socialRating, 4, '(8 + 4 + 4) / 4');
 
-  console.log('Accounts integration test passed: sessions, password reset, Google, profile, ratings');
+  logger.info('Accounts integration test passed: sessions, password reset, Google, profile, ratings');
 } finally {
   const users = await User.find({ email: { $in: createdEmails } }, '_id');
   const userIds = users.map((user) => user._id);

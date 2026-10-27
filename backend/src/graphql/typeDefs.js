@@ -221,6 +221,37 @@ const typeDefs = `#graphql
     createdAt: String!
   }
 
+  type NotificationTarget {
+    version: Int!
+    screen: String!
+    params: String!
+  }
+
+  type Notification {
+    id: ID!
+    type: String!
+    category: String!
+    title: String!
+    body: String!
+    target: NotificationTarget!
+    readAt: String
+    createdAt: String!
+  }
+
+  type NotificationPreferences {
+    session: Boolean!
+    friends: Boolean!
+    ratings: Boolean!
+    chat: Boolean!
+  }
+
+  type NotificationDevice {
+    id: ID!
+    platform: String!
+    enabled: Boolean!
+    lastSeenAt: String!
+  }
+
   type EmailCheckResult {
     exists: Boolean!
     message: String
@@ -251,6 +282,10 @@ const typeDefs = `#graphql
     getFriends(userId: ID!): [User]
     checkEmailExists(email: String!): EmailCheckResult!
     getRatingsForUser(userId: ID!): [Rating!]!
+    getNotifications(limit: Int = 30, before: String): [Notification!]!
+    getUnreadNotificationCount: Int!
+    getNotificationPreferences: NotificationPreferences!
+    getNotificationDevices: [NotificationDevice!]!
     # The ratings the signed-in user gave in a session.
     getRatingsBySession(sessionId: ID!): [Rating!]!
   }
@@ -288,6 +323,11 @@ const typeDefs = `#graphql
     # URI of at most 150 KB. Uploads that are never saved are deleted after a day.
     uploadProfilePhoto(image: String!): UploadedMedia!
     updateProfile(input: UpdateProfileInput!): User!
+    markNotificationRead(id: ID!): Notification!
+    markAllNotificationsRead: Int!
+    registerNotificationDevice(token: String!, platform: String!): NotificationDevice!
+    unregisterNotificationDevice(token: String!): Boolean!
+    updateNotificationPreferences(session: Boolean, friends: Boolean, ratings: Boolean, chat: Boolean): NotificationPreferences!
   }
 `;
 
