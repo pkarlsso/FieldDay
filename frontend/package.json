@@ -1,6 +1,6 @@
 {
   "name": "frontend",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "main": "index.js",
   "scripts": {
     "start": "expo start",
@@ -10,21 +10,25 @@
     "build": "expo export --platform all"
   },
   "dependencies": {
-    "@apollo/client": "^4.1.7",
+    "@apollo/client": "^4.3.4",
     "@expo/vector-icons": "^15.0.2",
     "@fieldday/apple-search-completer": "file:modules/apple-search-completer",
     "@react-native-community/datetimepicker": "9.1.0",
     "@react-native-community/slider": "5.2.0",
     "@react-navigation/bottom-tabs": "^7.15.9",
     "@react-navigation/native": "^7.2.2",
-    "@react-navigation/stack": "^7.8.10",
-    "expo": "~57.0.24",
+    "@react-navigation/stack": "^7.11.2",
+    "expo": "~57.0.25",
     "expo-auth-session": "~57.0.12",
-    "expo-constants": "~57.0.18",
+    "expo-build-properties": "~57.0.22",
+    "expo-constants": "~57.0.19",
     "expo-crypto": "~57.0.3",
+    "expo-device": "~7.0.2",
     "expo-device-hub": "^0.10.1",
-    "expo-location": "~57.0.19",
-    "expo-secure-store": "~57.0.4",
+    "expo-image-manipulator": "~58.0.14",
+    "expo-image-picker": "~57.0.20",
+    "expo-location": "~58.0.17",
+    "expo-notifications": "^0.32.17",
     "expo-splash-screen": "~57.0.9",
     "expo-status-bar": "~57.0.1",
     "expo-web-browser": "~57.0.3",
@@ -33,11 +37,10 @@
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
     "react-native-gesture-handler": "~2.32.0",
-    "react-native-maps": "1.27.2",
+    "react-native-maps": "1.29.11",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
-    "react-native-web": "^0.21.0",
-    "expo-build-properties": "~57.0.21"
+    "react-native-web": "^0.21.3"
   },
   "private": true
 }

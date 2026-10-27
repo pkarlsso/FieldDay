@@ -1,26 +1,63 @@
-const { ApolloServer } = require('@apollo/server');
-const { expressMiddleware } = require('@apollo/server/express4');
-const express = require('express');
-const cors = require('cors');
-const mongoose = require('mongoose');
-const typeDefs = require('./graphql/typeDefs');
-const resolvers = require('./graphql/resolvers');
-const { getConfig } = require('./config');
-const { authenticateRequest } = require('./utils/authSession');
+import { ApolloServer } from '@apollo/server';
+import { expressMiddleware } from '@apollo/server/express4';
+import express from 'express';
+import cors from 'cors';
+import mongoose from 'mongoose';
+import typeDefs from './graphql/typeDefs.js';
+import resolvers from './graphql/resolvers.js';
+import { getConfig } from './config.js';
+import { authenticateRequest, demoAuthBypassEnabled } from './utils/authSession.js';
+import logger from './utils/logger.js';
+
+function csrfProtection(req, res, next) {
+  const origin = req.get('origin');
+  if (!origin) return next();
+
+  const requestOrigin = `${req.protocol}://${req.get('host')}`;
+  const configuredOrigins = (process.env.CSRF_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map(value => value.trim())
+    .filter(Boolean);
+
+  if (origin !== requestOrigin && !configuredOrigins.includes(origin)) {
+    return res.status(403).json({ error: 'Cross-origin request blocked' });
+  }
+  return next();
+}
 
 async function startServer() {
-  // False positive: the API uses no cookies or sessions, so it has no ambient credentials for CSRF to abuse.
+  // CSRF protection is applied to browser requests on the GraphQL route below.
+  // Native requests use bearer headers rather than ambient cookies or sessions.
   // nosemgrep: javascript.express.security.audit.express-check-csurf-middleware-usage.express-check-csurf-middleware-usage
   const app = express();
   const { mongoUri, port } = getConfig();
 
   await mongoose.connect(mongoUri);
-  console.log('Connected to MongoDB Atlas');
+  logger.info('Connected to MongoDB Atlas');
+  if (demoAuthBypassEnabled()) {
+    logger.warn('AUTH_DEMO_BYPASS is on: sign up and login skip the emailed 2FA code. Turn it off for real users.');
+  }
 
-  const server = new ApolloServer({ typeDefs, resolvers });
+  const server = new ApolloServer({
+    typeDefs,
+    resolvers,
+    plugins: [{
+      async requestDidStart() {
+        return {
+          async didEncounterErrors({ operationName, errors }) {
+            logger.error('GraphQL request encountered errors', {
+              operationName,
+              errors: errors.map((error) => ({ message: error.message, path: error.path }))
+            });
+          }
+        };
+      }
+    }]
+  });
   await server.start();
 
-  app.use('/graphql', cors(), express.json(), expressMiddleware(server, {
+  // Raised from the 100kb default so profile pictures (up to ~200k chars) fit.
+  app.use('/graphql', csrfProtection, cors(), express.json({ limit: '300kb' }), expressMiddleware(server, {
     // Makes the signed-in user (from the "Authorization: Bearer <token>" header)
     // available to resolvers as context.currentUser.
     context: async ({ req }) => ({ currentUser: await authenticateRequest(req) })
@@ -29,11 +66,11 @@ async function startServer() {
   app.get('/health', (_, res) => res.json({ status: 'ok' }));
 
   app.listen(port, '0.0.0.0', () => {
-    console.log(`GraphQL server running at http://localhost:${port}/graphql`);
+    logger.info(`GraphQL server running at http://localhost:${port}/graphql`);
   });
 }
 
 startServer().catch(err => {
-  console.error('Failed to start server:', err);
+  logger.error('Failed to start server', err);
   process.exit(1);
 });
