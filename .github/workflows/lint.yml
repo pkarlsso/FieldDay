@@ -1,5 +1,5 @@
 # .github/workflows/lint.yml
-name: JS Code Linter
+name: CI / JavaScript Lint
 
 permissions:
   contents: read
@@ -16,6 +16,7 @@ on:
 
 jobs:
   lint:
+    name: JavaScript Lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
