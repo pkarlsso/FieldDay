@@ -1,14 +1,15 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { graphql } from '../api';
-import { CURRENT_USER_ID } from '../config';
 import logger from '../logger';
 
 const QUERY = `
-  query CurrentUser($id: ID!) {
-    getUser(id: $id) {
+  query CurrentUser {
+    me {
       id name bio hometown profilePicture socialRating totalRatings
+      profileComplete profileSetupMissing
       sportSkills { sport skillLevel }
+      availability { day periods }
       friends { id name profilePicture socialRating sports }
     }
   }
@@ -22,8 +23,8 @@ export function useCurrentUser() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      graphql(QUERY, { id: CURRENT_USER_ID })
-        .then((data) => { if (active) setUser(data.getUser); })
+      graphql(QUERY)
+        .then((data) => { if (active) setUser(data.me); })
         .catch((err) => logger.error('Current user fetch error:', err));
       return () => { active = false; };
     }, []),
