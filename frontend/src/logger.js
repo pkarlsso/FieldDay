@@ -1,11 +1,13 @@
+const isDevelopment = process.env.NODE_ENV !== 'production';
+
 function write(level, message, error) {
-  if (__DEV__ || level === 'warn' || level === 'error') {
-    const details = error instanceof Error ? error.message : error;
-    console[level](details === undefined ? message : `${message} ${details}`);
+  const method = console[level] || console.log;
+  if (isDevelopment || level === 'error') {
+    method(`[FieldDay] ${message}`, error?.message || error || '');
   }
 }
 
-export const logger = {
+const logger = {
   debug: (message, error) => write('debug', message, error),
   info: (message, error) => write('info', message, error),
   warn: (message, error) => write('warn', message, error),
