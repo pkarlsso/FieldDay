@@ -2,13 +2,13 @@
 
 ## Workflow and triggers
 
-[Application Build workflow](https://github.com/pkarlsso/FieldDay/blob/ci/application-build/.github/workflows/build.yml) runs on every branch push and on pull requests targeting `main` or `dev`. A manual trigger is also declared; it becomes available in the Actions UI once the workflow reaches the default branch. Draft PRs are not skipped.
+[Application Build workflow](https://github.com/pkarlsso/FieldDay/blob/ci/application-build/.github/workflows/build.yml) runs on pushes to `main` or `dev` and on pull requests targeting `main` or `dev`. A manual trigger is also declared; it becomes available in the Actions UI once the workflow reaches the default branch. Draft PRs are not skipped.
 
 ## What the pipeline does
 
 1. Checks out the revision into a fresh GitHub-hosted Ubuntu runner.
 2. Installs Node.js 22 and runs `npm ci` from the repository root for both npm workspaces and the shared development tools.
-3. Runs the team's existing ESLint configuration using `npm run lint`.
+3. The separate JS Code Linter workflow runs the team's existing ESLint configuration using `npm run lint`.
 4. Checks all backend JavaScript syntax, validates the GraphQL schema, and loads the Mongoose models without connecting to a database.
 5. Runs `npm run build`, which exports Expo production JavaScript/assets for web, Android, and iOS.
 6. Uploads `frontend/dist/` as a downloadable artifact retained for seven days.
