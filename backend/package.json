@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node src/index.js",
     "seed": "node src/seed.js",
+    "test:chat": "node scripts/integration-chat.mjs",
     "test:accounts": "node scripts/integration-accounts.mjs",
     "test:integration": "node scripts/integration-session.mjs"
   },
@@ -19,6 +20,7 @@
     "google-auth-library": "^11.3.1",
     "graphql": "^16.10.0",
     "mongoose": "^8.24.4",
-    "nodemailer": "^6.10.1"
+    "nodemailer": "^6.10.1",
+    "socket.io": "^4.8.4"
   }
 }

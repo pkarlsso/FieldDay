@@ -14,6 +14,7 @@
     "check:backend": "node scripts/check-backend.mjs",
     "check": "node scripts/check.mjs",
     "test:integration": "node scripts/integration-session.mjs",
+    "test:chat": "npm run test:chat --workspace backend",
     "test:accounts": "npm run test:accounts --workspace backend",
     "test:sport-preferences": "node scripts/test-sport-preferences.mjs",
     "test:session-lifecycle": "node scripts/test-session-lifecycle.mjs",

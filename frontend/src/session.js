@@ -61,7 +61,7 @@ export async function startSession({ userId, token }) {
   setAuthToken(token);
   setCurrentUserId(userId);
   await writeStored({ userId, token });
-  registerNotificationDevice().catch((err) => logger.log('Could not register notifications:', err.message));
+  registerNotificationDevice().catch((err) => logger.warn('Could not register notifications:', err));
 }
 
 // Called at launch. Returns true if a saved login is still valid.
@@ -74,7 +74,7 @@ export async function restoreSession() {
     if (result.success) {
       setAuthToken(stored.token);
       setCurrentUserId(result.userId);
-      registerNotificationDevice().catch((err) => logger.log('Could not register notifications:', err.message));
+      registerNotificationDevice().catch((err) => logger.warn('Could not register notifications:', err));
       return true;
     }
     // The server says this login has expired or been revoked.

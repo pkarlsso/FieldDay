@@ -221,6 +221,40 @@ const typeDefs = `#graphql
     createdAt: String!
   }
 
+  type ChatParticipant {
+    id: ID!
+    name: String!
+    profilePicture: String
+  }
+
+  type Message {
+    id: ID!
+    conversationId: ID!
+    sender: ChatParticipant!
+    body: String!
+    createdAt: String!
+    mine: Boolean!
+    read: Boolean!
+  }
+
+  type Conversation {
+    id: ID!
+    kind: String!
+    sessionId: ID
+    # The session a session chat belongs to. Null for direct messages.
+    session: Session
+    name: String!
+    participants: [ChatParticipant!]!
+    messages: [Message!]!
+    unreadCount: Int!
+    lastMessageAt: String
+  }
+
+  type MessagePage {
+    messages: [Message!]!
+    nextCursor: String
+  }
+
   type NotificationTarget {
     version: Int!
     screen: String!
@@ -282,6 +316,9 @@ const typeDefs = `#graphql
     getFriends(userId: ID!): [User]
     checkEmailExists(email: String!): EmailCheckResult!
     getRatingsForUser(userId: ID!): [Rating!]!
+    getConversations: [Conversation!]!
+    getConversation(conversationId: ID!): Conversation!
+    getConversationMessages(conversationId: ID!, cursor: String, limit: Int): MessagePage!
     getNotifications(limit: Int = 30, before: String): [Notification!]!
     getUnreadNotificationCount: Int!
     getNotificationPreferences: NotificationPreferences!
@@ -323,6 +360,9 @@ const typeDefs = `#graphql
     # URI of at most 150 KB. Uploads that are never saved are deleted after a day.
     uploadProfilePhoto(image: String!): UploadedMedia!
     updateProfile(input: UpdateProfileInput!): User!
+    getOrCreateDirectConversation(friendId: ID!): Conversation!
+    sendMessage(conversationId: ID!, body: String!, clientMessageId: String!): Message!
+    markConversationRead(conversationId: ID!): Boolean!
     markNotificationRead(id: ID!): Notification!
     markAllNotificationsRead: Int!
     registerNotificationDevice(token: String!, platform: String!): NotificationDevice!
