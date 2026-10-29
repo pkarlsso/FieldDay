@@ -90,10 +90,15 @@ export const LEAVE_SESSION = gql`
   }
 `;
 
+const CONVERSATION_SESSION_FIELDS = `
+  session { id sport location startsAt endsAt status skillLevel skillRange maxParticipants participants { id } }
+`;
+
 export const GET_CONVERSATIONS = `
   query GetConversations {
     getConversations {
       id kind sessionId name unreadCount lastMessageAt
+      ${CONVERSATION_SESSION_FIELDS}
       participants { id name profilePicture }
       messages { id conversationId body createdAt mine read sender { id name profilePicture } }
     }
@@ -104,6 +109,7 @@ export const GET_CONVERSATION = `
   query GetConversation($conversationId: ID!) {
     getConversation(conversationId: $conversationId) {
       id kind sessionId name unreadCount lastMessageAt
+      ${CONVERSATION_SESSION_FIELDS}
       participants { id name profilePicture }
     }
   }

@@ -241,6 +241,8 @@ const typeDefs = `#graphql
     id: ID!
     kind: String!
     sessionId: ID
+    # The session a session chat belongs to. Null for direct messages.
+    session: Session
     name: String!
     participants: [ChatParticipant!]!
     messages: [Message!]!

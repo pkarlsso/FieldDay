@@ -2,7 +2,8 @@ import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { Avatar, Card, IconButton, NotificationButton, ScreenHeader } from '../components/ui';
+import { Avatar, Card, IconButton, NotificationButton, ScreenHeader, SportIcon, StatusBadge } from '../components/ui';
+import { formatSessionRange, playersLabel, sessionTitle, skillLabel } from '../sessionInfo';
 import { colors } from '../theme';
 import { graphql } from '../../api';
 import { getAuthToken } from '../../authToken';
@@ -16,6 +17,48 @@ function addMessage(current, conversationId, message) {
   const messages = current?.messages || [];
   if (messages.some((existing) => existing.id === message.id)) return current;
   return { ...(current || { id: conversationId, name: 'Chat' }), messages: [...messages, message] };
+}
+
+const statusBadges = {
+  upcoming: { label: 'Upcoming', icon: 'calendar-outline', color: colors.purple },
+  in_progress: { label: 'Happening now', icon: 'play-circle-outline', color: colors.gold },
+  completed: { label: 'Ended', icon: 'checkmark-done', color: colors.green },
+};
+
+// Session chats show which session they belong to (tap to open it); direct
+// messages show the friend.
+function ConversationSummary({ conversation, navigation }) {
+  const { session } = conversation;
+  if (!session) {
+    const friend = conversation.participants?.find((participant) => participant.id !== CURRENT_USER_ID);
+    return (
+      <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.purpleSoft }}>
+        <Avatar name={conversation.name} uri={friend?.profilePicture} color={colors.purple} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: colors.ink, fontWeight: '900' }}>{conversation.name}</Text>
+          <Text style={{ color: colors.muted, marginTop: 3 }}>Direct message</Text>
+        </View>
+      </Card>
+    );
+  }
+  return (
+    <TouchableOpacity activeOpacity={0.88} onPress={() => navigation.navigate('SessionDetails', { sessionId: session.id })}>
+      <Card style={{ gap: 10, backgroundColor: colors.purpleSoft }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <SportIcon sport={session.sport} size={48} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.ink, fontWeight: '900' }}>{sessionTitle(session)}</Text>
+            <Text style={{ color: colors.muted, marginTop: 3 }}>{formatSessionRange(session.startsAt, session.endsAt)}</Text>
+            <Text style={{ color: colors.text, marginTop: 2 }}>{playersLabel(session)} • {skillLabel(session)}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={19} color={colors.purple} />
+        </View>
+        <View style={{ flexDirection: 'row' }}>
+          <StatusBadge {...(statusBadges[session.status] || statusBadges.upcoming)} />
+        </View>
+      </Card>
+    </TouchableOpacity>
+  );
 }
 
 export default function ChatDetailScreen({ route, navigation }) {
@@ -83,7 +126,7 @@ export default function ChatDetailScreen({ route, navigation }) {
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.page }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScreenHeader
-        title={conversation?.name || 'Chat'}
+        title={conversation?.session ? `${conversation.session.sport} chat` : (conversation?.name || 'Chat')}
         left={<IconButton icon="chevron-back" onPress={() => navigation.goBack()} />}
         right={<NotificationButton onPress={() => navigation.navigate('Notifications')} />}
       />
@@ -95,14 +138,7 @@ export default function ChatDetailScreen({ route, navigation }) {
       >
         {loading ? <ActivityIndicator color={colors.purple} /> : null}
         {error ? <Text style={{ color: colors.coral }}>{error}</Text> : null}
-        <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.purpleSoft }}>
-          <Avatar name={conversation?.name || 'Chat'} color={colors.purple} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: colors.ink, fontWeight: '900' }}>{conversation?.name || 'Conversation'}</Text>
-            <Text style={{ color: colors.muted, marginTop: 3 }}>Session coordination and quick updates.</Text>
-          </View>
-          <Ionicons name="notifications-outline" size={22} color={colors.purple} />
-        </Card>
+        {conversation ? <ConversationSummary conversation={conversation} navigation={navigation} /> : null}
 
         {(conversation?.messages || []).map((message) => (
           <View
@@ -129,7 +165,7 @@ export default function ChatDetailScreen({ route, navigation }) {
         <TextInput
           value={draft}
           onChangeText={setDraft}
-          placeholder="Message the group..."
+          placeholder={conversation?.kind === 'direct' ? `Message ${conversation.name.split(' ')[0]}...` : 'Message the group...'}
           placeholderTextColor={colors.muted}
           style={{
             flex: 1,

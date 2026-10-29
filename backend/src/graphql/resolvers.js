@@ -136,11 +136,15 @@ async function conversationView(conversation, user) {
   });
   const participants = await User.find({ _id: { $in: conversation.participants } }).select('name profilePicture');
   const otherNames = participants.filter((participant) => !sameId(participant._id, user._id)).map(({ name }) => name);
-  // Session chats are named after the session, not whichever player is listed first.
-  const session = conversation.kind === 'session' ? await Session.findById(conversation.session).select('sport location') : null;
+  // Session chats are named after the session, not whichever player is listed
+  // first, and carry the session so the app can show when and where it is.
+  const session = conversation.kind === 'session'
+    ? await Session.findById(conversation.session).populate('participants', 'name profilePicture')
+    : null;
   return {
     ...conversation.toObject(),
     sessionId: conversation.session ? String(conversation.session) : null,
+    session,
     name: conversation.kind === 'session'
       ? (session ? `${session.sport} · ${session.location}` : 'Session chat')
       : (otherNames.join(', ') || 'Direct message'),
