@@ -125,6 +125,18 @@ export default function FriendsScreen({ navigation }) {
   const incoming = requests.filter((request) => request.recipient?.id === user?.id);
   const outgoing = requests.filter((request) => request.requester?.id === user?.id);
 
+  // Why the person found by ID can't be sent a request, if they can't. The
+  // server rejects these too; checking here means the button isn't offered.
+  const lookupBlocker = (() => {
+    if (!lookupUser) return null;
+    if (lookupUser.id === user?.id) return { label: 'This is you', icon: 'person-outline', color: colors.muted };
+    if (friends.some((friend) => friend.id === lookupUser.id)) return { label: 'Already friends', icon: 'people-outline', color: colors.green };
+    if (requests.some((request) => request.requester?.id === lookupUser.id || request.recipient?.id === lookupUser.id)) {
+      return { label: 'Request pending', icon: 'time-outline', color: colors.gold };
+    }
+    return null;
+  })();
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <ScreenHeader title="Friends" right={<NotificationButton onPress={() => navigation.navigate('Notifications')} />} />
@@ -167,7 +179,9 @@ export default function FriendsScreen({ navigation }) {
                 <Text style={{ color: colors.ink, fontWeight: '900' }}>{lookupUser.name}</Text>
                 <Text style={{ color: colors.muted, marginTop: 3 }}>{lookupUser.id}</Text>
               </View>
-              <PrimaryButton label="Request" icon="person-add-outline" onPress={() => sendRequest(lookupUser.id)} />
+              {lookupBlocker
+                ? <StatusBadge {...lookupBlocker} />
+                : <PrimaryButton label="Request" icon="person-add-outline" onPress={() => sendRequest(lookupUser.id)} />}
             </View>
           ) : null}
         </Card>
