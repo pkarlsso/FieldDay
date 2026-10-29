@@ -4,16 +4,22 @@ import User from '../models/User.js';
 import Session from '../models/Session.js';
 import Rating from '../models/Rating.js';
 import FriendRequest from '../models/FriendRequest.js';
+import Conversation from '../models/Conversation.js';
+import Message from '../models/Message.js';
+import chatEvents from '../utils/chatEvents.js';
 let participationLimits;
 async function getParticipationLimits() {
   participationLimits ||= await import('../utils/participationLimits.mjs');
   return participationLimits;
 }
 import Media from '../models/Media.js';
+import Notification from '../models/Notification.js';
+import DeviceToken from '../models/DeviceToken.js';
+import * as authSessions from '../utils/authSession.js';
 import { validatePasswordStrength, PASSWORD_REQUIREMENTS, hashPassword, verifyPassword } from '../utils/password.js';
 import { generateCode, hashCode, CODE_TTL_MS, MAX_ATTEMPTS } from '../utils/twoFactor.js';
 import { RESET_CODE_TTL_MS } from '../utils/passwordReset.js';
-import * as authSessions from '../utils/authSession.js';
+import { getPreferences } from '../utils/notifications.js';
 import { createMediaLoader, storeProfilePhoto, toDataUri } from '../utils/media.js';
 import { VISIBILITIES, canViewSession, visibleSessionsFilter, visibilityOf } from '../utils/sessionAccess.js';
 // Called through the module objects (not destructured) so tests can stub them.
@@ -21,7 +27,9 @@ import mailer from '../utils/mailer.js';
 import googleAuth from '../utils/googleAuth.js';
 import logger from '../utils/logger.js';
 
-const PROFILE_LIMITS = { name: 50, bio: 300, hometown: 80, sport: 30, sportCount: 10 };
+const PROFILE_LIMITS = { name: 50, bio: 300, hometown: 80, sport: 30, sportCount: 10, pictureChars: 200000 };
+const MESSAGE_MAX_LENGTH = 2000;
+const MESSAGE_PAGE_SIZE = 50;
 const WEEKDAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 const DAY_PERIODS = ['MORNING', 'AFTERNOON', 'EVENING'];
 const MAX_INVITEES = 49;
@@ -103,6 +111,85 @@ async function createFriendRequest(requesterId, recipientId) {
     if (err.code === 11000) throw new Error('A friend request is already pending');
     throw err;
   }
+function hasParticipant(conversation, userId) {
+  return conversation.participants.some((participant) => sameId(participant, userId));
+}
+
+async function getAuthorizedConversation(conversationId, user, { allowFormerSession = false } = {}) {
+  const conversation = await Conversation.findById(conversationId);
+  if (!conversation) throw new Error('Conversation not found');
+  if (conversation.kind === 'session') {
+    const session = await Session.findById(conversation.session);
+    if (!session) throw new Error('Session not found');
+    const isCurrentParticipant = hasParticipant(session, user._id);
+    const wasParticipant = hasParticipant(conversation, user._id);
+    if (!isCurrentParticipant && !(allowFormerSession && wasParticipant)) {
+      throw new Error('You cannot access this conversation');
+    }
+    return { conversation, session, canSend: isCurrentParticipant };
+  }
+  if (!hasParticipant(conversation, user._id)) throw new Error('You cannot access this conversation');
+  return { conversation, canSend: true };
+}
+
+function cleanMessageBody(body) {
+  if (typeof body !== 'string') throw new Error('Message must be text');
+  const cleaned = body.trim();
+  if (!cleaned) throw new Error('Message cannot be empty');
+  if (cleaned.length > MESSAGE_MAX_LENGTH) throw new Error(`Message must be ${MESSAGE_MAX_LENGTH} characters or fewer`);
+  return cleaned;
+}
+
+// Also broadcast over Socket.IO, which skips the GraphQL resolvers, so this
+// must already match the Message type's shape.
+function serializeMessage(message, userId) {
+  const { sender } = message;
+  return {
+    ...message.toObject(),
+    id: String(message._id),
+    conversationId: String(message.conversation),
+    sender: { id: String(sender._id || sender), name: sender.name, profilePicture: sender.profilePicture },
+    createdAt: new Date(message.createdAt).toISOString(),
+    mine: sameId(message.sender._id || message.sender, userId),
+    read: message.readBy.some((id) => sameId(id, userId))
+  };
+}
+
+async function ensureSessionConversation(session) {
+  return Conversation.findOneAndUpdate(
+    { session: session._id },
+    { $setOnInsert: { kind: 'session', session: session._id }, $addToSet: { participants: { $each: session.participants } } },
+    { new: true, upsert: true }
+  );
+}
+
+async function conversationView(conversation, user) {
+  const messages = await Message.find({ conversation: conversation._id })
+    .sort({ createdAt: -1, _id: -1 }).limit(1).populate('sender', 'name profilePicture');
+  const unreadCount = await Message.countDocuments({
+    conversation: conversation._id,
+    readBy: { $ne: user._id },
+    sender: { $ne: user._id }
+  });
+  const participants = await User.find({ _id: { $in: conversation.participants } }).select('name profilePicture');
+  const otherNames = participants.filter((participant) => !sameId(participant._id, user._id)).map(({ name }) => name);
+  // Session chats are named after the session, not whichever player is listed
+  // first, and carry the session so the app can show when and where it is.
+  const session = conversation.kind === 'session'
+    ? await Session.findById(conversation.session).populate('participants', 'name profilePicture')
+    : null;
+  return {
+    ...conversation.toObject(),
+    sessionId: conversation.session ? String(conversation.session) : null,
+    session,
+    name: conversation.kind === 'session'
+      ? (session ? `${session.sport} · ${session.location}` : 'Session chat')
+      : (otherNames.join(', ') || 'Direct message'),
+    participants,
+    messages: messages.map((message) => serializeMessage(message, user._id)),
+    unreadCount,
+    lastMessageAt: conversation.lastMessageAt ? conversation.lastMessageAt.toISOString() : null
+  };
 }
 
 // Hidden sessions get the same answer as missing ones, so nobody can find out
@@ -603,6 +690,36 @@ const resolvers = {
     status: (request) => request.status,
     createdAt: (request) => new Date(request.createdAt).toISOString(),
     updatedAt: (request) => new Date(request.updatedAt).toISOString()
+  // Conversations and messages are spread from toObject(), which drops the
+  // `id` virtual, so ids come from `_id` here.
+  },
+
+  Conversation: {
+    id: (conversation) => String(conversation._id)
+  },
+
+  ChatParticipant: {
+    id: (participant) => String(participant.id ?? participant._id)
+  },
+
+  Message: {
+    id: (message) => String(message._id),
+    conversationId: (message) => String(message.conversation),
+    createdAt: (message) => new Date(message.createdAt).toISOString()
+  },
+  
+  Notification: {
+    target: (notification) => ({
+      ...notification.target,
+      params: JSON.stringify(notification.target.params || {})
+    }),
+    readAt: (notification) => notification.readAt && new Date(notification.readAt).toISOString(),
+    createdAt: (notification) => new Date(notification.createdAt).toISOString()
+  },
+
+  NotificationDevice: {
+    id: (device) => String(device._id),
+    lastSeenAt: (device) => new Date(device.lastSeenAt).toISOString()
   },
 
   Query: {
@@ -613,6 +730,45 @@ const resolvers = {
     getRatingsBySession: async (_, { sessionId }, context) => {
       const user = requireUser(context);
       return Rating.find({ session: sessionId, rater: user._id });
+    },
+
+    getConversations: async (_, __, context) => {
+      const user = requireUser(context);
+      const sessions = await Session.find({ participants: user._id }).select('_id participants');
+      await Promise.all(sessions.map(ensureSessionConversation));
+      const conversations = await Conversation.find({
+        $or: [{ participants: user._id }, { session: { $in: sessions.map(({ _id }) => _id) } }]
+      }).sort({ lastMessageAt: -1, createdAt: -1 });
+      return Promise.all(conversations.map((conversation) => conversationView(conversation, user)));
+    },
+
+    getConversation: async (_, { conversationId }, context) => {
+      const user = requireUser(context);
+      const access = await getAuthorizedConversation(conversationId, user, { allowFormerSession: true });
+      return conversationView(access.conversation, user);
+    },
+
+    getConversationMessages: async (_, { conversationId, cursor, limit = MESSAGE_PAGE_SIZE }, context) => {
+      const user = requireUser(context);
+      const access = await getAuthorizedConversation(conversationId, user, { allowFormerSession: true });
+      const boundedLimit = Math.min(Math.max(limit, 1), MESSAGE_PAGE_SIZE);
+      const filter = { conversation: access.conversation._id };
+      if (cursor) {
+        const cursorMessage = await Message.findById(cursor).select('createdAt _id');
+        if (!cursorMessage) throw new Error('Invalid message cursor');
+        filter.$or = [
+          { createdAt: { $lt: cursorMessage.createdAt } },
+          { createdAt: cursorMessage.createdAt, _id: { $lt: cursorMessage._id } }
+        ];
+      }
+      const messages = await Message.find(filter).sort({ createdAt: -1, _id: -1 })
+        .limit(boundedLimit + 1).populate('sender', 'name profilePicture');
+      const hasMore = messages.length > boundedLimit;
+      const page = hasMore ? messages.slice(0, boundedLimit) : messages;
+      return {
+        messages: page.reverse().map((message) => serializeMessage(message, user._id)),
+        nextCursor: hasMore ? String(page[0]._id) : null
+      };
     },
 
     getSession: async (_, { id }, context) => {
@@ -713,6 +869,25 @@ const resolvers = {
       const pendingIds = new Set(pending.flatMap(({ requester, recipient }) => [String(requester), String(recipient)]));
       return User.find({ _id: { $in: participantIds.filter((id) => !pendingIds.has(id)) } })
         .select('name bio hometown profilePicture sports socialRating');
+    },
+    
+    getNotifications: async (_, { limit, before }, context) => {
+      const user = requireUser(context);
+      const query = { recipient: user._id };
+      if (before) query.createdAt = { $lt: new Date(before) };
+      return Notification.find(query).sort({ createdAt: -1 }).limit(Math.min(limit, 100));
+    },
+
+    getUnreadNotificationCount: async (_, __, context) => {
+      const user = requireUser(context);
+      return Notification.countDocuments({ recipient: user._id, readAt: null });
+    },
+
+    getNotificationPreferences: async (_, __, context) => getPreferences(requireUser(context)._id),
+
+    getNotificationDevices: async (_, __, context) => {
+      const user = requireUser(context);
+      return DeviceToken.find({ user: user._id }).sort({ lastSeenAt: -1 });
     }
   },
 
@@ -1180,6 +1355,111 @@ const resolvers = {
       if (user.profilePhoto) await Media.updateOne({ _id: user.profilePhoto }, { $set: { expiresAt: null } });
       if (replacedPhoto) await Media.deleteOne({ _id: replacedPhoto, owner: user._id });
       return User.findById(user._id).populate('friends');
+    },
+
+    getOrCreateDirectConversation: async (_, { friendId }, context) => {
+      const user = requireUser(context);
+      if (sameId(user._id, friendId)) throw new Error('You cannot message yourself');
+      const friend = await User.findById(friendId);
+      if (!friend || !friend.friends.some((id) => sameId(id, user._id)) || !user.friends.some((id) => sameId(id, friendId))) {
+        throw new Error('You can only message a friend');
+      }
+      const participants = [String(user._id), String(friendId)].sort();
+      const participantKey = participants.join(':');
+      const conversation = await Conversation.findOneAndUpdate(
+        { kind: 'direct', participantKey },
+        { $setOnInsert: { kind: 'direct', participants, participantKey } },
+        { new: true, upsert: true }
+      );
+      return conversationView(conversation, user);
+    },
+
+    sendMessage: async (_, { conversationId, body, clientMessageId }, context) => {
+      const user = requireUser(context);
+      const access = await getAuthorizedConversation(conversationId, user, { allowFormerSession: true });
+      if (!access.canSend) throw new Error('You can no longer send messages in this session');
+      if (!clientMessageId || clientMessageId.length > 100) throw new Error('clientMessageId is required');
+      const cleanedBody = cleanMessageBody(body);
+      const existing = await Message.findOne({ conversation: access.conversation._id, clientMessageId }).populate('sender', 'name profilePicture');
+      if (existing) return serializeMessage(existing, user._id);
+      let message;
+      try {
+        message = await Message.create({
+          conversation: access.conversation._id,
+          sender: user._id,
+          body: cleanedBody,
+          clientMessageId,
+          readBy: [user._id]
+        });
+      } catch (error) {
+        if (error.code !== 11000) throw error;
+        message = await Message.findOne({ conversation: access.conversation._id, clientMessageId });
+      }
+      await Conversation.updateOne({ _id: access.conversation._id }, { $set: { lastMessageAt: message.createdAt } });
+      await message.populate('sender', 'name profilePicture');
+      const serialized = serializeMessage(message, user._id);
+      chatEvents.emit('message', String(access.conversation._id), { ...serialized, mine: false, read: false });
+      return serialized;
+    },
+
+    markConversationRead: async (_, { conversationId }, context) => {
+      const user = requireUser(context);
+      const access = await getAuthorizedConversation(conversationId, user, { allowFormerSession: true });
+      await Message.updateMany(
+        { conversation: access.conversation._id, sender: { $ne: user._id }, readBy: { $ne: user._id } },
+        { $addToSet: { readBy: user._id } }
+      );
+      return true;
+    },
+    markNotificationRead: async (_, { id }, context) => {
+      const user = requireUser(context);
+      const notification = await Notification.findOneAndUpdate(
+        { _id: id, recipient: user._id, readAt: null },
+        { $set: { readAt: new Date() } },
+        { new: true }
+      );
+      if (notification) return notification;
+      const existing = await Notification.findOne({ _id: id, recipient: user._id });
+      if (!existing) throw new Error('Notification not found');
+      return existing;
+    },
+
+    markAllNotificationsRead: async (_, __, context) => {
+      const user = requireUser(context);
+      const result = await Notification.updateMany(
+        { recipient: user._id, readAt: null },
+        { $set: { readAt: new Date() } }
+      );
+      return result.modifiedCount;
+    },
+
+    registerNotificationDevice: async (_, { token, platform }, context) => {
+      const user = requireUser(context);
+      if (!['ios', 'android'].includes(platform)) throw new Error('Unsupported notification platform');
+      return DeviceToken.findOneAndUpdate(
+        { token },
+        { $set: { user: user._id, platform, enabled: true, lastSeenAt: new Date() } },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+    },
+
+    unregisterNotificationDevice: async (_, { token }, context) => {
+      const user = requireUser(context);
+      const result = await DeviceToken.updateOne(
+        { token, user: user._id },
+        { $set: { enabled: false, lastSeenAt: new Date() } }
+      );
+      return result.modifiedCount > 0;
+    },
+
+    updateNotificationPreferences: async (_, values, context) => {
+      const user = requireUser(context);
+      const preferences = await getPreferences(user._id);
+      const updates = Object.fromEntries(
+        Object.entries(values).filter(([key, value]) => key !== 'user' && value !== undefined)
+      );
+      Object.assign(preferences, updates, { updatedAt: new Date() });
+      return preferences.save();
     }
   }
 };

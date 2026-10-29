@@ -25,6 +25,7 @@
     },
     "plugins": [
       "expo-status-bar",
+      "expo-notifications",
       [
         "expo-splash-screen",
         {
@@ -45,14 +46,7 @@
         }
       ],
       "./plugins/withQuotedReactNativeXcodeScript",
-      [
-        "expo-build-properties",
-        {
-          "ios": {
-            "enableSceneSupport": true
-          }
-        }
-      ]
+      "expo-build-properties"
     ]
   }
 }

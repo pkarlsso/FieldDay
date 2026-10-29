@@ -89,3 +89,61 @@ export const LEAVE_SESSION = gql`
     }
   }
 `;
+
+const CONVERSATION_SESSION_FIELDS = `
+  session { id sport location startsAt endsAt status skillLevel skillRange maxParticipants participants { id } }
+`;
+
+export const GET_CONVERSATIONS = `
+  query GetConversations {
+    getConversations {
+      id kind sessionId name unreadCount lastMessageAt
+      ${CONVERSATION_SESSION_FIELDS}
+      participants { id name profilePicture }
+      messages { id conversationId body createdAt mine read sender { id name profilePicture } }
+    }
+  }
+`;
+
+export const GET_CONVERSATION = `
+  query GetConversation($conversationId: ID!) {
+    getConversation(conversationId: $conversationId) {
+      id kind sessionId name unreadCount lastMessageAt
+      ${CONVERSATION_SESSION_FIELDS}
+      participants { id name profilePicture }
+    }
+  }
+`;
+
+export const GET_CONVERSATION_MESSAGES = `
+  query GetConversationMessages($conversationId: ID!, $cursor: String, $limit: Int) {
+    getConversationMessages(conversationId: $conversationId, cursor: $cursor, limit: $limit) {
+      nextCursor
+      messages { id conversationId body createdAt mine read sender { id name profilePicture } }
+    }
+  }
+`;
+
+export const GET_OR_CREATE_DIRECT_CONVERSATION = `
+  mutation GetOrCreateDirectConversation($friendId: ID!) {
+    getOrCreateDirectConversation(friendId: $friendId) {
+      id kind sessionId name unreadCount lastMessageAt
+      participants { id name profilePicture }
+      messages { id conversationId body createdAt mine read sender { id name profilePicture } }
+    }
+  }
+`;
+
+export const SEND_MESSAGE = `
+  mutation SendMessage($conversationId: ID!, $body: String!, $clientMessageId: String!) {
+    sendMessage(conversationId: $conversationId, body: $body, clientMessageId: $clientMessageId) {
+      id conversationId body createdAt mine read sender { id name profilePicture }
+    }
+  }
+`;
+
+export const MARK_CONVERSATION_READ = `
+  mutation MarkConversationRead($conversationId: ID!) {
+    markConversationRead(conversationId: $conversationId)
+  }
+`;

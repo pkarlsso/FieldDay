@@ -9,6 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import ExploreScreen from './screens/ExploreScreen';
 import LiveExploreScreen from './screens/LiveExploreScreen';
 import ChatDetailScreen from './screens/ChatDetailScreen';
+import ChatScreen from './screens/ChatScreen';
 import CreateSessionScreen from './screens/CreateSessionScreen';
 import FriendsScreen from './screens/FriendsScreen';
 import HomeScreen from './screens/HomeScreen';
@@ -26,6 +27,7 @@ import SessionsScreen from './screens/SessionsScreen';
 import LiveSessionsScreen from './screens/LiveSessionsScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import { colors } from './theme';
+import { NotificationProvider } from '../notifications';
 import { restoreSession, screenAfterSignIn } from '../session';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import SignUpEmailScreen from '../screens/auth/SignUpEmailScreen';
@@ -45,6 +47,7 @@ const tabIcons = {
   Map: 'map-outline',
   Sessions: 'calendar-check-outline',
   Friends: 'account-group-outline',
+  Chat: 'chat-processing-outline',
   Profile: 'account-circle-outline',
   Create: 'plus-circle-outline',
 };
@@ -79,6 +82,7 @@ function MainTabs() {
       <Tab.Screen name="Map" component={MapScreen} />
       <Tab.Screen name="Sessions" component={useLiveData ? LiveSessionsScreen : SessionsScreen} />
       <Tab.Screen name="Friends" component={FriendsScreen} />
+      <Tab.Screen name="Chat" component={ChatScreen} />
       <Tab.Screen name="Create" component={CreateSessionScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
@@ -106,10 +110,10 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer>
-      <StatusBar style="dark" />
-      {/* cardStyle flex keeps each card viewport-sized on web, so screens scroll inside themselves. */}
-      <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false, cardStyle: { flex: 1 } }}>
+    <NotificationProvider>
+      <NavigationContainer>
+        <StatusBar style="dark" />
+        <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false, cardStyle: { flex: 1 } }}>
         <Stack.Screen name="SignUpEmail" component={SignUpEmailScreen} />
         <Stack.Screen name="SignUpPassword" component={SignUpPasswordScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
@@ -127,7 +131,8 @@ export default function App() {
         <Stack.Screen name="ChatDetail" component={ChatDetailScreen} />
         <Stack.Screen name="Notifications" component={NotificationsScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
-      </Stack.Navigator>
-    </NavigationContainer>
+        </Stack.Navigator>
+      </NavigationContainer>
+    </NotificationProvider>
   );
 }

@@ -1,4 +1,4 @@
-name: Label Pull Requests
+name: Repository / Pull Request Labels
 
 on:
   pull_request:
@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   label:
+    name: Apply Pull Request Labels
     if: >-
       github.actor != 'dependabot[bot]' &&
       github.event.pull_request.head.repo.full_name == github.repository

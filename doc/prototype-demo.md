@@ -18,6 +18,6 @@ Use Node.js 22. From `frontend/`, run `npm ci`, then `npm run demo` for Expo Go 
 | #43 post-session rating | Rating/report/friend UI and completion summary | Persist ratings, reports and friend requests through the backend |
 | #44 recommendations | Recommended sessions presentation | Actual recommendation retrieval and refresh |
 
-Home, profile, settings, friends, chat, and notifications are also included for navigation review. Mock chat and session interactions do not persist to MongoDB. Some controls are visual placeholders. This import does not implement the session creation form (#27), timestamps/GeoJSON (#22–23), backend operations (#24–26), or integration tests (#31). These issues stay open.
+Home, profile, settings, friends, chat, and notifications are also included for navigation review. Chat now persists authenticated session and direct messages to MongoDB and supports GraphQL history plus Socket.IO delivery when the backend is configured with MongoDB. Some controls remain visual placeholders. This import does not implement the session creation form (#27), timestamps/GeoJSON (#22–23), backend operations (#24–26), or integration tests (#31). These issues stay open.
 
 The backend source and package manifest were compared with the prototype and are unchanged. Do not copy prototype `.env` files into Git. Native device verification and live API integration remain separate from browser demo verification.

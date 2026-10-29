@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 // Exercises password reset, Google sign-in, persistent sign-in, profile editing
 // and ratings against the database in MONGODB_URI. It runs the GraphQL schema
 // in-process (no server needed), stubs out email and Google, and deletes every
@@ -17,6 +16,7 @@ import Session from '../src/models/Session.js';
 import Rating from '../src/models/Rating.js';
 import AuthSession from '../src/models/AuthSession.js';
 import FriendRequest from '../src/models/FriendRequest.js';
+import logger from '../src/utils/logger.js';
 import SessionRegistration from '../src/models/SessionRegistration.mjs';
 import { getParticipationTier, recordRegistration } from '../src/utils/participationLimits.mjs';
 
@@ -390,8 +390,7 @@ try {
   assert.equal((await User.findById(host._id)).totalRatings, 4);
   assert.equal((await User.findById(host._id)).socialRating, 4, '(8 + 4 + 4) / 4');
 
-  // eslint-disable-next-line no-console
-  console.log('Accounts integration test passed: sessions, password reset, Google, profile, ratings');
+  logger.info('Accounts integration test passed: sessions, password reset, Google, profile, ratings');
 } finally {
   const users = await User.find({ email: { $in: createdEmails } }, '_id');
   const userIds = users.map((user) => user._id);
