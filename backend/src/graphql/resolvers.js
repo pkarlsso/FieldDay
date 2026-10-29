@@ -111,6 +111,8 @@ async function createFriendRequest(requesterId, recipientId) {
     if (err.code === 11000) throw new Error('A friend request is already pending');
     throw err;
   }
+}
+
 function hasParticipant(conversation, userId) {
   return conversation.participants.some((participant) => sameId(participant, userId));
 }
