@@ -631,7 +631,7 @@ const resolvers = {
     id: (message) => String(message._id),
     conversationId: (message) => String(message.conversation),
     createdAt: (message) => new Date(message.createdAt).toISOString()
-  }
+  },
   
   Notification: {
     target: (notification) => ({
@@ -1260,6 +1260,7 @@ const resolvers = {
         { $addToSet: { readBy: user._id } }
       );
       return true;
+    },
     markNotificationRead: async (_, { id }, context) => {
       const user = requireUser(context);
       const notification = await Notification.findOneAndUpdate(

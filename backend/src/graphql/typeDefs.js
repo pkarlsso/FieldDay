@@ -251,6 +251,8 @@ const typeDefs = `#graphql
   type MessagePage {
     messages: [Message!]!
     nextCursor: String
+  }
+
   type NotificationTarget {
     version: Int!
     screen: String!
@@ -312,7 +314,6 @@ const typeDefs = `#graphql
     getFriends(userId: ID!): [User]
     checkEmailExists(email: String!): EmailCheckResult!
     getRatingsForUser(userId: ID!): [Rating!]!
-    getRatingsBySession(sessionId: ID!, raterId: ID!): [Rating!]!
     getConversations: [Conversation!]!
     getConversationMessages(conversationId: ID!, cursor: String, limit: Int): MessagePage!
     getNotifications(limit: Int = 30, before: String): [Notification!]!
