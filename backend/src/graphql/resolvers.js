@@ -81,16 +81,17 @@ function hasParticipant(conversation, userId) {
 async function getAuthorizedConversation(conversationId, user, { allowFormerSession = false } = {}) {
   const conversation = await Conversation.findById(conversationId);
   if (!conversation) throw new Error('Conversation not found');
-  if (!hasParticipant(conversation, user._id)) {
-    if (!(allowFormerSession && conversation.kind === 'session')) throw new Error('You cannot access this conversation');
-    const session = await Session.findById(conversation.session);
-    if (!session || !hasParticipant(conversation, user._id)) throw new Error('You cannot access this conversation');
-  }
   if (conversation.kind === 'session') {
     const session = await Session.findById(conversation.session);
     if (!session) throw new Error('Session not found');
-    return { conversation, session, canSend: hasParticipant(session, user._id) };
+    const isCurrentParticipant = hasParticipant(session, user._id);
+    const wasParticipant = hasParticipant(conversation, user._id);
+    if (!isCurrentParticipant && !(allowFormerSession && wasParticipant)) {
+      throw new Error('You cannot access this conversation');
+    }
+    return { conversation, session, canSend: isCurrentParticipant };
   }
+  if (!hasParticipant(conversation, user._id)) throw new Error('You cannot access this conversation');
   return { conversation, canSend: true };
 }
 
@@ -114,7 +115,7 @@ function serializeMessage(message, userId) {
 async function ensureSessionConversation(session) {
   return Conversation.findOneAndUpdate(
     { session: session._id },
-    { $setOnInsert: { kind: 'session', session: session._id, participants: session.participants } },
+    { $setOnInsert: { kind: 'session', session: session._id }, $addToSet: { participants: { $each: session.participants } } },
     { new: true, upsert: true }
   );
 }
@@ -665,6 +666,12 @@ const resolvers = {
         $or: [{ participants: user._id }, { session: { $in: sessions.map(({ _id }) => _id) } }]
       }).sort({ lastMessageAt: -1, createdAt: -1 });
       return Promise.all(conversations.map((conversation) => conversationView(conversation, user)));
+    },
+
+    getConversation: async (_, { conversationId }, context) => {
+      const user = requireUser(context);
+      const access = await getAuthorizedConversation(conversationId, user, { allowFormerSession: true });
+      return conversationView(access.conversation, user);
     },
 
     getConversationMessages: async (_, { conversationId, cursor, limit = MESSAGE_PAGE_SIZE }, context) => {

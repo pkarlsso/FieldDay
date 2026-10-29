@@ -60,10 +60,15 @@ try {
   if (first.sendMessage.id !== retry.sendMessage.id) throw new Error('message retry was not idempotent');
   await expectError(sendMutation, { conversationId, body: 'Unauthorized', clientMessageId: 'outsider-1' }, tokens.get(String(users[2]._id)), 'cannot access');
 
+  await Session.updateOne({ _id: session._id }, { $addToSet: { participants: users[2]._id } });
+  const lateJoinerHistory = await graphql(messagesQuery, { conversationId }, tokens.get(String(users[2]._id)));
+  if (lateJoinerHistory.getConversationMessages.messages.length !== 1) throw new Error('late joiner could not read session chat');
+  await graphql(sendMutation, { conversationId, body: 'I just joined', clientMessageId: 'late-joiner-1' }, tokens.get(String(users[2]._id)));
+
   await Session.updateOne({ _id: session._id }, { $pull: { participants: users[1]._id } });
   await expectError(sendMutation, { conversationId, body: 'I left', clientMessageId: 'former-1' }, tokens.get(String(users[1]._id)), 'no longer send');
   const history = await graphql(messagesQuery, { conversationId }, tokens.get(String(users[1]._id)));
-  if (history.getConversationMessages.messages.length !== 1) throw new Error('former participant lost read access');
+  if (history.getConversationMessages.messages.length !== 2) throw new Error('former participant lost read access');
 
   process.stdout.write('Integration chat test passed: authorization -> persistence -> retry -> read-only history\n');
 } finally {

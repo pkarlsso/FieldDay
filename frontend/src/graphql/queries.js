@@ -100,6 +100,15 @@ export const GET_CONVERSATIONS = `
   }
 `;
 
+export const GET_CONVERSATION = `
+  query GetConversation($conversationId: ID!) {
+    getConversation(conversationId: $conversationId) {
+      id kind sessionId name unreadCount lastMessageAt
+      participants { id name profilePicture }
+    }
+  }
+`;
+
 export const GET_CONVERSATION_MESSAGES = `
   query GetConversationMessages($conversationId: ID!, $cursor: String, $limit: Int) {
     getConversationMessages(conversationId: $conversationId, cursor: $cursor, limit: $limit) {

@@ -315,6 +315,7 @@ const typeDefs = `#graphql
     checkEmailExists(email: String!): EmailCheckResult!
     getRatingsForUser(userId: ID!): [Rating!]!
     getConversations: [Conversation!]!
+    getConversation(conversationId: ID!): Conversation!
     getConversationMessages(conversationId: ID!, cursor: String, limit: Int): MessagePage!
     getNotifications(limit: Int = 30, before: String): [Notification!]!
     getUnreadNotificationCount: Int!

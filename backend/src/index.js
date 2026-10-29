@@ -85,23 +85,27 @@ async function startServer() {
   });
   io.on('connection', (socket) => {
     socket.on('joinConversation', async (conversationId, callback = () => {}) => {
-      const conversation = await Conversation.findById(conversationId);
-      if (!conversation) return callback({ ok: false, error: 'Conversation not found' });
-      let allowed = conversation.participants.some((id) => id.equals(socket.currentUser._id));
-      if (!allowed && conversation.kind === 'session') {
-        const session = await Session.findById(conversation.session);
-        allowed = Boolean(session && conversation.participants.some((id) => id.equals(socket.currentUser._id)));
+      try {
+        const conversation = await Conversation.findById(conversationId);
+        if (!conversation) return callback({ ok: false, error: 'Conversation not found' });
+        let allowed = conversation.participants.some((id) => id.equals(socket.currentUser._id));
+        if (conversation.kind === 'session') {
+          const session = await Session.findById(conversation.session).select('participants');
+          allowed = Boolean(session?.participants.some((id) => id.equals(socket.currentUser._id)));
+        }
+        if (!allowed) return callback({ ok: false, error: 'You cannot access this conversation' });
+        await socket.join(`conversation:${conversationId}`);
+        return callback({ ok: true });
+      } catch (error) {
+        return callback({ ok: false, error: error.name === 'CastError' ? 'Conversation not found' : 'Unable to join conversation' });
       }
-      if (!allowed) return callback({ ok: false, error: 'You cannot access this conversation' });
-      await socket.join(`conversation:${conversationId}`);
-      return callback({ ok: true });
     });
   });
   chatEvents.on('message', (conversationId, message) => {
     io.to(`conversation:${conversationId}`).emit('message', message);
   });
 
-  app.listen(port, '0.0.0.0', () => {
+  httpServer.listen(port, '0.0.0.0', () => {
     logger.info(`GraphQL server running at http://localhost:${port}/graphql`);
   });
 }

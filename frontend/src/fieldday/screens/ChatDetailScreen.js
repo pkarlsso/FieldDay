@@ -7,7 +7,7 @@ import { colors } from '../theme';
 import { graphql } from '../../api';
 import { getAuthToken } from '../../authToken';
 import { API_URL } from '../../config';
-import { GET_CONVERSATION_MESSAGES, MARK_CONVERSATION_READ, SEND_MESSAGE } from '../../graphql/queries';
+import { GET_CONVERSATION, GET_CONVERSATION_MESSAGES, MARK_CONVERSATION_READ, SEND_MESSAGE } from '../../graphql/queries';
 import { io } from 'socket.io-client';
 
 export default function ChatDetailScreen({ route, navigation }) {
@@ -22,11 +22,13 @@ export default function ChatDetailScreen({ route, navigation }) {
     if (!conversationId) return undefined;
     let active = true;
     setLoading(true);
-    graphql(GET_CONVERSATION_MESSAGES, { conversationId, limit: 50 })
-      .then((data) => {
+    Promise.all([
+      graphql(GET_CONVERSATION, { conversationId }),
+      graphql(GET_CONVERSATION_MESSAGES, { conversationId, limit: 50 })
+    ])
+      .then(([conversationData, messageData]) => {
         if (!active) return;
-        const messages = data.getConversationMessages.messages;
-        setConversation((current) => ({ ...(current || { id: conversationId, name: 'Chat', messages: [] }), messages }));
+        setConversation({ ...conversationData.getConversation, messages: messageData.getConversationMessages.messages });
         return graphql(MARK_CONVERSATION_READ, { conversationId });
       })
       .catch((err) => { if (active) setError(err.message); })
