@@ -1,16 +1,25 @@
-import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useCallback, useRef, useState } from 'react';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { Avatar, Card, IconButton, NotificationButton, ScreenHeader } from '../components/ui';
 import { colors } from '../theme';
 import { graphql } from '../../api';
 import { getAuthToken } from '../../authToken';
-import { API_URL } from '../../config';
+import { API_URL, CURRENT_USER_ID } from '../../config';
 import { GET_CONVERSATION, GET_CONVERSATION_MESSAGES, MARK_CONVERSATION_READ, SEND_MESSAGE } from '../../graphql/queries';
 import { io } from 'socket.io-client';
 
+// The sender's own socket also receives each message, often before the
+// sendMessage response, so messages are merged by id rather than appended.
+function addMessage(current, conversationId, message) {
+  const messages = current?.messages || [];
+  if (messages.some((existing) => existing.id === message.id)) return current;
+  return { ...(current || { id: conversationId, name: 'Chat' }), messages: [...messages, message] };
+}
+
 export default function ChatDetailScreen({ route, navigation }) {
+  const scrollRef = useRef(null);
   const conversationId = route.params?.conversationId;
   const [conversation, setConversation] = useState(null);
   const [draft, setDraft] = useState('');
@@ -45,11 +54,9 @@ export default function ChatDetailScreen({ route, navigation }) {
     socket.on('connect', () => socket.emit('joinConversation', conversationId));
     socket.on('message', (message) => {
       if (message.conversationId !== conversationId) return;
-      setConversation((current) => {
-        const messages = current?.messages || [];
-        if (messages.some((existing) => existing.id === message.id)) return current;
-        return { ...(current || { id: conversationId, name: 'Chat' }), messages: [...messages, message] };
-      });
+      const mine = message.sender?.id === CURRENT_USER_ID;
+      setConversation((current) => addMessage(current, conversationId, { ...message, mine }));
+      if (!mine) graphql(MARK_CONVERSATION_READ, { conversationId }).catch(() => {});
     });
     return () => socket.disconnect();
   }, [conversationId]));
@@ -64,7 +71,7 @@ export default function ChatDetailScreen({ route, navigation }) {
         body: draft,
         clientMessageId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       });
-      setConversation((current) => ({ ...current, messages: [...(current?.messages || []), data.sendMessage] }));
+      setConversation((current) => addMessage(current, conversationId, data.sendMessage));
       setDraft('');
     } catch (sendError) {
       setError(sendError.message);
@@ -74,13 +81,18 @@ export default function ChatDetailScreen({ route, navigation }) {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.page }}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.page }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScreenHeader
         title={conversation?.name || 'Chat'}
         left={<IconButton icon="chevron-back" onPress={() => navigation.goBack()} />}
         right={<NotificationButton onPress={() => navigation.navigate('Notifications')} />}
       />
-      <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 130, gap: 12 }}>
+      <ScrollView
+        ref={scrollRef}
+        onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ padding: 18, paddingBottom: 130, gap: 12 }}
+      >
         {loading ? <ActivityIndicator color={colors.purple} /> : null}
         {error ? <Text style={{ color: colors.coral }}>{error}</Text> : null}
         <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.purpleSoft }}>
@@ -135,6 +147,6 @@ export default function ChatDetailScreen({ route, navigation }) {
           <Ionicons name="send" size={19} color={colors.card} />
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }

@@ -103,10 +103,16 @@ function cleanMessageBody(body) {
   return cleaned;
 }
 
+// Also broadcast over Socket.IO, which skips the GraphQL resolvers, so this
+// must already match the Message type's shape.
 function serializeMessage(message, userId) {
+  const { sender } = message;
   return {
     ...message.toObject(),
+    id: String(message._id),
     conversationId: String(message.conversation),
+    sender: { id: String(sender._id || sender), name: sender.name, profilePicture: sender.profilePicture },
+    createdAt: new Date(message.createdAt).toISOString(),
     mine: sameId(message.sender._id || message.sender, userId),
     read: message.readBy.some((id) => sameId(id, userId))
   };
@@ -130,10 +136,14 @@ async function conversationView(conversation, user) {
   });
   const participants = await User.find({ _id: { $in: conversation.participants } }).select('name profilePicture');
   const otherNames = participants.filter((participant) => !sameId(participant._id, user._id)).map(({ name }) => name);
+  // Session chats are named after the session, not whichever player is listed first.
+  const session = conversation.kind === 'session' ? await Session.findById(conversation.session).select('sport location') : null;
   return {
     ...conversation.toObject(),
     sessionId: conversation.session ? String(conversation.session) : null,
-    name: conversation.kind === 'session' ? (otherNames[0] || 'Session chat') : (otherNames.join(', ') || 'Direct message'),
+    name: conversation.kind === 'session'
+      ? (session ? `${session.sport} · ${session.location}` : 'Session chat')
+      : (otherNames.join(', ') || 'Direct message'),
     participants,
     messages: messages.map((message) => serializeMessage(message, user._id)),
     unreadCount,
@@ -626,6 +636,16 @@ const resolvers = {
     session: (rating) => String(rating.session),
     ratee: (rating) => String(rating.ratee),
     createdAt: (rating) => new Date(rating.createdAt).toISOString()
+  },
+
+  // Conversations and messages are spread from toObject(), which drops the
+  // `id` virtual, so ids come from `_id` here.
+  Conversation: {
+    id: (conversation) => String(conversation._id)
+  },
+
+  ChatParticipant: {
+    id: (participant) => String(participant.id ?? participant._id)
   },
 
   Message: {
@@ -1233,7 +1253,7 @@ const resolvers = {
 
     sendMessage: async (_, { conversationId, body, clientMessageId }, context) => {
       const user = requireUser(context);
-      const access = await getAuthorizedConversation(conversationId, user);
+      const access = await getAuthorizedConversation(conversationId, user, { allowFormerSession: true });
       if (!access.canSend) throw new Error('You can no longer send messages in this session');
       if (!clientMessageId || clientMessageId.length > 100) throw new Error('clientMessageId is required');
       const cleanedBody = cleanMessageBody(body);
