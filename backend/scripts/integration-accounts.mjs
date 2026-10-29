@@ -16,6 +16,8 @@ import Session from '../src/models/Session.js';
 import Rating from '../src/models/Rating.js';
 import AuthSession from '../src/models/AuthSession.js';
 import FriendRequest from '../src/models/FriendRequest.js';
+import Notification from '../src/models/Notification.js';
+import NotificationPreference from '../src/models/NotificationPreference.js';
 import logger from '../src/utils/logger.js';
 import SessionRegistration from '../src/models/SessionRegistration.mjs';
 import { getParticipationTier, recordRegistration } from '../src/utils/participationLimits.mjs';
@@ -273,42 +275,39 @@ try {
     name: 'Limited Creator', email: emailFor('limited-create'), socialRating: 3.0
   });
   createdEmails.push(emailFor('limited-create'));
-  const createSessionMutation = `mutation($hostId:ID!,$input:CreateSessionInput!){createSession(hostId:$hostId,input:$input){id}}`;
+  // The host is the signed-in user; sessions must start in the future.
+  const createSessionMutation = 'mutation($input:CreateSessionInput!){createSession(input:$input){id}}';
+  const daysFromNow = (days) => new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
   const createInput = {
     sport: 'Tennis',
-    startsAt: '2026-11-01T22:00:00.000Z',
+    startsAt: daysFromNow(3),
     location: 'Test Court',
-    locationPoint: { longitude: -86.9, latitude: 40.4 }
+    locationPoint: { longitude: -86.9, latitude: 40.4 },
+    skillLevel: 2,
+    maxParticipants: 4
   };
-  const limitedCreated = await ok(createSessionMutation, {
-    hostId: String(limitedCreate._id), input: createInput
-  }, limitedCreate);
+  const limitedCreated = await ok(createSessionMutation, { input: createInput }, limitedCreate);
   sessionIds.push(limitedCreated.createSession.id);
   await fails(createSessionMutation, {
-    hostId: String(limitedCreate._id), input: { ...createInput, startsAt: '2026-11-02T22:00:00.000Z' }
+    input: { ...createInput, startsAt: daysFromNow(4) }
   }, limitedCreate, 'allows 1 new session registration per rolling 7 days');
 
   const limitedJoin = await User.create({
     name: 'Limited Joiner', email: emailFor('limited-join'), socialRating: 3.0
   });
   createdEmails.push(emailFor('limited-join'));
+  const joinStartsAt = new Date(daysFromNow(5));
   const joinTarget = await Session.create({
-    sport: 'Tennis', date: '2026-11-03', time: '22:00', startsAt: new Date('2026-11-03T22:00:00.000Z'),
+    sport: 'Tennis', date: joinStartsAt.toISOString().slice(0, 10), time: '22:00', startsAt: joinStartsAt,
     location: 'Test Court', locationPoint: { type: 'Point', coordinates: [-86.9, 40.4] },
     participants: [host._id], host: host._id, status: 'upcoming'
   });
   sessionIds.push(joinTarget._id);
   await recordRegistration(joinTarget._id, limitedJoin._id);
-  const joinMutation = 'mutation($sessionId:ID!,$userId:ID!){joinSession(sessionId:$sessionId,userId:$userId){id}}';
-  await fails(joinMutation, { sessionId: String(joinTarget._id), userId: String(limitedJoin._id) }, limitedJoin, 'allows 1 new session registration per rolling 7 days');
-  await fails(joinMutation, { sessionId: String(joinTarget._id), userId: String(host._id) }, limitedJoin, 'only join a session for yourself');
+  // joinSession always joins the signed-in user, so there is no userId to misuse.
+  const joinMutation = 'mutation($sessionId:ID!){joinSession(sessionId:$sessionId){id}}';
+  await fails(joinMutation, { sessionId: String(joinTarget._id) }, limitedJoin, 'allows 1 new session registration per rolling 7 days');
 
-  await fails(submit, rate(ids.host, [{ userId: ids.guest, rating: 6 }]), null, 'whole numbers from 1 to 5');
-  await fails(submit, rate(ids.host, [{ userId: ids.guest, rating: 0 }]), null, 'whole numbers from 1 to 5');
-  await fails(submit, rate(ids.host, [{ userId: ids.host, rating: 5 }]), null, 'cannot rate yourself');
-  await fails(submit, rate(ids.host, [{ userId: ids.outsider, rating: 5 }]), null, 'only rate people who played');
-  await fails(submit, rate(ids.outsider, [{ userId: ids.host, rating: 5 }]), null, 'played in the session');
-  await fails(submit, rate(ids.host, [{ userId: ids.guest, rating: 5 }, { userId: ids.guest, rating: 4 }]), null, 'only be rated once');
   await fails(submit, rate([{ userId: ids.guest, rating: 6 }]), players.host, 'whole numbers from 1 to 5');
   await fails(submit, rate([{ userId: ids.guest, rating: 0 }]), players.host, 'whole numbers from 1 to 5');
   await fails(submit, rate([{ userId: ids.host, rating: 5 }]), players.host, 'cannot rate yourself');
@@ -371,6 +370,23 @@ try {
   assert.deepEqual((await User.findById(outsider._id)).friends.map(String), []);
   assert.deepEqual((await User.findById(host._id)).friends.map(String), [ids.guest]);
 
+  const notified = await Notification.find({ recipient: { $in: [guest._id, host._id] }, type: 'friend_request' });
+  assert.ok(notified.some((n) => n.recipient.equals(guest._id) && n.title === 'New friend request'), 'the recipient is told about a request');
+  assert.ok(notified.some((n) => n.recipient.equals(host._id) && n.title === 'Friend request accepted'), 'the requester is told it was accepted');
+  assert.equal((await ok('query{findUserById(id:"not-an-id"){id}}', {}, host)).findUserById, null, 'a mistyped ID is not found');
+
+  // A session that ended by its end time keeps a stored status of "upcoming";
+  // its players still count as people you have played with.
+  const clockEnded = await Session.create({
+    sport: 'Pickleball', date: '2026-01-02', time: '10:00',
+    startsAt: new Date('2026-01-02T10:00:00Z'), endsAt: new Date('2026-01-02T12:00:00Z'),
+    location: 'Test Court', locationPoint: { type: 'Point', coordinates: [-86.9, 40.4] },
+    participants: [outsider._id, third._id], host: outsider._id, status: 'upcoming'
+  });
+  sessionIds.push(clockEnded._id);
+  const candidates = (await ok('query{getFriendCandidates{id}}', {}, outsider)).getFriendCandidates;
+  assert.deepEqual(candidates.map(({ id }) => id), [ids.third], 'suggestions include sessions that ended by the clock');
+
   await fails(submit, rate([{ userId: ids.guest, rating: 1 }]), players.host, 'already rated');
   assert.equal((await User.findById(guest._id)).totalRatings, 3, 'a repeat submission changes no averages');
 
@@ -400,6 +416,8 @@ try {
     Session.deleteMany({ _id: { $in: sessionIds } }),
     AuthSession.deleteMany({ user: { $in: userIds } }),
     FriendRequest.deleteMany({ $or: [{ requester: { $in: userIds } }, { recipient: { $in: userIds } }] }),
+    Notification.deleteMany({ recipient: { $in: userIds } }),
+    NotificationPreference.deleteMany({ user: { $in: userIds } }),
     User.deleteMany({ _id: { $in: userIds } })
   ]);
   await mongoose.disconnect();
