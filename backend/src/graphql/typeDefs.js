@@ -48,6 +48,25 @@ const typeDefs = `#graphql
     periods: [DayPeriod!]!
   }
 
+  type PublicUser {
+    id: ID!
+    name: String!
+    bio: String
+    hometown: String
+    profilePicture: String
+    sports: [String]
+    socialRating: Float
+  }
+
+  type FriendRequest {
+    id: ID!
+    requester: PublicUser!
+    recipient: PublicUser!
+    status: String!
+    createdAt: String!
+    updatedAt: String!
+  }
+
   type SportSkill {
     sport: String!
     skillLevel: Float!
@@ -314,6 +333,9 @@ const typeDefs = `#graphql
     getCompletedSessions: [Session]
     getMySessions: MySessions!
     getFriends(userId: ID!): [User]
+    findUserById(id: ID!): PublicUser
+    getMyFriendRequests(status: String): [FriendRequest!]!
+    getFriendCandidates: [PublicUser!]!
     checkEmailExists(email: String!): EmailCheckResult!
     getRatingsForUser(userId: ID!): [Rating!]!
     getConversations: [Conversation!]!
@@ -343,6 +365,9 @@ const typeDefs = `#graphql
     # Participants only, after the session ends and before noShowDeadline.
     # Pass an empty list if everyone showed up. Can be changed until you rate.
     reportNoShows(sessionId: ID!, noShowUserIds: [ID!]!): Session!
+    sendFriendRequest(recipientId: ID!): FriendRequest!
+    acceptFriendRequest(requestId: ID!): FriendRequest!
+    declineFriendRequest(requestId: ID!): FriendRequest!
     submitRatings(sessionId: ID!, ratings: [RatingInput!]!): RatingResult
     # Only with someone you have played a session with.
     addFriend(friendId: ID!): User

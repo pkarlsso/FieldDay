@@ -59,6 +59,9 @@ export default function NotificationsScreen({ navigation }) {
     try { params = JSON.parse(item.target.params || '{}'); } catch { return; }
     if (['SessionDetails', 'RateSession', 'SessionComplete', 'ChatDetail', 'Notifications', 'Settings'].includes(item.target.screen)) {
       navigation.navigate(item.target.screen, params);
+    } else if (item.target.screen === 'Friends') {
+      // Friends is a tab, not a stack screen.
+      navigation.navigate('MainTabs', { screen: 'Friends' });
     }
   }
 
