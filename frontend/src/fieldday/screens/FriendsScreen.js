@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { Alert, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { graphql } from '../../api';
 import { Avatar, Card, NotificationButton, PrimaryButton, ScreenHeader, StatusBadge } from '../components/ui';
 import { colors } from '../theme';
@@ -88,6 +89,12 @@ export default function FriendsScreen({ navigation }) {
     }
   };
 
+  const copyUserId = async () => {
+    if (!user?.id) return;
+    await Clipboard.setStringAsync(user.id);
+    Alert.alert('User ID copied', 'Share this ID with the person who wants to add you.');
+  };
+
   const lookup = async () => {
     const id = lookupId.trim();
     if (!id) return;
@@ -122,6 +129,23 @@ export default function FriendsScreen({ navigation }) {
         <Card>
           <Text style={{ color: colors.ink, fontSize: 18, fontWeight: '900' }}>Add someone you know</Text>
           <Text style={{ color: colors.muted, marginTop: 5, lineHeight: 19 }}>Use their exact FieldDay user ID.</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, padding: 10, borderRadius: 14, backgroundColor: colors.purpleSoft }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.muted, fontSize: 11, fontWeight: '800' }}>Your user ID</Text>
+              <Text selectable style={{ color: colors.ink, fontSize: 13, fontWeight: '800', marginTop: 3 }} numberOfLines={1}>
+                {user?.id || 'Loading...'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              accessibilityLabel="Copy your user ID"
+              accessibilityRole="button"
+              disabled={!user?.id}
+              onPress={copyUserId}
+              style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', opacity: user?.id ? 1 : 0.5 }}
+            >
+              <Ionicons name="copy-outline" size={19} color={colors.purple} />
+            </TouchableOpacity>
+          </View>
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
             <TextInput
               value={lookupId}
