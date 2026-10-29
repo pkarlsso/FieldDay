@@ -251,6 +251,35 @@ const typeDefs = `#graphql
   type MessagePage {
     messages: [Message!]!
     nextCursor: String
+  type NotificationTarget {
+    version: Int!
+    screen: String!
+    params: String!
+  }
+
+  type Notification {
+    id: ID!
+    type: String!
+    category: String!
+    title: String!
+    body: String!
+    target: NotificationTarget!
+    readAt: String
+    createdAt: String!
+  }
+
+  type NotificationPreferences {
+    session: Boolean!
+    friends: Boolean!
+    ratings: Boolean!
+    chat: Boolean!
+  }
+
+  type NotificationDevice {
+    id: ID!
+    platform: String!
+    enabled: Boolean!
+    lastSeenAt: String!
   }
 
   type EmailCheckResult {
@@ -286,6 +315,12 @@ const typeDefs = `#graphql
     getRatingsBySession(sessionId: ID!, raterId: ID!): [Rating!]!
     getConversations: [Conversation!]!
     getConversationMessages(conversationId: ID!, cursor: String, limit: Int): MessagePage!
+    getNotifications(limit: Int = 30, before: String): [Notification!]!
+    getUnreadNotificationCount: Int!
+    getNotificationPreferences: NotificationPreferences!
+    getNotificationDevices: [NotificationDevice!]!
+    # The ratings the signed-in user gave in a session.
+    getRatingsBySession(sessionId: ID!): [Rating!]!
   }
 
   type Mutation {
@@ -324,6 +359,11 @@ const typeDefs = `#graphql
     getOrCreateDirectConversation(friendId: ID!): Conversation!
     sendMessage(conversationId: ID!, body: String!, clientMessageId: String!): Message!
     markConversationRead(conversationId: ID!): Boolean!
+    markNotificationRead(id: ID!): Notification!
+    markAllNotificationsRead: Int!
+    registerNotificationDevice(token: String!, platform: String!): NotificationDevice!
+    unregisterNotificationDevice(token: String!): Boolean!
+    updateNotificationPreferences(session: Boolean, friends: Boolean, ratings: Boolean, chat: Boolean): NotificationPreferences!
   }
 `;
 
