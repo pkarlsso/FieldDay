@@ -19,7 +19,7 @@ import * as authSessions from '../utils/authSession.js';
 import { validatePasswordStrength, PASSWORD_REQUIREMENTS, hashPassword, verifyPassword } from '../utils/password.js';
 import { generateCode, hashCode, CODE_TTL_MS, MAX_ATTEMPTS } from '../utils/twoFactor.js';
 import { RESET_CODE_TTL_MS } from '../utils/passwordReset.js';
-import { getPreferences } from '../utils/notifications.js';
+import { createNotification, getPreferences } from '../utils/notifications.js';
 import { createMediaLoader, storeProfilePhoto, toDataUri } from '../utils/media.js';
 import { VISIBILITIES, canViewSession, visibleSessionsFilter, visibilityOf } from '../utils/sessionAccess.js';
 // Called through the module objects (not destructured) so tests can stub them.
@@ -75,15 +75,35 @@ function requireUser(context) {
   return context.currentUser;
 }
 
+// profilePhoto is needed to resolve uploaded photos; sportSkills for `sports`.
+const PUBLIC_USER_FIELDS = 'name bio hometown profilePicture profilePhoto sports sportSkills skillLevel socialRating';
+
 function publicUserQuery(id) {
-  return User.findById(id).select('name bio hometown profilePicture sports socialRating');
+  return User.findById(id).select(PUBLIC_USER_FIELDS);
 }
 
 function populatedFriendRequestQuery(id) {
   return FriendRequest.findById(id).populate('requester').populate('recipient');
 }
 
+// A failed notification must not undo the friend request it is about.
+async function notifyFriendActivity(recipient, title, body) {
+  try {
+    await createNotification({
+      recipient,
+      type: 'friend_request',
+      category: 'friends',
+      title,
+      body,
+      target: { version: 1, screen: 'Friends', params: {} }
+    });
+  } catch (err) {
+    logger.error(err, { context: 'Friend request notification failed', recipientId: String(recipient) });
+  }
+}
+
 async function createFriendRequest(requesterId, recipientId) {
+  if (!mongoose.isValidObjectId(recipientId)) throw new Error('User not found');
   if (String(requesterId) === String(recipientId)) throw new Error('You cannot send a friend request to yourself');
 
   const [requester, recipient] = await Promise.all([
@@ -106,6 +126,7 @@ async function createFriendRequest(requesterId, recipientId) {
 
   try {
     const request = await FriendRequest.create({ requester: requesterId, recipient: recipientId });
+    await notifyFriendActivity(recipient._id, 'New friend request', `${requester.name} wants to be friends on FieldDay.`);
     return populatedFriendRequestQuery(request._id);
   } catch (err) {
     if (err.code === 11000) throw new Error('A friend request is already pending');
@@ -235,6 +256,15 @@ function sportSkillsOf(user) {
   return user.sportSkills && user.sportSkills.length > 0
     ? user.sportSkills
     : (user.sports || []).map((sport) => ({ sport, skillLevel: user.skillLevel }));
+}
+
+// Uploaded photos live in Media (profilePicture is cleared when one is saved);
+// older accounts may still have a profilePicture URL.
+async function profilePictureOf(user, context) {
+  if (!user.profilePhoto) return user.profilePicture || '';
+  context.loadMedia ||= createMediaLoader();
+  const media = await context.loadMedia(idOf(user.profilePhoto));
+  return media ? toDataUri(media) : '';
 }
 
 // What first-run setup asks for. A photo, bio and hometown are optional.
@@ -665,12 +695,7 @@ const resolvers = {
     // overall `skillLevel`, so fall back to those.
     sportSkills: (user) => sportSkillsOf(user),
     availability: (user) => user.availability || [],
-    profilePicture: async (user, _, context) => {
-      if (!user.profilePhoto) return user.profilePicture || '';
-      context.loadMedia ||= createMediaLoader();
-      const media = await context.loadMedia(idOf(user.profilePhoto));
-      return media ? toDataUri(media) : '';
-    },
+    profilePicture: (user, _, context) => profilePictureOf(user, context),
     profileComplete: (user) => profileSetupMissing(user).length === 0,
     profileSetupMissing: (user) => profileSetupMissing(user)
   },
@@ -682,7 +707,9 @@ const resolvers = {
   },
 
   PublicUser: {
-    id: (user) => String(user._id || user.id)
+    id: (user) => String(user._id || user.id),
+    profilePicture: (user, _, context) => profilePictureOf(user, context),
+    sports: (user) => sportSkillsOf(user).map(({ sport }) => sport)
   },
 
   FriendRequest: {
@@ -692,10 +719,10 @@ const resolvers = {
     status: (request) => request.status,
     createdAt: (request) => new Date(request.createdAt).toISOString(),
     updatedAt: (request) => new Date(request.updatedAt).toISOString()
-  // Conversations and messages are spread from toObject(), which drops the
-  // `id` virtual, so ids come from `_id` here.
   },
 
+  // Conversations and messages are spread from toObject(), which drops the
+  // `id` virtual, so ids come from `_id` here.
   Conversation: {
     id: (conversation) => String(conversation._id)
   },
@@ -841,6 +868,8 @@ const resolvers = {
 
     findUserById: async (_, { id }, context) => {
       requireUser(context);
+      // A mistyped ID is just "not found", not a database cast error.
+      if (!mongoose.isValidObjectId(id)) return null;
       return publicUserQuery(id);
     },
 
@@ -856,7 +885,8 @@ const resolvers = {
 
     getFriendCandidates: async (_, __, context) => {
       const user = requireUser(context);
-      const sessions = await Session.find({ status: 'completed', participants: user._id }, 'participants');
+      // Stored status stays "upcoming" after a session ends, so match by end time.
+      const sessions = await Session.find({ participants: user._id, ...endedSessionsFilter() }, 'participants');
       const participantIds = [...new Set(sessions.flatMap((session) => session.participants.map(String)))]
         .filter((id) => id !== String(user._id) && !user.friends.some((friendId) => String(friendId) === id));
       if (participantIds.length === 0) return [];
@@ -870,7 +900,7 @@ const resolvers = {
       }, 'requester recipient');
       const pendingIds = new Set(pending.flatMap(({ requester, recipient }) => [String(requester), String(recipient)]));
       return User.find({ _id: { $in: participantIds.filter((id) => !pendingIds.has(id)) } })
-        .select('name bio hometown profilePicture sports socialRating');
+        .select(PUBLIC_USER_FIELDS);
     },
     
     getNotifications: async (_, { limit, before }, context) => {
@@ -1090,6 +1120,7 @@ const resolvers = {
         User.updateOne({ _id: request.requester }, { $addToSet: { friends: request.recipient } }),
         User.updateOne({ _id: request.recipient }, { $addToSet: { friends: request.requester } })
       ]);
+      await notifyFriendActivity(request.requester, 'Friend request accepted', `${user.name} accepted your friend request.`);
       return populatedFriendRequestQuery(request._id);
     },
 

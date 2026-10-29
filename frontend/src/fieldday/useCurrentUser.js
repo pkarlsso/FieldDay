@@ -17,20 +17,25 @@ const QUERY = `
 
 // The signed-in user's profile, refetched whenever the screen regains focus so
 // edits made on Edit Profile show up right away. null until the first load.
-export function useCurrentUser() {
+// Also returns `reload`, to refetch without leaving the screen.
+export function useCurrentUserWithReload() {
   const [user, setUser] = useState(null);
 
-  useFocusEffect(
-    useCallback(() => {
-      let active = true;
-      graphql(QUERY)
-        .then((data) => { if (active) setUser(data.me); })
-        .catch((err) => logger.error('Current user fetch error:', err));
-      return () => { active = false; };
-    }, []),
-  );
+  const load = useCallback(() => {
+    let active = true;
+    graphql(QUERY)
+      .then((data) => { if (active) setUser(data.me); })
+      .catch((err) => logger.error('Current user fetch error:', err));
+    return () => { active = false; };
+  }, []);
 
-  return user;
+  useFocusEffect(load);
+
+  return [user, load];
+}
+
+export function useCurrentUser() {
+  return useCurrentUserWithReload()[0];
 }
 
 export function firstName(user) {

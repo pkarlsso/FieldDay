@@ -6,7 +6,7 @@ import * as Clipboard from 'expo-clipboard';
 import { graphql } from '../../api';
 import { Avatar, Card, NotificationButton, PrimaryButton, ScreenHeader, StatusBadge } from '../components/ui';
 import { colors } from '../theme';
-import { useCurrentUser } from '../useCurrentUser';
+import { useCurrentUserWithReload } from '../useCurrentUser';
 import { GET_OR_CREATE_DIRECT_CONVERSATION } from '../../graphql/queries';
 
 const REQUEST_FIELDS = `
@@ -47,16 +47,17 @@ const DECLINE_REQUEST = `
 `;
 
 export default function FriendsScreen({ navigation }) {
-    const openDirectChat = async (friendId) => {
-      try {
-        const data = await graphql(GET_OR_CREATE_DIRECT_CONVERSATION, { friendId });
-        navigation.navigate('ChatDetail', { conversationId: data.getOrCreateDirectConversation.id });
-      } catch (error) {
-        Alert.alert('Unable to open chat', error.message);
-      }
-    };
+  const openDirectChat = async (friendId) => {
+    try {
+      const data = await graphql(GET_OR_CREATE_DIRECT_CONVERSATION, { friendId });
+      navigation.navigate('ChatDetail', { conversationId: data.getOrCreateDirectConversation.id });
+    } catch (error) {
+      Alert.alert('Unable to open chat', error.message);
+    }
+  };
 
-  const user = useCurrentUser();
+  // Reloaded after accepting a request so the new friend shows up right away.
+  const [user, reloadUser] = useCurrentUserWithReload();
   const friends = user?.friends || [];
   const [requests, setRequests] = useState([]);
   const [candidates, setCandidates] = useState([]);
@@ -83,6 +84,7 @@ export default function FriendsScreen({ navigation }) {
     try {
       await graphql(SEND_REQUEST, { id: recipientId });
       setLookupUser(null);
+      setLookupId('');
       refreshRequests();
     } catch (err) {
       Alert.alert('Could not send request', err.message);
@@ -114,6 +116,7 @@ export default function FriendsScreen({ navigation }) {
     try {
       await graphql(mutation, { id: requestId });
       refreshRequests();
+      if (mutation === ACCEPT_REQUEST) reloadUser();
     } catch (err) {
       Alert.alert('Could not update request', err.message);
     }
