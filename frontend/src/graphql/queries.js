@@ -22,8 +22,8 @@ export const GET_USER = gql`
 `;
 
 export const GET_COMPLETED_SESSIONS = gql`
-  query GetCompletedSessions($userId: ID!) {
-    getCompletedSessions(userId: $userId) {
+  query GetCompletedSessions {
+    getCompletedSessions {
       id
       sport
       date
@@ -47,8 +47,8 @@ export const GET_COMPLETED_SESSIONS = gql`
 `;
 
 export const SUBMIT_RATINGS = gql`
-  mutation SubmitRatings($sessionId: ID!, $raterId: ID!, $ratings: [RatingInput!]!) {
-    submitRatings(sessionId: $sessionId, raterId: $raterId, ratings: $ratings) {
+  mutation SubmitRatings($sessionId: ID!, $ratings: [RatingInput!]!) {
+    submitRatings(sessionId: $sessionId, ratings: $ratings) {
       success
       message
       avgRatingGiven
@@ -63,8 +63,8 @@ export const SUBMIT_RATINGS = gql`
 `;
 
 export const CREATE_SESSION = gql`
-  mutation CreateSession($hostId: ID!, $input: CreateSessionInput!) {
-    createSession(hostId: $hostId, input: $input) {
+  mutation CreateSession($input: CreateSessionInput!) {
+    createSession(input: $input) {
       id sport startsAt location
       locationPoint { type coordinates }
       maxParticipants status
@@ -75,17 +75,75 @@ export const CREATE_SESSION = gql`
 `;
 
 export const JOIN_SESSION = gql`
-  mutation JoinSession($sessionId: ID!, $userId: ID!) {
-    joinSession(sessionId: $sessionId, userId: $userId) {
+  mutation JoinSession($sessionId: ID!) {
+    joinSession(sessionId: $sessionId) {
       id participants { id name }
     }
   }
 `;
 
 export const LEAVE_SESSION = gql`
-  mutation LeaveSession($sessionId: ID!, $userId: ID!) {
-    leaveSession(sessionId: $sessionId, userId: $userId) {
+  mutation LeaveSession($sessionId: ID!) {
+    leaveSession(sessionId: $sessionId) {
       id participants { id name }
     }
+  }
+`;
+
+const CONVERSATION_SESSION_FIELDS = `
+  session { id sport location startsAt endsAt status skillLevel skillRange maxParticipants participants { id } }
+`;
+
+export const GET_CONVERSATIONS = `
+  query GetConversations {
+    getConversations {
+      id kind sessionId name unreadCount lastMessageAt
+      ${CONVERSATION_SESSION_FIELDS}
+      participants { id name profilePicture }
+      messages { id conversationId body createdAt mine read sender { id name profilePicture } }
+    }
+  }
+`;
+
+export const GET_CONVERSATION = `
+  query GetConversation($conversationId: ID!) {
+    getConversation(conversationId: $conversationId) {
+      id kind sessionId name unreadCount lastMessageAt
+      ${CONVERSATION_SESSION_FIELDS}
+      participants { id name profilePicture }
+    }
+  }
+`;
+
+export const GET_CONVERSATION_MESSAGES = `
+  query GetConversationMessages($conversationId: ID!, $cursor: String, $limit: Int) {
+    getConversationMessages(conversationId: $conversationId, cursor: $cursor, limit: $limit) {
+      nextCursor
+      messages { id conversationId body createdAt mine read sender { id name profilePicture } }
+    }
+  }
+`;
+
+export const GET_OR_CREATE_DIRECT_CONVERSATION = `
+  mutation GetOrCreateDirectConversation($friendId: ID!) {
+    getOrCreateDirectConversation(friendId: $friendId) {
+      id kind sessionId name unreadCount lastMessageAt
+      participants { id name profilePicture }
+      messages { id conversationId body createdAt mine read sender { id name profilePicture } }
+    }
+  }
+`;
+
+export const SEND_MESSAGE = `
+  mutation SendMessage($conversationId: ID!, $body: String!, $clientMessageId: String!) {
+    sendMessage(conversationId: $conversationId, body: $body, clientMessageId: $clientMessageId) {
+      id conversationId body createdAt mine read sender { id name profilePicture }
+    }
+  }
+`;
+
+export const MARK_CONVERSATION_READ = `
+  mutation MarkConversationRead($conversationId: ID!) {
+    markConversationRead(conversationId: $conversationId)
   }
 `;

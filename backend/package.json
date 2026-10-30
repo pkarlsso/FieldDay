@@ -6,15 +6,18 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "seed": "node src/seed.js"
+    "seed": "node src/seed.js",
+    "test:chat": "node scripts/integration-chat.mjs",
+    "test:accounts": "node scripts/integration-accounts.mjs",
+    "test:integration": "node scripts/integration-session.mjs"
   },
   "dependencies": {
     "@apollo/server": "^4.13.0",
     "argon2": "^0.41.1",
     "cors": "^2.8.5",
-    "dotenv": "^17.4.1",
+    "dotenv": "^18.0.8",
     "express": "^4.22.2",
-    "google-auth-library": "^11.1.0",
+    "google-auth-library": "^11.3.1",
     "graphql": "^16.10.0",
     "mongoose": "^8.24.4",
     "nodemailer": "^6.10.1",

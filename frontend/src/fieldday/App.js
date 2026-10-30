@@ -9,6 +9,7 @@ import { StatusBar } from 'expo-status-bar';
 import ExploreScreen from './screens/ExploreScreen';
 import LiveExploreScreen from './screens/LiveExploreScreen';
 import ChatDetailScreen from './screens/ChatDetailScreen';
+import ChatScreen from './screens/ChatScreen';
 import CreateSessionScreen from './screens/CreateSessionScreen';
 import FriendsScreen from './screens/FriendsScreen';
 import HomeScreen from './screens/HomeScreen';
@@ -26,7 +27,8 @@ import SessionsScreen from './screens/SessionsScreen';
 import LiveSessionsScreen from './screens/LiveSessionsScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import { colors } from './theme';
-import { restoreSession } from '../session';
+import { NotificationProvider } from '../notifications';
+import { restoreSession, screenAfterSignIn } from '../session';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import SignUpEmailScreen from '../screens/auth/SignUpEmailScreen';
 import SignUpPasswordScreen from '../screens/auth/SignUpPasswordScreen';
@@ -45,6 +47,7 @@ const tabIcons = {
   Map: 'map-outline',
   Sessions: 'calendar-check-outline',
   Friends: 'account-group-outline',
+  Chat: 'chat-processing-outline',
   Profile: 'account-circle-outline',
   Create: 'plus-circle-outline',
 };
@@ -79,6 +82,7 @@ function MainTabs() {
       <Tab.Screen name="Map" component={MapScreen} />
       <Tab.Screen name="Sessions" component={useLiveData ? LiveSessionsScreen : SessionsScreen} />
       <Tab.Screen name="Friends" component={FriendsScreen} />
+      <Tab.Screen name="Chat" component={ChatScreen} />
       <Tab.Screen name="Create" component={CreateSessionScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
@@ -91,9 +95,9 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
-    restoreSession().then((signedIn) => {
-      if (active) setInitialRoute(signedIn ? 'MainTabs' : 'SignUpEmail');
-    });
+    restoreSession()
+      .then((signedIn) => (signedIn ? screenAfterSignIn() : 'SignUpEmail'))
+      .then((route) => { if (active) setInitialRoute(route); });
     return () => { active = false; };
   }, []);
 
@@ -106,10 +110,10 @@ export default function App() {
   }
 
   return (
-    <NavigationContainer>
-      <StatusBar style="dark" />
-      {/* cardStyle flex keeps each card viewport-sized on web, so screens scroll inside themselves. */}
-      <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false, cardStyle: { flex: 1 } }}>
+    <NotificationProvider>
+      <NavigationContainer>
+        <StatusBar style="dark" />
+        <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false, cardStyle: { flex: 1 } }}>
         <Stack.Screen name="SignUpEmail" component={SignUpEmailScreen} />
         <Stack.Screen name="SignUpPassword" component={SignUpPasswordScreen} />
         <Stack.Screen name="Login" component={LoginScreen} />
@@ -117,6 +121,8 @@ export default function App() {
         <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
         <Stack.Screen name="TwoFactor" component={TwoFactorScreen} />
         <Stack.Screen name="MainTabs" component={MainTabs} />
+        {/* First-run setup: the same form as Edit Profile, shown after sign-in until it is complete. */}
+        <Stack.Screen name="ProfileSetup" component={EditProfileScreen} initialParams={{ onboarding: true }} />
         <Stack.Screen name="EditProfile" component={EditProfileScreen} />
         <Stack.Screen name="SessionDetails" component={useLiveData ? LiveSessionDetailsScreen : SessionDetailsScreen} />
         <Stack.Screen name="RateSession" component={useLiveData ? LiveRateSessionScreen : RateSessionScreen} />
@@ -125,7 +131,8 @@ export default function App() {
         <Stack.Screen name="ChatDetail" component={ChatDetailScreen} />
         <Stack.Screen name="Notifications" component={NotificationsScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
-      </Stack.Navigator>
-    </NavigationContainer>
+        </Stack.Navigator>
+      </NavigationContainer>
+    </NotificationProvider>
   );
 }

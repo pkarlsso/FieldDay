@@ -1,5 +1,8 @@
-// This will be updated after seeding the database with your actual user ID
-export let CURRENT_USER_ID = '69db4924fa3cb80a64df2953';
+// The signed-in user's ID, set at sign-in and cleared at sign-out. Screens use
+// it only to tell which rows are "you" (host badge, your own player row). It is
+// never sent as proof of who you are: the server works that out from the
+// session token in the Authorization header.
+export let CURRENT_USER_ID = null;
 
 // The shared AWS API is the normal backend for Expo development and installed
 // builds. Set EXPO_PUBLIC_API_URL locally only when intentionally testing a

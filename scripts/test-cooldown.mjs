@@ -9,6 +9,7 @@ import resolvers from '../backend/src/graphql/resolvers.js';
 import User from '../backend/src/models/User.js';
 import Session from '../backend/src/models/Session.js';
 import Rating from '../backend/src/models/Rating.js';
+import SessionRegistration from '../backend/src/models/SessionRegistration.mjs';
 
 const tag = `cooldown-test-${Date.now()}`;
 const emailFor = (name) => `${tag}-${name}@example.test`;
@@ -40,9 +41,9 @@ async function blocked(query, variables, currentUser) {
   return new Date(error.extensions.cooldownUntil);
 }
 
-const CREATE = 'mutation($hostId:ID!,$input:CreateSessionInput!){createSession(hostId:$hostId,input:$input){id}}';
-const JOIN = 'mutation($s:ID!,$u:ID!){joinSession(sessionId:$s,userId:$u){id}}';
-const SUBMIT = 'mutation($s:ID!,$r:ID!,$x:[RatingInput!]!){submitRatings(sessionId:$s,raterId:$r,ratings:$x){success}}';
+const CREATE = 'mutation($input:CreateSessionInput!){createSession(input:$input){id}}';
+const JOIN = 'mutation($s:ID!){joinSession(sessionId:$s){id}}';
+const SUBMIT = 'mutation($s:ID!,$x:[RatingInput!]!){submitRatings(sessionId:$s,ratings:$x){success}}';
 const ME = 'query($id:ID!){getUser(id:$id){id socialRating cooldownUntil}}';
 
 const idOf = (user) => String(user._id);
@@ -79,7 +80,7 @@ async function rate(rater, ratee, value) {
     status: 'upcoming',
     noShowReports: [{ reporter: rater._id, noShows: [] }, { reporter: ratee._id, noShows: [] }]
   });
-  await ok(SUBMIT, { s: String(session._id), r: idOf(rater), x: [{ userId: idOf(ratee), rating: value }] });
+  await ok(SUBMIT, { s: String(session._id), x: [{ userId: idOf(ratee), rating: value }] }, rater);
   return User.findById(ratee._id);
 }
 
@@ -88,7 +89,7 @@ const withinSeconds = (actual, expected, seconds = 60) => Math.abs(actual - expe
 try {
   await mongoose.connect(getConfig().mongoUri);
   const [rater, other, target] = await Promise.all([makeUser('rater'), makeUser('other'), makeUser('target')]);
-  const openSession = (await ok(CREATE, { hostId: idOf(other), input: input() }, other)).createSession.id;
+  const openSession = (await ok(CREATE, { input: input() }, other)).createSession.id;
 
   // ---- a low rating starts a 2-day cooldown -----------------------------
   const rated = await rate(rater, target, 1);
@@ -97,20 +98,16 @@ try {
   assert.ok(withinSeconds(rated.cooldownUntil, Date.now() + COOLDOWN_MS), 'the cooldown lasts 2 days');
   console.log('✓ A rating that drops the social rating below 2 starts a 2-day cooldown');
 
-  // ---- create and join are blocked, however they are called -------------
+  // ---- create and join are blocked -------------------------------------
   // `rated` is the user as the server loads them for a signed-in request.
-  const until = await blocked(CREATE, { hostId: idOf(target), input: input() }, rated);
+  // Create and join act as the signed-in user, so there is no way to name
+  // someone else instead (see test-authorization).
+  const until = await blocked(CREATE, { input: input() }, rated);
   assert.equal(+until, +rated.cooldownUntil, 'the error carries the end time');
-  await blocked(JOIN, { s: openSession, u: idOf(target) }, rated);
-  // Signed in as the suspended user but naming someone else.
-  await blocked(CREATE, { hostId: idOf(other), input: input() }, rated);
-  await blocked(JOIN, { s: openSession, u: idOf(other) }, rated);
-  // Not signed in at all, naming the suspended user.
-  await blocked(CREATE, { hostId: idOf(target), input: input() }, null);
-  await blocked(JOIN, { s: openSession, u: idOf(target) }, null);
+  await blocked(JOIN, { s: openSession }, rated);
   assert.equal(await Session.countDocuments({ host: target._id, startsAt: { $gt: new Date() } }), 0, 'nothing was created');
   assert.ok(!(await Session.findById(openSession)).participants.some((id) => id.equals(target._id)), 'nothing was joined');
-  console.log('✓ Create and join are rejected during the cooldown, including direct GraphQL calls');
+  console.log('✓ Create and join are rejected during the cooldown');
 
   // ---- only the user sees their own cooldown ----------------------------
   const own = (await ok(ME, { id: idOf(target) }, target)).getUser;
@@ -128,9 +125,12 @@ try {
   await User.updateOne({ _id: target._id }, { cooldownUntil: new Date(Date.now() - 1000) });
   const expired = await User.findById(target._id);
   assert.equal((await ok(ME, { id: idOf(target) }, expired)).getUser.cooldownUntil, null, 'an expired cooldown is not shown');
-  const created = (await ok(CREATE, { hostId: idOf(target), input: input() }, expired)).createSession.id;
+  const created = (await ok(CREATE, { input: input() }, expired)).createSession.id;
   assert.ok(created, 'can create again after the cooldown ends');
-  await ok(JOIN, { s: openSession, u: idOf(target) }, expired);
+  // A low rating also limits how often someone can register (participation
+  // limits, tested on their own), so clear the create before testing a join.
+  await SessionRegistration.deleteMany({ user: target._id });
+  await ok(JOIN, { s: openSession }, expired);
   console.log('✓ Create and join work again once the cooldown has ended');
 
   // A rating that raises the average (still under 2) doesn't start a new one.
@@ -166,6 +166,7 @@ try {
   const sessionIds = sessions.map((session) => session._id);
   await Promise.all([
     Rating.deleteMany({ session: { $in: sessionIds } }),
+    SessionRegistration.deleteMany({ user: { $in: userIds } }),
     Session.deleteMany({ _id: { $in: sessionIds } }),
     User.deleteMany({ _id: { $in: userIds } })
   ]);
