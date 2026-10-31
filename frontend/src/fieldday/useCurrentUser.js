@@ -6,7 +6,7 @@ import logger from '../logger';
 const QUERY = `
   query CurrentUser {
     me {
-      id name bio hometown profilePicture socialRating totalRatings
+      id name bio hometown profilePicture socialRating totalRatings cooldownUntil
       profileComplete profileSetupMissing
       sportSkills { sport skillLevel }
       availability { day periods }

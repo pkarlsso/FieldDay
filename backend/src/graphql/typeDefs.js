@@ -14,6 +14,10 @@ const typeDefs = `#graphql
     socialRating: Float
     totalRatings: Int
     friends: [User]
+    # When the user's cooldown ends (FR-8): their social rating dropped below 2,
+    # so they can't create or join sessions until then. Only the signed-in user
+    # sees their own; null for everyone else and when there is no cooldown.
+    cooldownUntil: String
     # True once the first-run setup has everything it needs.
     profileComplete: Boolean!
     # What first-run setup still needs: any of "name", "sports" and
@@ -349,6 +353,10 @@ const typeDefs = `#graphql
     getRatingsBySession(sessionId: ID!): [Rating!]!
   }
 
+  # createSession and joinSession fail with code ACCOUNT_COOLDOWN (and the end
+  # time in extensions.cooldownUntil) while the user is in a cooldown.
+  # Changes to a session's roster are announced over Socket.IO; see
+  # doc/realtime.md.
   type Mutation {
     # The signed-in user becomes the host and first participant.
     createSession(input: CreateSessionInput!): Session

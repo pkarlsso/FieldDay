@@ -26,6 +26,9 @@ const userSchema = new mongoose.Schema({
   socialRating: { type: Number, default: 0, min: 0, max: 5 },
   totalRatings: { type: Number, default: 0 },
   ratingSum: { type: Number, default: 0 },
+  // FR-8: set to 2 days out when a rating pulls socialRating below 2. Creating
+  // and joining sessions are blocked until then. null when never suspended.
+  cooldownUntil: { type: Date, default: null },
   friends: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   createdAt: { type: Date, default: Date.now },
 

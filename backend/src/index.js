@@ -1,3 +1,4 @@
+import http from 'node:http';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@apollo/server/express4';
 import express from 'express';
@@ -7,24 +8,25 @@ import typeDefs from './graphql/typeDefs.js';
 import resolvers from './graphql/resolvers.js';
 import { getConfig } from './config.js';
 import { authenticateRequest, demoAuthBypassEnabled } from './utils/authSession.js';
-import { createServer } from 'http';
-import { Server as SocketServer } from 'socket.io';
 import logger from './utils/logger.js';
+import { attachRealtime, startSessionClock } from './realtime.js';
 import Conversation from './models/Conversation.js';
 import Session from './models/Session.js';
 import chatEvents from './utils/chatEvents.js';
 
-function csrfProtection(req, res, next) {
-  const origin = req.get('origin');
-  if (!origin) return next();
-
-  const requestOrigin = `${req.protocol}://${req.get('host')}`;
+// Requests without an Origin header (native apps, curl) are allowed; browser
+// requests must come from this server or an origin in CSRF_ALLOWED_ORIGINS.
+function isAllowedOrigin(origin, requestOrigin) {
+  if (!origin) return true;
   const configuredOrigins = (process.env.CSRF_ALLOWED_ORIGINS || '')
     .split(',')
     .map(value => value.trim())
     .filter(Boolean);
+  return origin === requestOrigin || configuredOrigins.includes(origin);
+}
 
-  if (origin !== requestOrigin && !configuredOrigins.includes(origin)) {
+function csrfProtection(req, res, next) {
+  if (!isAllowedOrigin(req.get('origin'), `${req.protocol}://${req.get('host')}`)) {
     return res.status(403).json({ error: 'Cross-origin request blocked' });
   }
   return next();
@@ -70,14 +72,20 @@ async function startServer() {
 
   app.get('/health', (_, res) => res.json({ status: 'ok' }));
 
-  const httpServer = createServer(app);
-  const io = new SocketServer(httpServer, { cors: { origin: '*' } });
+  // Socket.IO shares the HTTP server so live session updates and chat use the
+  // same host and port as GraphQL (path /socket.io).
+  const httpServer = http.createServer(app);
+  const io = attachRealtime(httpServer, {
+    allowOrigin: (origin, req) => isAllowedOrigin(origin, `${req.socket.encrypted ? 'https' : 'http'}://${req.headers.host}`)
+  });
+  startSessionClock();
+
+  // Session updates go to every connection (they carry only a session id), so
+  // signing in is optional here; joining a chat checks for a signed-in user.
   io.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth?.token;
-      const currentUser = await authenticateRequest({ headers: { authorization: `Bearer ${token || ''}` } });
-      if (!currentUser) return next(new Error('You must be signed in to connect.'));
-      socket.currentUser = currentUser;
+      if (token) socket.currentUser = await authenticateRequest({ headers: { authorization: `Bearer ${token}` } });
       return next();
     } catch (error) {
       return next(error);
@@ -85,6 +93,7 @@ async function startServer() {
   });
   io.on('connection', (socket) => {
     socket.on('joinConversation', async (conversationId, callback = () => {}) => {
+      if (!socket.currentUser) return callback({ ok: false, error: 'You must be signed in to join a conversation.' });
       try {
         const conversation = await Conversation.findById(conversationId);
         if (!conversation) return callback({ ok: false, error: 'Conversation not found' });
