@@ -16,7 +16,7 @@
     "@react-native-community/datetimepicker": "9.2.1",
     "@react-native-community/slider": "5.2.1",
     "@react-navigation/bottom-tabs": "^7.15.9",
-    "@react-navigation/native": "^7.2.2",
+    "@react-navigation/native": "^7.5.1",
     "@react-navigation/stack": "^7.11.2",
     "expo": "~58.0.21",
     "expo-auth-session": "~58.0.16",
