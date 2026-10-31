@@ -395,6 +395,9 @@ function ratingEligibility(session, userId, now = new Date()) {
 function validateRatingSubmission(session, raterId, ratings) {
   const { eligible, reason } = ratingEligibility(session, raterId);
   if (!eligible) throw new Error(reason);
+  if (!Array.isArray(ratings) || ratings.length === 0) {
+    throw new Error('Submit at least one rating');
+  }
   const reportedNoShows = noShowReportBy(session, raterId)?.noShows || [];
 
   const seen = new Set();

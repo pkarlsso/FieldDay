@@ -54,7 +54,6 @@ describe('RateSessionScreen', () => {
         expect.stringContaining('mutation SubmitRatings'),
         {
           sessionId: 'session-123',
-          raterId: 'current-user',
           ratings: [
             { userId: 'player-one', rating: 5, addFriend: true },
             { userId: 'player-two', rating: 3, addFriend: false },
