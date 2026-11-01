@@ -2,13 +2,15 @@
 // reports and rating eligibility.
 import assert from 'node:assert/strict';
 import mongoose from 'mongoose';
-import { ApolloServer } from '@apollo/server';
+import { ApolloServer } from '../backend/test/support/apollo.js';
 import { getConfig } from '../backend/src/config.js';
 import typeDefs from '../backend/src/graphql/typeDefs.js';
 import resolvers from '../backend/src/graphql/resolvers.js';
 import User from '../backend/src/models/User.js';
 import Session from '../backend/src/models/Session.js';
 import Rating from '../backend/src/models/Rating.js';
+import SessionRegistration from '../backend/src/models/SessionRegistration.mjs';
+import { UNLIMITED_RATING } from './lib/graphqlHarness.mjs';
 
 const tag = `lifecycle-test-${Date.now()}`;
 const emailFor = (name) => `${tag}-${name}@example.test`;
@@ -75,7 +77,7 @@ try {
   const [host, a, b, c, outsider] = await Promise.all(
     ['host', 'a', 'b', 'c', 'outsider'].map((name) => {
       createdEmails.push(emailFor(name));
-      return User.create({ name, email: emailFor(name) });
+      return User.create({ name, email: emailFor(name), socialRating: UNLIMITED_RATING });
     })
   );
   const hostId = idOf(host);
@@ -252,6 +254,7 @@ try {
   await Promise.all([
     Rating.deleteMany({ session: { $in: sessions.map((session) => session._id) } }),
     Session.deleteMany({ _id: { $in: sessions.map((session) => session._id) } }),
+    SessionRegistration.deleteMany({ user: { $in: userIds } }),
     User.deleteMany({ _id: { $in: userIds } })
   ]);
   await server.stop();

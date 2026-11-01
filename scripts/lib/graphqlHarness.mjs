@@ -3,7 +3,7 @@
 // they (and their sessions, ratings and photos) can be deleted afterwards.
 import assert from 'node:assert/strict';
 import mongoose from 'mongoose';
-import { ApolloServer } from '@apollo/server';
+import { ApolloServer } from '../../backend/test/support/apollo.js';
 import { getConfig } from '../../backend/src/config.js';
 import typeDefs from '../../backend/src/graphql/typeDefs.js';
 import resolvers from '../../backend/src/graphql/resolvers.js';
@@ -12,8 +12,14 @@ import Session from '../../backend/src/models/Session.js';
 import Rating from '../../backend/src/models/Rating.js';
 import Media from '../../backend/src/models/Media.js';
 import AuthSession from '../../backend/src/models/AuthSession.js';
+import SessionRegistration from '../../backend/src/models/SessionRegistration.mjs';
 
 export const HOUR = 60 * 60 * 1000;
+
+// Test users start in the top rating tier, which has no limit on how many
+// sessions they create or join. A new account's rating of 0 allows one every
+// 30 days (participationLimits.mjs), and these tests need more than that.
+export const UNLIMITED_RATING = 5;
 
 export async function startHarness(tag) {
   await mongoose.connect(getConfig().mongoUri);
@@ -47,7 +53,7 @@ export async function startHarness(tag) {
     return Promise.all(names.map((name) => {
       const email = `${tag}-${name}@example.test`;
       createdEmails.push(email);
-      return User.create({ name, email, ...fields });
+      return User.create({ name, email, socialRating: UNLIMITED_RATING, ...fields });
     }));
   }
 
@@ -64,6 +70,7 @@ export async function startHarness(tag) {
       Session.deleteMany({ _id: { $in: sessionIds } }),
       Media.deleteMany({ owner: { $in: userIds } }),
       AuthSession.deleteMany({ user: { $in: userIds } }),
+      SessionRegistration.deleteMany({ user: { $in: userIds } }),
       User.deleteMany({ _id: { $in: userIds } })
     ]);
     await server.stop();
