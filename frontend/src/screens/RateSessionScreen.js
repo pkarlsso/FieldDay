@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { graphql } from '../api';
 import { CURRENT_USER_ID } from '../config';
@@ -7,8 +7,8 @@ const PURPLE = '#7C7EFF';
 const GREEN = '#2DB55D';
 
 const MUTATION = `
-  mutation SubmitRatings($sessionId: ID!, $raterId: ID!, $ratings: [RatingInput!]!) {
-    submitRatings(sessionId: $sessionId, raterId: $raterId, ratings: $ratings) {
+  mutation SubmitRatings($sessionId: ID!, $ratings: [RatingInput!]!) {
+    submitRatings(sessionId: $sessionId, ratings: $ratings) {
       success message avgRatingGiven friendRequestsSent
       updatedUsers { id name socialRating }
     }
@@ -62,7 +62,6 @@ export default function RateSessionScreen({ route, navigation }) {
     try {
       const data = await graphql(MUTATION, {
         sessionId: session.id,
-        raterId: CURRENT_USER_ID,
         ratings: ratingsInput,
       });
 

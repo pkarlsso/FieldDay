@@ -1,7 +1,8 @@
-name: Application Build
+name: CI / Application Build
 
 on:
   push:
+    branches: [main, dev]
   pull_request:
     branches: [main, dev]
   workflow_dispatch:
@@ -14,10 +15,92 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Lint and build application
+  backend-test:
+    name: Backend test
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      mongodb:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      CI: 'true'
+      MONGODB_URI: mongodb://127.0.0.1:27017/fieldday
+      PORT: '4000'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Set up Node.js 22.13
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22.13.x'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install locked workspace dependencies
+        run: npm ci
+      - name: Verify the standalone deployment bundle starts
+        run: |
+          (cd backend && zip -rq "$RUNNER_TEMP/fieldday-backend.zip" . -x '.env' 'node_modules/*')
+          mkdir -p "$RUNNER_TEMP/fieldday-backend"
+          unzip -q "$RUNNER_TEMP/fieldday-backend.zip" -d "$RUNNER_TEMP/fieldday-backend"
+          npm ci --omit=dev --prefix "$RUNNER_TEMP/fieldday-backend"
+          PORT=4001 DISABLE_NO_SHOW_RATINGS_JOB=true node "$RUNNER_TEMP/fieldday-backend/src/index.js" > "$RUNNER_TEMP/bundle.log" 2>&1 &
+          bundle_pid=$!
+          trap 'kill "$bundle_pid" 2>/dev/null || true' EXIT
+          if ! curl --fail --retry 20 --retry-all-errors --retry-delay 2 http://localhost:4001/health; then
+            cat "$RUNNER_TEMP/bundle.log"
+            exit 1
+          fi
+      # The session and chat tests call the running server over HTTP, so they
+      # run in the same step as the server.
+      - name: Start backend, verify health and run HTTP tests
+        run: |
+          npm run start --workspace backend > backend.log 2>&1 &
+          backend_pid=$!
+          trap 'kill "$backend_pid" 2>/dev/null || true' EXIT
+          curl --fail --retry 20 --retry-all-errors --retry-delay 2 http://localhost:4000/health
+          npm run test:integration
+          npm run test:chat
+      # These scripts set a non-zero exit code when an assertion fails, so a
+      # failing test fails the job. They clean up the records they create.
+      - name: Integration tests
+        run: |
+          npm run test:authorization
+          npm run test:profile-setup
+          npm run test:session-membership
+          npm run test:session-visibility
+          npm run test:session-lifecycle
+          npm run test:sport-preferences
+          npm run test:realtime
+          npm run test:cooldown
+          npm run test:attendance
+          npm run test:accounts
+
+  checks:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Validate backend
+            command: npm run check:backend
+            artifact_path: ''
+          - name: Unit tests
+            command: npm run test:unit
+            artifact_path: ''
+          - name: Build frontend
+            command: npm run build
+            artifact_path: frontend/dist/
     env:
       CI: 'true'
       EXPO_NO_TELEMETRY: '1'
@@ -27,23 +110,84 @@ jobs:
         with:
           persist-credentials: false
       - name: Set up Node.js 22.13
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22.13.x'
           cache: npm
           cache-dependency-path: package-lock.json
       - name: Install locked workspace dependencies
         run: npm ci
-      - name: Run ESLint
-        run: npm run lint
-      - name: Validate backend syntax and schema
-        run: npm run check:backend
-      - name: Build Expo production bundles for web, Android, and iOS
-        run: npm run build
+      - name: Run check
+        run: ${{ matrix.command }}
+      - name: Record build version
+        if: matrix.artifact_path != ''
+        id: version
+        run: |
+          VERSION=$(node -p "require('./frontend/app.json').expo.version")
+          VERSION="$VERSION" node -e "const fs=require('fs'); fs.writeFileSync('frontend/dist/build-info.json', JSON.stringify({version: process.env.VERSION, commit: process.env.GITHUB_SHA}, null, 2) + '\\n')"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
       - name: Upload application build artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: matrix.artifact_path != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: fieldday-bundles-${{ github.sha }}
-          path: frontend/dist/
+          name: fieldday-bundles-${{ steps.version.outputs.version }}-${{ github.sha }}
+          path: ${{ matrix.artifact_path }}
           if-no-files-found: error
           retention-days: 7
+
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      CI: 'true'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Set up Node.js 22.13
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22.13.x'
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install locked workspace dependencies
+        run: npm ci
+      - name: Generate CycloneDX SBOM
+        run: npm run sbom
+      - name: Upload SBOM
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fieldday-sbom-${{ github.sha }}
+          path: doc/SBOM.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Commit SBOM to SBOM branch
+        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Keep the generated file while switching to the existing output branch.
+          mv doc/SBOM.json "$RUNNER_TEMP/fieldday-sbom.json"
+          auth=$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::$auth"
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth"
+          git fetch origin SBOM
+          git checkout --detach FETCH_HEAD
+          mkdir -p doc
+          cp "$RUNNER_TEMP/fieldday-sbom.json" doc/SBOM.json
+          git add doc/SBOM.json
+          if git diff --cached --quiet -- doc/SBOM.json; then
+            echo 'SBOM is unchanged.'
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m 'chore: update SBOM'
+            git push origin HEAD:refs/heads/SBOM
+          fi
