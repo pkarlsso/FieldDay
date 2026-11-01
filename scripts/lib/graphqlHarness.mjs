@@ -16,11 +16,6 @@ import SessionRegistration from '../../backend/src/models/SessionRegistration.mj
 
 export const HOUR = 60 * 60 * 1000;
 
-// Test users start in the top rating tier, which has no limit on how many
-// sessions they create or join. A new account's rating of 0 allows one every
-// 30 days (participationLimits.mjs), and these tests need more than that.
-export const UNLIMITED_RATING = 5;
-
 export async function startHarness(tag) {
   await mongoose.connect(getConfig().mongoUri);
   const server = new ApolloServer({ typeDefs, resolvers });
@@ -53,7 +48,7 @@ export async function startHarness(tag) {
     return Promise.all(names.map((name) => {
       const email = `${tag}-${name}@example.test`;
       createdEmails.push(email);
-      return User.create({ name, email, socialRating: UNLIMITED_RATING, ...fields });
+      return User.create({ name, email, ...fields });
     }));
   }
 
