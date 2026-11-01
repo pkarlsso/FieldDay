@@ -178,5 +178,6 @@ jobs:
             echo 'SBOM is unchanged.'
           else
             git commit -m 'chore: update SBOM'
-            git -c "http.extraheader=AUTHORIZATION: bearer ${GITHUB_TOKEN}" push origin HEAD:dev
+            auth_header=$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w 0)
+            git -c "http.extraheader=AUTHORIZATION: basic ${auth_header}" push origin HEAD:dev
           fi
