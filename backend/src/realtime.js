@@ -33,7 +33,8 @@ function closeRealtime() {
   return closing ? closing.close() : undefined;
 }
 
-// reason: "created", "joined", "left", "started" or "ended".
+// reason: "created", "edited", "cancelled", "joined", "left", "checked_in",
+// "started" or "ended".
 function publishSessionUpdate(sessionId, reason) {
   if (!io || !sessionId) return;
   io.emit(SESSION_UPDATED, { sessionId: String(sessionId), reason, at: new Date().toISOString() });

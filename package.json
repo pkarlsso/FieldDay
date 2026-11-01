@@ -24,6 +24,7 @@
     "test:session-visibility": "node scripts/test-session-visibility.mjs",
     "test:authorization": "node scripts/test-authorization.mjs",
     "test:profile-setup": "node scripts/test-profile-setup.mjs",
+    "test:attendance": "node scripts/test-attendance-and-host-changes.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
     "export:shaped": "node backend/scripts/export-shaped-data.mjs",
     "test:shaped-export": "node scripts/test-shaped-export.mjs",

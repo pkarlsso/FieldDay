@@ -133,7 +133,10 @@ try {
   console.log('✓ Capacity, skill level and end time are visible through discovery');
 
   // ---- #204 automatic ending ---------------------------------------------
+  // New sessions take attendance from check-ins (#279); the peer no-show vote
+  // tested here still applies to sessions created before that.
   const sid = created.id;
+  await Session.updateOne({ _id: sid }, { checkInRequired: false });
   for (const user of [a, b, c]) await ok(JOIN, { s: sid }, user);
   await fails(JOIN, { s: sid }, outsider, 'Session is full');
 
@@ -205,6 +208,7 @@ try {
 
   // ---- No-show window and older sessions ----------------------------------
   const late = (await ok(CREATE, { input: validInput() }, host)).createSession;
+  await Session.updateOne({ _id: late.id }, { checkInRequired: false });
   await ok(JOIN, { s: late.id }, a);
   await moveSession(late.id, 52, -50);
   const lateView = (await ok(GET, { id: late.id }, a)).getSession;
