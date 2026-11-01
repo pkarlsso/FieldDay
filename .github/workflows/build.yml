@@ -141,7 +141,6 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
-      pull-requests: write
     env:
       CI: 'true'
     steps:
@@ -167,14 +166,28 @@ jobs:
           path: doc/SBOM.json
           if-no-files-found: error
           retention-days: 30
-      - name: Open or update SBOM pull request
+      - name: Commit SBOM to SBOM branch
         if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
-        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
-        with:
-          add-paths: doc/SBOM.json
-          branch: automation/update-sbom
-          base: dev
-          commit-message: 'chore: update SBOM'
-          title: 'chore: update SBOM'
-          body: 'Update the generated CycloneDX SBOM for the current dev build.'
-          delete-branch: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Keep the generated file while switching to the existing output branch.
+          mv doc/SBOM.json "$RUNNER_TEMP/fieldday-sbom.json"
+          auth=$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')
+          echo "::add-mask::$auth"
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth"
+          git fetch origin SBOM
+          git checkout --detach FETCH_HEAD
+          mkdir -p doc
+          cp "$RUNNER_TEMP/fieldday-sbom.json" doc/SBOM.json
+          git add doc/SBOM.json
+          if git diff --cached --quiet -- doc/SBOM.json; then
+            echo 'SBOM is unchanged.'
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m 'chore: update SBOM'
+            git push origin HEAD:refs/heads/SBOM
+          fi
