@@ -22,7 +22,7 @@ import { RESET_CODE_TTL_MS } from '../utils/passwordReset.js';
 import { createNotification, getPreferences } from '../utils/notifications.js';
 import { createMediaLoader, storeProfilePhoto, toDataUri } from '../utils/media.js';
 import { VISIBILITIES, canViewSession, visibleSessionsFilter, visibilityOf } from '../utils/sessionAccess.js';
-import { recommendSessions, recommendationQuery, validateRecommendationOptions } from '../services/recommendations.js';
+import { recommendSessions, explainGorseSessions, recommendationQuery, validateRecommendationOptions } from '../services/recommendations.js';
 import {
   bestEffort as bestEffortGorse,
   gorseConfig,
@@ -1036,7 +1036,10 @@ const resolvers = {
         .populate('participants')
         .populate('host')
         .limit(300);
-      const baseline = recommendSessions(candidates, user, origin, limit);
+      // Score every eligible candidate so Gorse picks outside the fallback top
+      // results still get accurate distances and explanations.
+      const scored = recommendSessions(candidates, user, origin, candidates.length);
+      const baseline = scored.slice(0, limit);
       if (candidates.length === 0) return baseline;
       try {
         const config = gorseConfig();
@@ -1049,16 +1052,8 @@ const resolvers = {
           gorseId('session', session._id, config.idSecret),
           session,
         ]));
-        const baselineById = new Map(baseline.map((entry) => [String(entry.session._id), entry]));
-        const ranked = rankedIds
-          .map((id) => byGorseId.get(id))
-          .filter(Boolean)
-          .slice(0, limit)
-          .map((session) => {
-            const entry = baselineById.get(String(session._id))
-              || { session, score: 0, reasons: [] };
-            return { ...entry, reasons: [...entry.reasons, 'Ranked by Gorse'] };
-          });
+        const selected = rankedIds.map((id) => byGorseId.get(id)).filter(Boolean);
+        const ranked = explainGorseSessions(selected, scored, limit);
         if (ranked.length) {
           await recordRecommendationReads(user, ranked.map(({ session }) => session));
         }
