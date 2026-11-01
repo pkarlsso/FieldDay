@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Avatar, Card, HeaderActionRow, IconButton, NotificationButton, PrimaryButton, ScreenHeader, SportIcon, Stat } from '../components/ui';
 import { colors } from '../theme';
 import { useCurrentUser } from '../useCurrentUser';
+import { describeSteps, formatAvailability } from '../profileSetup';
 import { endSession } from '../../session';
 
 export default function ProfileScreen({ navigation }) {
@@ -37,11 +38,25 @@ export default function ProfileScreen({ navigation }) {
 
   const sportSkills = user.sportSkills || [];
   const friends = user.friends || [];
+  const availability = formatAvailability(user.availability);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       {header}
       <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 120, gap: 16 }}>
+        {!user.profileComplete ? (
+          <Card style={{ backgroundColor: colors.goldSoft, gap: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Ionicons name="alert-circle-outline" size={20} color={colors.ink} />
+              <Text style={{ color: colors.ink, fontSize: 17, fontWeight: '900' }}>Profile setup incomplete</Text>
+            </View>
+            <Text style={{ color: colors.text, lineHeight: 20 }}>
+              Add {describeSteps(user.profileSetupMissing)} so other players know who they are meeting.
+            </Text>
+            <PrimaryButton label="Finish setup" icon="create-outline" onPress={() => navigation.navigate('EditProfile')} />
+          </Card>
+        ) : null}
+
         <Card style={{ alignItems: 'center', paddingVertical: 26 }}>
           <Avatar name={user.name} uri={user.profilePicture} color={colors.purple} size={86} />
           <Text style={{ color: colors.ink, fontSize: 25, fontWeight: '900', marginTop: 14 }}>{user.name}</Text>
@@ -80,6 +95,22 @@ export default function ProfileScreen({ navigation }) {
               </View>
             ))}
           </View>
+        </Card>
+
+        <Card>
+          <Text style={{ color: colors.ink, fontSize: 20, fontWeight: '900', marginBottom: 12 }}>Usually free</Text>
+          {availability.length === 0 ? (
+            <Text style={{ color: colors.muted, lineHeight: 20 }}>No availability yet. Add it from Edit Profile.</Text>
+          ) : (
+            <View style={{ gap: 6 }}>
+              {availability.map((line) => (
+                <View key={line} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="time-outline" size={16} color={colors.purple} />
+                  <Text style={{ color: colors.text, fontWeight: '700' }}>{line}</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </Card>
 
         <Card>

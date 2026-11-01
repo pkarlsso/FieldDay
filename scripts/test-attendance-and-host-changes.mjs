@@ -38,12 +38,12 @@ async function fails(query, variables, currentUser, expected) {
   assert.ok(message.includes(expected), `expected "${message}" to include "${expected}"`);
 }
 
-const CREATE = 'mutation($hostId:ID!,$input:CreateSessionInput!){createSession(hostId:$hostId,input:$input){id}}';
-const JOIN = 'mutation($s:ID!,$u:ID!){joinSession(sessionId:$s,userId:$u){id}}';
+const CREATE = 'mutation($input:CreateSessionInput!){createSession(input:$input){id}}';
+const JOIN = 'mutation($s:ID!){joinSession(sessionId:$s){id}}';
 const CHECK_IN = `mutation($s:ID!,$lat:Float!,$lng:Float!){checkInToSession(sessionId:$s,latitude:$lat,longitude:$lng){
   id myCheckIn }}`;
 const REPORT = 'mutation($s:ID!,$n:[ID!]!){reportNoShows(sessionId:$s,noShowUserIds:$n){id}}';
-const SUBMIT = 'mutation($s:ID!,$r:ID!,$x:[RatingInput!]!){submitRatings(sessionId:$s,raterId:$r,ratings:$x){success}}';
+const SUBMIT = 'mutation($s:ID!,$x:[RatingInput!]!){submitRatings(sessionId:$s,ratings:$x){success}}';
 const GET = `query($id:ID!){getSession(id:$id){
   id status date time startsAt endsAt location locationPoint{coordinates} maxParticipants cancelledAt completedAt
   checkInRequired checkInClosesAt checkInRadiusMeters noShowDeadline myCheckIn
@@ -88,15 +88,17 @@ try {
   const [host, a, b, c, outsider] = await Promise.all(
     ['host', 'a', 'b', 'c', 'outsider'].map((name) => {
       createdEmails.push(emailFor(name));
-      return User.create({ name, email: emailFor(name) });
+      // A top rating has no participation limit, so the many creates and joins
+      // here aren't capped. The resolvers read it from these signed-in objects,
+      // so ratings applied in the database below don't change it.
+      return User.create({ name, email: emailFor(name), socialRating: 5 });
     })
   );
-  const hostId = idOf(host);
-  const newSession = async (overrides) => (await ok(CREATE, { hostId, input: validInput(overrides) }, host)).createSession.id;
+  const newSession = async (overrides) => (await ok(CREATE, { input: validInput(overrides) }, host)).createSession.id;
 
   // ---- #279 location-verified check-in -----------------------------------
   const sid = await newSession();
-  for (const user of [a, b, c]) await ok(JOIN, { s: sid, u: idOf(user) });
+  for (const user of [a, b, c]) await ok(JOIN, { s: sid }, user);
 
   const before = (await ok(GET, { id: sid }, a)).getSession;
   assert.equal(before.checkInRequired, true, 'new sessions use check-in');
@@ -167,16 +169,16 @@ try {
   assert.equal(ended.noShowDeadline, null, 'check-in sessions skip the no-show question');
   assert.match(ended.ratingEligibility.reason, /didn't check in/);
   assert.equal((await ok(GET, { id: sid }, a)).getSession.ratingEligibility.eligible, true, 'checked in, so a can rate straight away');
-  await fails(SUBMIT, { s: sid, r: idOf(a), x: [{ userId: idOf(c), rating: 3 }] }, null, 'didn\'t check in');
-  await fails(SUBMIT, { s: sid, r: idOf(c), x: [{ userId: idOf(a), rating: 3 }] }, null, 'didn\'t check in');
+  await fails(SUBMIT, { s: sid, x: [{ userId: idOf(c), rating: 3 }] }, a, 'didn\'t check in');
+  await fails(SUBMIT, { s: sid, x: [{ userId: idOf(a), rating: 3 }] }, c, 'didn\'t check in');
   for (const [rater, others] of [[host, [a, b]], [a, [host, b]], [b, [host, a]]]) {
-    await ok(SUBMIT, { s: sid, r: idOf(rater), x: others.map((user) => ({ userId: idOf(user), rating: 5 })) });
+    await ok(SUBMIT, { s: sid, x: others.map((user) => ({ userId: idOf(user), rating: 5 })) }, rater);
   }
   assert.equal((await Session.findById(sid)).rated, true, 'no-shows do not hold up "everyone rated"');
   console.log('✓ Only players who checked in rate, and only each other');
 
   const open = await newSession();
-  await ok(JOIN, { s: open, u: idOf(a) });
+  await ok(JOIN, { s: open }, a);
   await startSession(open, 5 * MINUTE);
   const hostBeforeOpen = await ratingsOf(host);
   await settleNoShowRatings();
@@ -188,7 +190,7 @@ try {
   // when the no-show check closes.
   const peer = await newSession();
   await Session.updateOne({ _id: peer }, { checkInRequired: false });
-  for (const user of [a, b, c]) await ok(JOIN, { s: peer, u: idOf(user) });
+  for (const user of [a, b, c]) await ok(JOIN, { s: peer }, user);
   await startSession(peer, 3 * HOUR);
   await ok(REPORT, { s: peer, n: [idOf(b)] }, host);
   await ok(REPORT, { s: peer, n: [idOf(b)] }, a);
@@ -210,8 +212,8 @@ try {
   const start = new Date(Date.now() + 24 * HOUR);
   start.setUTCSeconds(0, 0);
   const editable = await newSession({ startsAt: start.toISOString(), maxParticipants: 4 });
-  await ok(JOIN, { s: editable, u: idOf(a) });
-  await ok(JOIN, { s: editable, u: idOf(b) });
+  await ok(JOIN, { s: editable }, a);
+  await ok(JOIN, { s: editable }, b);
 
   await fails(EDIT, { s: editable, input: { maxParticipants: 5 } }, null, 'signed in');
   await fails(EDIT, { s: editable, input: { maxParticipants: 5 } }, a, 'Only the host');
@@ -246,7 +248,7 @@ try {
     ['New Court', moved.toISOString(), 3],
     'joined players see the edits'
   );
-  await fails(JOIN, { s: editable, u: idOf(c) }, null, 'Session is full');
+  await fails(JOIN, { s: editable }, c, 'Session is full');
   console.log('✓ Hosts can edit time, location and capacity (never below the player count)');
 
   await fails(CANCEL, { s: editable }, a, 'Only the host');
@@ -261,7 +263,7 @@ try {
     assert.ok(!listed.some((s) => s.id === editable), `cancelled sessions are not discoverable (status ${status})`);
   }
   await Session.updateOne({ _id: editable }, { $pull: { participants: b._id } });
-  await fails(JOIN, { s: editable, u: idOf(c) }, null, 'was cancelled');
+  await fails(JOIN, { s: editable }, c, 'was cancelled');
   await fails(EDIT, { s: editable, input: { maxParticipants: 6 } }, host, 'was cancelled');
   await fails(CANCEL, { s: editable }, host, 'was cancelled');
   const aMine = (await ok(MINE, {}, a)).getMySessions;

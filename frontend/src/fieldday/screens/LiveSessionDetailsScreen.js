@@ -3,20 +3,23 @@ import { ActivityIndicator, Alert, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Location from 'expo-location';
 import { Card, IconButton, PrimaryButton, ScreenHeader, StatusBadge } from '../components/ui';
+import CooldownNotice, { isCoolingDown } from '../components/CooldownNotice';
 import { colors } from '../theme';
 import { attendanceFor, checkInOpen, formatSessionRange, formatSessionTime, needsNoShowCheck, playersLabel, sessionTitle, skillLabel } from '../sessionInfo';
+import { useCurrentUser } from '../useCurrentUser';
+import { affectsSessions, useSessionUpdates } from '../useSessionUpdates';
 import { graphql } from '../../api';
 import { CURRENT_USER_ID } from '../../config';
 
 const QUERY = `query($id:ID!){ getSession(id:$id){
-  id sport startsAt endsAt location locationPoint{coordinates} skillLevel skillRange maxParticipants status
+  id sport startsAt endsAt location locationPoint{coordinates} skillLevel skillRange maxParticipants status visibility
   completedAt cancelledAt noShowDeadline participants{id name} host{id name}
   checkInRequired checkInClosesAt checkInRadiusMeters myCheckIn
   attendance{ user{id} status noShowReports checkedInAt } myNoShowReport{ noShows reportedAt }
   ratingEligibility{ eligible reason }
 } }`;
-const JOIN = `mutation($sessionId:ID!,$userId:ID!){joinSession(sessionId:$sessionId,userId:$userId){id participants{id name}}}`;
-const LEAVE = `mutation($sessionId:ID!,$userId:ID!){leaveSession(sessionId:$sessionId,userId:$userId){id participants{id name}}}`;
+const JOIN = `mutation($sessionId:ID!){joinSession(sessionId:$sessionId){id participants{id name}}}`;
+const LEAVE = `mutation($sessionId:ID!){leaveSession(sessionId:$sessionId){id participants{id name}}}`;
 const CHECK_IN = `mutation($sessionId:ID!,$latitude:Float!,$longitude:Float!){
   checkInToSession(sessionId:$sessionId,latitude:$latitude,longitude:$longitude){id myCheckIn}
 }`;
@@ -27,6 +30,11 @@ const statusBadges = {
   in_progress: { label: 'Happening now', icon: 'play-circle-outline', color: colors.gold },
   completed: { label: 'Ended', icon: 'checkmark-done', color: colors.green },
   cancelled: { label: 'Cancelled', icon: 'close-circle-outline', color: colors.coral },
+};
+
+const visibilityBadges = {
+  FRIENDS: { label: 'Friends only', icon: 'people-outline', color: colors.blue },
+  INVITE_ONLY: { label: 'Invite only', icon: 'lock-closed-outline', color: colors.blue },
 };
 
 export default function LiveSessionDetailsScreen({ route, navigation }) {
@@ -53,17 +61,29 @@ export default function LiveSessionDetailsScreen({ route, navigation }) {
 
   // Refetch on focus so no-show answers and ratings from the next screens show up here.
   useFocusEffect(useCallback(() => { load(); }, [load]));
+  // And whenever someone else joins or leaves, or the session starts or ends.
+  useSessionUpdates(useCallback((events) => {
+    if (affectsSessions(events, [sessionId])) load();
+  }, [load, sessionId]));
 
-  async function run(mutation, variables) {
+  const me = useCurrentUser();
+  const [blockedUntil, setBlockedUntil] = useState(null);
+  const cooldownUntil = blockedUntil || me?.cooldownUntil;
+
+  async function run(mutation) {
     setBusy(true);
+    let message = '';
     try {
-      await graphql(mutation, { sessionId: session.id, ...variables });
-      await load();
+      await graphql(mutation, { sessionId: session.id });
     } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
+      if (err.code === 'ACCOUNT_COOLDOWN') setBlockedUntil(err.extensions.cooldownUntil);
+      else message = err.message;
     }
+    // Refetch either way: a failed join usually means this screen was stale
+    // (someone took the last spot), so show what's actually there now.
+    await load();
+    if (message) setError(message);
+    setBusy(false);
   }
 
   // The server checks the time window and the distance to the session.
@@ -104,6 +124,8 @@ export default function LiveSessionDetailsScreen({ route, navigation }) {
   const canCheckIn = joined && !session.myCheckIn && checkInOpen(session, now);
   const missedCheckIn = joined && session.checkInRequired && !session.myCheckIn && !cancelled
     && new Date(session.checkInClosesAt) < now;
+  const full = session.participants.length >= session.maxParticipants;
+  const coolingDown = !joined && isCoolingDown(cooldownUntil);
   const owesNoShowCheck = joined && needsNoShowCheck(session);
   const canChangeNoShows = joined && ended && session.myNoShowReport
     && new Date(session.noShowDeadline) > new Date() && session.ratingEligibility.eligible;
@@ -113,7 +135,10 @@ export default function LiveSessionDetailsScreen({ route, navigation }) {
       <ScreenHeader title="Session Details" left={<IconButton icon="chevron-back" onPress={() => navigation.goBack()} />} />
       <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 120, gap: 14 }}>
         <Card style={{ gap: 8 }}>
-          <View style={{ flexDirection: 'row' }}><StatusBadge {...(statusBadges[session.status] || statusBadges.upcoming)} /></View>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <StatusBadge {...(statusBadges[session.status] || statusBadges.upcoming)} />
+            {visibilityBadges[session.visibility] ? <StatusBadge {...visibilityBadges[session.visibility]} /> : null}
+          </View>
           <Text style={{ color: colors.ink, fontSize: 22, fontWeight: '900' }}>{sessionTitle(session)}</Text>
           <Text style={{ color: colors.text }}>{formatSessionRange(session.startsAt, session.endsAt)}</Text>
           <Text style={{ color: colors.text }}>{playersLabel(session)} • {skillLabel(session)}</Text>
@@ -161,12 +186,14 @@ export default function LiveSessionDetailsScreen({ route, navigation }) {
           </Card>
         ) : null}
 
-        {!ended && !cancelled && !isHost ? (
+        {!ended && !cancelled && !isHost && coolingDown ? <CooldownNotice until={cooldownUntil} /> : null}
+
+        {!ended && !cancelled && !isHost && !coolingDown ? (
           <PrimaryButton
-            label={joined ? 'Leave Session' : 'Join Session'}
+            label={joined ? 'Leave Session' : full ? 'Session is full' : 'Join Session'}
             variant={joined ? 'destructive' : undefined}
-            disabled={busy}
-            onPress={() => run(joined ? LEAVE : JOIN, { userId: CURRENT_USER_ID })}
+            disabled={busy || (!joined && full)}
+            onPress={() => run(joined ? LEAVE : JOIN)}
           />
         ) : null}
 

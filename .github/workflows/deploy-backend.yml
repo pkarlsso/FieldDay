@@ -1,4 +1,4 @@
-name: Deploy Backend to AWS
+name: Release / Backend Deployment
 
 on:
   push:
@@ -25,7 +25,7 @@ env:
 
 jobs:
   deploy:
-    name: Deploy backend
+    name: Deploy Backend
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

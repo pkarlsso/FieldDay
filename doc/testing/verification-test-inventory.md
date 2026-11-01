@@ -67,10 +67,10 @@ The RVTM uses `TC-FR2-03` twice for different tests. This table names them `TC-F
 ## Evidence available now
 
 - [PR #91](https://github.com/pkarlsso/FieldDay/pull/91) is merged: MongoDB session create, timestamp, GeoJSON, join, duplicate join, and leave integration path.
-- [PR #127](https://github.com/pkarlsso/FieldDay/pull/127) is open and green: iOS build-path fix. [Application Build log](https://github.com/pkarlsso/FieldDay/actions/runs/35546154185).
-- [PR #128](https://github.com/pkarlsso/FieldDay/pull/128) is open and green: real seven-tab frontend promotion. [Application Build log](https://github.com/pkarlsso/FieldDay/actions/runs/35547079057).
+- [PR #127](https://github.com/pkarlsso/FieldDay/pull/127) is open and green: iOS build-path fix. [CI / Application Build log](https://github.com/pkarlsso/FieldDay/actions/runs/35546154185).
+- [PR #128](https://github.com/pkarlsso/FieldDay/pull/128) is open and green: real seven-tab frontend promotion. [CI / Application Build log](https://github.com/pkarlsso/FieldDay/actions/runs/35547079057).
 - [PR #131](https://github.com/pkarlsso/FieldDay/pull/131) adds invalid timestamp/coordinates and roster-capacity coverage. It needs an isolated CI MongoDB database before it can run in GitHub Actions.
-- [PR #137](https://github.com/pkarlsso/FieldDay/pull/137) restores native Apple Maps address autocomplete as a dedicated feature. [Application Build log](https://github.com/pkarlsso/FieldDay/actions/runs/35547162456).
+- [PR #137](https://github.com/pkarlsso/FieldDay/pull/137) restores native Apple Maps address autocomplete as a dedicated feature. [CI / Application Build log](https://github.com/pkarlsso/FieldDay/actions/runs/35547162456).
 
 ## CI plan
 

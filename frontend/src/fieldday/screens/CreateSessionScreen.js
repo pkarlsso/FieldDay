@@ -5,15 +5,16 @@ import * as Location from 'expo-location';
 import MapView, { Marker } from 'react-native-maps';
 import { addResultsListener, isAvailable as hasAppleSearch, resolve, search } from '../../../modules/apple-search-completer/src';
 import { Card, IconButton, Pill, PrimaryButton, ScreenHeader } from '../components/ui';
+import CooldownNotice, { isCoolingDown } from '../components/CooldownNotice';
 import { colors, sports } from '../theme';
-import { CAPACITY_LIMITS, DEFAULT_SESSION_LENGTH_MS, SKILL_LEVELS, validateSessionForm } from '../sessionInfo';
+import { CAPACITY_LIMITS, DEFAULT_SESSION_LENGTH_MS, SKILL_LEVELS, VISIBILITY_OPTIONS, validateSessionForm } from '../sessionInfo';
+import { useCurrentUser } from '../useCurrentUser';
 import { graphql } from '../../api';
-import { CURRENT_USER_ID } from '../../config';
 import logger from '../../logger';
 
 const MUTATION = `
-  mutation CreateSession($hostId: ID!, $input: CreateSessionInput!) {
-    createSession(hostId: $hostId, input: $input) { id sport startsAt location }
+  mutation CreateSession($input: CreateSessionInput!) {
+    createSession(input: $input) { id sport startsAt location visibility }
   }
 `;
 const EDIT_MUTATION = `
@@ -76,11 +77,20 @@ export default function CreateSessionScreen({ navigation, route }) {
   const [locationConfirmed, setLocationConfirmed] = useState(true);
   const [maxParticipants, setMaxParticipants] = useState(editing?.maxParticipants ?? DEFAULT_CAPACITY);
   const [skillLevel, setSkillLevel] = useState(editing?.skillLevel ?? null);
+  const [visibility, setVisibility] = useState('PUBLIC');
+  const [inviteeIds, setInviteeIds] = useState([]);
   const [errors, setErrors] = useState({});
+  // Friends are who an invite-only session can be offered to.
+  const friends = useCurrentUser()?.friends || [];
   const mapRef = useRef(null);
   const [suggestions, setSuggestions] = useState([]);
   const [geocoding, setGeocoding] = useState(false);
   const [loading, setLoading] = useState(false);
+  const user = useCurrentUser();
+  // Set when the server rejects a create because of a cooldown the profile
+  // didn't show yet (e.g. a rating landed while this screen was open).
+  const [blockedUntil, setBlockedUntil] = useState(null);
+  const cooldownUntil = blockedUntil || user?.cooldownUntil;
 
   useEffect(() => {
     if (location.trim().length < 3) {
@@ -178,6 +188,10 @@ export default function CreateSessionScreen({ navigation, route }) {
     setMaxParticipants((value) => Math.min(CAPACITY_LIMITS.max, Math.max(min, value + delta)));
   }
 
+  function toggleInvitee(id) {
+    setInviteeIds((ids) => (ids.includes(id) ? ids.filter((value) => value !== id) : [...ids, id]));
+  }
+
   function resetForm() {
     setSport(null);
     const start = defaultStartAt();
@@ -188,15 +202,19 @@ export default function CreateSessionScreen({ navigation, route }) {
     setLocationConfirmed(true);
     setMaxParticipants(DEFAULT_CAPACITY);
     setSkillLevel(null);
+    setVisibility('PUBLIC');
+    setInviteeIds([]);
     setErrors({});
   }
 
   async function create() {
-    const formErrors = validateSessionForm({ sport, startsAt, endsAt, location, locationConfirmed, maxParticipants, skillLevel, joinedCount });
-    // Sport and skill level can't be edited (older sessions may have no level).
+    const formErrors = validateSessionForm({ sport, startsAt, endsAt, location, locationConfirmed, maxParticipants, skillLevel, joinedCount, visibility, inviteeIds });
+    // Sport, skill level and visibility can't be edited (older sessions may have
+    // no level).
     if (editing) {
       delete formErrors.sport;
       delete formErrors.skillLevel;
+      delete formErrors.visibility;
     }
     setErrors(formErrors);
     if (Object.keys(formErrors).length) {
@@ -227,7 +245,6 @@ export default function CreateSessionScreen({ navigation, route }) {
     }
     try {
       const data = await graphql(MUTATION, {
-        hostId: CURRENT_USER_ID,
         input: {
           sport,
           startsAt: startsAt.toISOString(),
@@ -236,13 +253,16 @@ export default function CreateSessionScreen({ navigation, route }) {
           locationPoint,
           maxParticipants,
           skillLevel,
+          visibility,
+          ...(visibility === 'INVITE_ONLY' ? { inviteeIds } : {}),
         },
       });
       Alert.alert('Session created', `${data.createSession.sport} at ${data.createSession.location}`);
       resetForm();
       navigation.navigate('Sessions');
     } catch (error) {
-      Alert.alert('Could not create session', error.message);
+      if (error.code === 'ACCOUNT_COOLDOWN') setBlockedUntil(error.extensions.cooldownUntil);
+      else Alert.alert('Could not create session', error.message);
     } finally {
       setLoading(false);
     }
@@ -255,6 +275,7 @@ export default function CreateSessionScreen({ navigation, route }) {
         left={editing ? <IconButton icon="chevron-back" onPress={() => navigation.goBack()} /> : undefined}
       />
       <ScrollView contentContainerStyle={{ padding: 18, gap: 14 }}>
+        {editing ? null : <CooldownNotice until={cooldownUntil} />}
         <Card style={{ gap: 10 }}>
           {editing ? (
             <Text style={{ color: colors.ink, fontSize: 18, fontWeight: '900' }}>{editing.sport}</Text>
@@ -322,6 +343,25 @@ export default function CreateSessionScreen({ navigation, route }) {
                 ))}
               </View>
               <FieldError message={errors.skillLevel} />
+              <Text style={styles.label}>Who can find and join</Text>
+              <View style={styles.pillRow}>
+                {VISIBILITY_OPTIONS.map((option) => (
+                  <Pill key={option.value} label={option.label} active={visibility === option.value} onPress={() => setVisibility(option.value)} />
+                ))}
+              </View>
+              <Text style={{ color: colors.muted }}>{VISIBILITY_OPTIONS.find((option) => option.value === visibility).detail}</Text>
+              {visibility === 'INVITE_ONLY' ? (
+                friends.length ? (
+                  <View style={styles.pillRow}>
+                    {friends.map((friend) => (
+                      <Pill key={friend.id} label={friend.name} active={inviteeIds.includes(friend.id)} onPress={() => toggleInvitee(friend.id)} />
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={{ color: colors.muted }}>You have no friends to invite yet. Add the people you play with when you rate a session.</Text>
+                )
+              ) : null}
+              <FieldError message={errors.visibility} />
             </>
           )}
           <Text style={styles.label}>Location</Text>
@@ -337,7 +377,7 @@ export default function CreateSessionScreen({ navigation, route }) {
           <PrimaryButton
             label={editing ? (loading ? 'Saving...' : 'Save Changes') : (loading ? 'Creating...' : 'Create Session')}
             onPress={create}
-            disabled={loading}
+            disabled={loading || (!editing && isCoolingDown(cooldownUntil))}
           />
         </Card>
       </ScrollView>

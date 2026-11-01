@@ -4,9 +4,9 @@ import { CommonActions, usePreventRemove } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { graphql } from '../api';
-import { CURRENT_USER_ID } from '../config';
 import { Avatar, Card, IconButton, Pill, PrimaryButton, ScreenHeader, SportIcon } from '../fieldday/components/ui';
 import { colors } from '../fieldday/theme';
+import { DAY_PERIODS, WEEKDAYS, availabilityByDay, availabilityList, describeSteps, missingSetupSteps } from '../fieldday/profileSetup';
 import logger from '../logger';
 
 const LEVELS = [1, 2, 3, 4, 5];
@@ -17,10 +17,11 @@ const LIMITS = { name: 50, bio: 300, hometown: 80, sport: 30, sportCount: 10 };
 const PICTURE_SIZE = 256;
 
 const QUERY = `
-  query GetProfile($id: ID!) {
-    getUser(id: $id) {
+  query GetProfile {
+    me {
       id name bio hometown profilePicture
       sportSkills { sport skillLevel }
+      availability { day periods }
     }
   }
 `;
@@ -28,17 +29,29 @@ const QUERY = `
 const MUTATION = `
   mutation UpdateProfile($input: UpdateProfileInput!) {
     updateProfile(input: $input) {
-      id name bio hometown profilePicture
+      id name bio hometown profilePicture profileComplete
       sportSkills { sport skillLevel }
+      availability { day periods }
     }
   }
 `;
 
-export default function EditProfileScreen({ navigation }) {
+const UPLOAD_PHOTO = `
+  mutation UploadProfilePhoto($image: String!) {
+    uploadProfilePhoto(image: $image) { id }
+  }
+`;
+
+// Also used as first-run setup (route param `onboarding`): no way back, and
+// saving goes on to the main app.
+export default function EditProfileScreen({ navigation, route }) {
+  const onboarding = Boolean(route?.params?.onboarding);
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
   const [hometown, setHometown] = useState('');
   const [skills, setSkills] = useState([]);
+  // { MON: ['EVENING'], SAT: ['MORNING', 'AFTERNOON'] }
+  const [availability, setAvailability] = useState({});
   const [profilePicture, setProfilePicture] = useState('');
   const [newSport, setNewSport] = useState('');
   const [loading, setLoading] = useState(true);
@@ -55,22 +68,24 @@ export default function EditProfileScreen({ navigation }) {
     setLoading(true);
     setError(null);
     try {
-      const { getUser } = await graphql(QUERY, { id: CURRENT_USER_ID });
+      const { me } = await graphql(QUERY);
       const loaded = {
-        name: getUser.name || '',
-        bio: getUser.bio || '',
-        hometown: getUser.hometown || '',
-        profilePicture: getUser.profilePicture || '',
-        skills: getUser.sportSkills.map(({ sport, skillLevel }) => ({
+        name: me.name || '',
+        bio: me.bio || '',
+        hometown: me.hometown || '',
+        profilePicture: me.profilePicture || '',
+        skills: me.sportSkills.map(({ sport, skillLevel }) => ({
           sport,
           skillLevel: Math.min(5, Math.max(1, Math.round(skillLevel))),
         })),
+        availability: availabilityByDay(me.availability),
       };
       setName(loaded.name);
       setBio(loaded.bio);
       setHometown(loaded.hometown);
       setProfilePicture(loaded.profilePicture);
       setSkills(loaded.skills);
+      setAvailability(loaded.availability);
       setOriginal(loaded);
     } catch (err) {
       setError(err.message);
@@ -94,6 +109,7 @@ export default function EditProfileScreen({ navigation }) {
     || hometown !== original.hometown
     || pictureChanged
     || JSON.stringify(skills) !== JSON.stringify(original.skills)
+    || JSON.stringify(availabilityList(availability)) !== JSON.stringify(availabilityList(original.availability))
   );
 
   // Catches every way out (back arrow, Cancel, swipe, Android back, browser
@@ -136,6 +152,15 @@ export default function EditProfileScreen({ navigation }) {
     setSkills(skills.map((s) => (s.sport === sport ? { ...s, skillLevel } : s)));
 
   const removeSport = (sport) => setSkills(skills.filter((s) => s.sport !== sport));
+
+  const togglePeriod = (day, period) => {
+    const current = availability[day] || [];
+    setAvailability({
+      ...availability,
+      [day]: current.includes(period) ? current.filter((p) => p !== period) : [...current, period],
+    });
+    setError(null);
+  };
 
   const choosePicture = async () => {
     setError(null);
@@ -180,20 +205,31 @@ export default function EditProfileScreen({ navigation }) {
     setError(null);
   };
 
+  const afterSave = onboarding
+    ? CommonActions.reset({ index: 0, routes: [{ name: 'MainTabs' }] })
+    : CommonActions.goBack();
+
   // Saves the profile and then performs `then` (a navigation action) on success.
-  const handleSave = async (then = CommonActions.goBack()) => {
+  const handleSave = async (then = afterSave) => {
     setBlockedAction(null);
-    if (!name.trim()) {
-      setError('Please enter a name.');
+    const missing = missingSetupSteps({ name, skills, availability: availabilityList(availability) });
+    if (missing.length) {
+      setError(`Please add ${describeSteps(missing)} before saving.`);
       return;
     }
 
     setSaving(true);
     setError(null);
     try {
-      const input = { name, bio, hometown, sportSkills: skills };
-      // Only upload the picture when it changed, since it is the bulk of the request.
-      if (pictureChanged) input.profilePicture = profilePicture;
+      const input = { name, bio, hometown, sportSkills: skills, availability: availabilityList(availability) };
+      // The photo is uploaded on its own and the profile stores a reference to
+      // it. Only upload when it changed, since it is the bulk of the request.
+      if (pictureChanged && profilePicture) {
+        const { uploadProfilePhoto } = await graphql(UPLOAD_PHOTO, { image: profilePicture });
+        input.profilePhotoId = uploadProfilePhoto.id;
+      } else if (pictureChanged) {
+        input.profilePhotoId = ''; // removes the photo
+      }
       await graphql(MUTATION, { input });
       setLeaveAction(then);
     } catch (err) {
@@ -207,7 +243,9 @@ export default function EditProfileScreen({ navigation }) {
     setBlockedAction(null);
   };
 
-  const header = (
+  const header = onboarding ? (
+    <ScreenHeader eyebrow="Welcome to FieldDay" title="Set up your profile" />
+  ) : (
     <ScreenHeader
       title="Edit Profile"
       left={<IconButton icon="chevron-back" onPress={() => navigation.goBack()} />}
@@ -231,17 +269,26 @@ export default function EditProfileScreen({ navigation }) {
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       {header}
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {onboarding ? (
+          <Card>
+            <Text style={styles.intro}>
+              Add the sports you play and when you are usually free, so other players know who they are meeting. A photo, bio and hometown are optional.
+            </Text>
+          </Card>
+        ) : null}
+
         <Card style={styles.pictureCard}>
           <Avatar name={name || '?'} uri={profilePicture} color={colors.purple} size={96} />
           <View style={styles.pictureActions}>
             <Pill label={profilePicture ? 'Change photo' : 'Add photo'} active onPress={choosePicture} />
             {profilePicture ? <Pill label="Remove" onPress={removePicture} /> : null}
           </View>
+          <Text style={styles.required}>Profile photo · optional</Text>
         </Card>
 
         <Card>
           <Text style={styles.sectionTitle}>About you</Text>
-          <Text style={styles.label}>Name or username</Text>
+          <Text style={styles.label}>Name or username · required</Text>
           <TextInput
             style={styles.input}
             value={name}
@@ -251,7 +298,7 @@ export default function EditProfileScreen({ navigation }) {
             placeholderTextColor={colors.muted}
           />
 
-          <Text style={styles.label}>Hometown</Text>
+          <Text style={styles.label}>Hometown · optional</Text>
           <TextInput
             style={styles.input}
             value={hometown}
@@ -261,7 +308,7 @@ export default function EditProfileScreen({ navigation }) {
             placeholderTextColor={colors.muted}
           />
 
-          <Text style={styles.label}>Bio</Text>
+          <Text style={styles.label}>Bio · optional</Text>
           <TextInput
             style={[styles.input, styles.bioInput]}
             value={bio}
@@ -276,7 +323,7 @@ export default function EditProfileScreen({ navigation }) {
 
         <Card>
           <Text style={styles.sectionTitle}>Sports preferences</Text>
-          <Text style={styles.hint}>Skill level: 1 = just starting out, 5 = very experienced</Text>
+          <Text style={styles.hint}>Required: add at least one. Skill level: 1 = just starting out, 5 = very experienced</Text>
           <View style={{ gap: 10 }}>
             {skills.map(({ sport, skillLevel }) => (
               <View key={sport} style={styles.skillCard}>
@@ -326,11 +373,33 @@ export default function EditProfileScreen({ navigation }) {
           )}
         </Card>
 
+        <Card>
+          <Text style={styles.sectionTitle}>Weekly availability</Text>
+          <Text style={styles.hint}>Required: tap when you are usually free to play.</Text>
+          <View style={{ gap: 8 }}>
+            {WEEKDAYS.map((day) => (
+              <View key={day.value} style={styles.availabilityRow}>
+                <Text style={styles.dayLabel}>{day.label}</Text>
+                <View style={styles.periodRow}>
+                  {DAY_PERIODS.map((period) => (
+                    <Pill
+                      key={period.value}
+                      label={period.label}
+                      active={Boolean(availability[day.value]?.includes(period.value))}
+                      onPress={() => togglePeriod(day.value, period.value)}
+                    />
+                  ))}
+                </View>
+              </View>
+            ))}
+          </View>
+        </Card>
+
         {error && <Text style={styles.errorText}>{error}</Text>}
         {saving
           ? <ActivityIndicator color={colors.purple} style={{ paddingVertical: 15 }} />
-          : <PrimaryButton label="Save Changes" icon="checkmark-circle-outline" onPress={() => handleSave()} />}
-        <PrimaryButton label="Cancel" variant="secondary" onPress={() => navigation.goBack()} disabled={saving} />
+          : <PrimaryButton label={onboarding ? 'Finish setup' : 'Save Changes'} icon="checkmark-circle-outline" onPress={() => handleSave()} />}
+        {onboarding ? null : <PrimaryButton label="Cancel" variant="secondary" onPress={() => navigation.goBack()} disabled={saving} />}
       </ScrollView>
 
       <Modal visible={!!blockedAction} transparent animationType="fade" onRequestClose={() => setBlockedAction(null)}>
@@ -364,6 +433,11 @@ const styles = StyleSheet.create({
   keepEditingText: { color: colors.purple, fontWeight: '900', fontSize: 15 },
   pictureCard: { alignItems: 'center', paddingVertical: 22 },
   pictureActions: { flexDirection: 'row', gap: 8, marginTop: 14 },
+  required: { fontSize: 12, color: colors.muted, marginTop: 8 },
+  intro: { color: colors.text, fontSize: 15, lineHeight: 21 },
+  availabilityRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  dayLabel: { width: 36, fontWeight: '900', color: colors.ink },
+  periodRow: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   sectionTitle: { color: colors.ink, fontSize: 20, fontWeight: '900', marginBottom: 4 },
   label: { fontSize: 13, fontWeight: '800', color: colors.text, marginTop: 14, marginBottom: 6 },
   hint: { fontSize: 12, color: colors.muted, marginTop: 4, marginBottom: 10 },

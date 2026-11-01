@@ -56,8 +56,19 @@ function readBearerToken(req) {
   return scheme === 'Bearer' && token ? token : null;
 }
 
-// Resolves the signed-in user for a request, or null. An unknown or expired
-// token is treated as "not signed in" rather than an error so public
+// Demo-only switch that lets sign up and login hand out a session token
+// without the emailed 2FA code. It changes how a token is first issued, never
+// how one is checked: every request still has to carry a valid token, and the
+// user is still taken from that token. Leave AUTH_DEMO_BYPASS unset for real
+// users.
+function demoAuthBypassEnabled() {
+  return process.env.AUTH_DEMO_BYPASS === 'true';
+}
+
+// Resolves the signed-in user for a request, or null. This is the only place
+// the server decides who is making a request; resolvers read it from
+// context.currentUser and never from IDs in the request body. An unknown or
+// expired token is treated as "not signed in" rather than an error so public
 // operations (login, sign up, ...) keep working with a stale header.
 async function authenticateRequest(req) {
   const session = await findActiveSession(readBearerToken(req));
@@ -71,5 +82,6 @@ export {
   restoreAuthSession,
   revokeAuthSession,
   revokeAllAuthSessions,
+  demoAuthBypassEnabled,
   authenticateRequest
 };

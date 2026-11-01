@@ -1,6 +1,7 @@
 import { ActivityIndicator, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Avatar, Card, HeaderActionRow, NotificationButton, PrimaryButton, ScreenHeader, SportIcon, Stat } from '../components/ui';
+import CooldownNotice from '../components/CooldownNotice';
 import { colors } from '../theme';
 import { buildActivity, formatSessionRange, formatSessionTime, groupMySessions, playersLabel, sessionTitle, skillLabel } from '../sessionInfo';
 import { useMySessions } from '../useMySessions';
@@ -59,6 +60,7 @@ export default function LiveHomeScreen({ navigation }) {
         contentContainerStyle={{ padding: 18, paddingBottom: 120, gap: 16 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.purple} />}
       >
+        <CooldownNotice until={user?.cooldownUntil} />
         <Card style={{ backgroundColor: colors.purple }}>
           <TouchableOpacity activeOpacity={0.86} disabled={!nextSession} onPress={() => nextSession && open(nextSession)}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>

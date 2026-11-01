@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { graphql } from '../../api';
 import PasswordChecklist, { isStrongPassword } from '../../components/PasswordChecklist';
-import { startSession } from '../../session';
+import { finishSignIn } from '../../session';
 
 const PURPLE = '#7C7EFF';
 
@@ -41,8 +41,7 @@ export default function SignUpPasswordScreen({ route, navigation }) {
       } else if (data.signUp.requiresTwoFactor) {
         navigation.navigate('TwoFactor', { email, mode: 'signup' });
       } else {
-        await startSession(data.signUp);
-        navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+        await finishSignIn(navigation, data.signUp);
       }
     } catch (err) {
       setError(err.message);

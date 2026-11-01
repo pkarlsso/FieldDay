@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { graphql } from '../../api';
 import GoogleSignInButton from './GoogleSignInButton';
-import { startSession } from '../../session';
+import { finishSignIn } from '../../session';
 
 const PURPLE = '#7C7EFF';
 
@@ -41,8 +41,7 @@ export default function LoginScreen({ route, navigation }) {
       } else if (data.login.requiresTwoFactor) {
         navigation.navigate('TwoFactor', { email: email.trim(), mode: 'login' });
       } else {
-        await startSession(data.login);
-        navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] });
+        await finishSignIn(navigation, data.login);
       }
     } catch (err) {
       setError(err.message);
