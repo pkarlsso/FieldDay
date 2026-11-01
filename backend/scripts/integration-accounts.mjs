@@ -32,6 +32,11 @@ const codes = { twoFactor: {}, reset: {} };
 mailer.sendTwoFactorEmail = async (email, code) => { codes.twoFactor[email] = code; };
 mailer.sendPasswordResetEmail = async (email, code) => { codes.reset[email] = code; };
 
+// The shared logger records uncaught errors and keeps the process alive, which
+// would let a failed assertion end the run with exit code 0. A test should stop
+// with a failing exit code instead.
+logger.exitOnError = true;
+
 const server = new ApolloServer({ typeDefs, resolvers });
 await server.start();
 
