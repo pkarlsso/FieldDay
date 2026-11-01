@@ -1,4 +1,5 @@
 import { io } from 'socket.io-client';
+import { getAuthToken } from './authToken';
 import { REALTIME_URL } from './config';
 import logger from './logger';
 
@@ -11,6 +12,10 @@ import logger from './logger';
 // that changed in between was missed and the screen should refetch it all.
 const listeners = new Set();
 let socket = null;
+// The sign-in token the connection was opened with. Updates for private
+// sessions only reach signed-in users who may see them, so a connection made
+// before signing in (or as someone else) is reopened with the current token.
+let socketToken = null;
 
 function notify(event) {
   listeners.forEach((listener) => {
@@ -23,10 +28,12 @@ function notify(event) {
 }
 
 function connect() {
-  if (socket) return;
+  if (socket && socketToken === getAuthToken()) return;
+  disconnect();
+  socketToken = getAuthToken();
   // Starts with HTTP long-polling and upgrades to a WebSocket when the network
   // allows it, so it still works behind proxies that don't pass WebSockets.
-  socket = io(REALTIME_URL, { reconnectionDelayMax: 10000 });
+  socket = io(REALTIME_URL, { reconnectionDelayMax: 10000, auth: { token: socketToken } });
   let connectedBefore = false;
   socket.on('connect', () => {
     if (connectedBefore) notify({ resync: true });

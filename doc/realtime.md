@@ -8,13 +8,29 @@ real-time features such as chat can share the same connection.
 
 1. A change happens on the server: a session is created, someone joins or
    leaves, or a session starts or ends (by the clock).
-2. The server broadcasts `session:updated` with `{ sessionId, reason, at }`.
-   `reason` is `created`, `joined`, `left`, `started` or `ended`.
+2. The server sends `session:updated` with `{ sessionId, reason, at }`.
+   `reason` is `created`, `edited`, `cancelled`, `joined`, `left`,
+   `checked_in`, `started` or `ended`.
 3. Each screen that shows that session refetches it through GraphQL.
 
 The event only says *which* session changed, never who is in it. What a client
 sees after refetching still goes through the same GraphQL rules as any other
-request, so this approach still works once private sessions exist.
+request.
+
+## Who gets an event
+
+Even a session id and a reason reveal that a session exists and when people
+join it, so events follow the same rule as `canViewSession`:
+
+- **Public sessions:** every connection, signed in or not.
+- **Friends-only and invite-only sessions:** only the host, the players, and
+  the host's friends or the invitees. A player who leaves still gets that
+  `left` event.
+
+The app sends its sign-in token when it connects (`auth: { token }`), and each
+signed-in connection joins a `user:<id>` room that private events are sent to.
+A connection without a valid token only gets public-session events. The app
+reconnects when the signed-in user changes.
 
 Starting and ending happen by the clock, not through a mutation, so the server
 checks every 30 seconds for sessions that crossed either time
@@ -55,4 +71,6 @@ connection, just less promptly.
 
 `npm run test:realtime` checks events for create, join, leave, start and end;
 a stale join on a full session; four simultaneous joins for one spot; a join
-and a leave at the same time; and a client that disconnects and reconnects.
+and a leave at the same time; a client that disconnects and reconnects; and
+that friends-only and invite-only session events reach only the people who
+may see the session, never signed-out clients or strangers.
