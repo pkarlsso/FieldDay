@@ -68,12 +68,6 @@ async function issueTwoFactorCode(user) {
   await mailer.sendTwoFactorEmail(user.email, code);
 }
 
-async function createDemoAuthSession(user, message) {
-  if (!authSessions.demoAuthBypassEnabled()) return null;
-  const token = await authSessions.createAuthSession(user._id);
-  return authSuccess(user, message, { token, requiresTwoFactor: false });
-}
-
 // The signed-in user, taken from the request's bearer token. Every operation
 // that acts for a user goes through this rather than trusting an ID the
 // client sends.
@@ -1060,6 +1054,17 @@ const resolvers = {
       return publicUserQuery(id);
     },
 
+    searchUsersByName: async (_, { name }, context) => {
+      const user = requireUser(context);
+      const term = name.trim().slice(0, 60);
+      if (term.length < 2) return [];
+      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const matches = [{ name: { $regex: escaped, $options: 'i' } }];
+      if (mongoose.isValidObjectId(term)) matches.push({ _id: term });
+      return User.find({ _id: { $ne: user._id }, $or: matches })
+        .select(PUBLIC_USER_FIELDS).sort({ name: 1, _id: 1 }).limit(20);
+    },
+
     getMyFriendRequests: async (_, { status = 'pending' }, context) => {
       const user = requireUser(context);
       const filter = { $or: [{ requester: user._id }, { recipient: user._id }] };
@@ -1446,19 +1451,9 @@ const resolvers = {
         passwordHash
       });
 
-      if (authSessions.demoAuthBypassEnabled()) {
-        await user.save();
-        return createDemoAuthSession(user, 'Account created for demo testing.');
-      }
-
-      await issueTwoFactorCode(user);
-
-      return {
-        success: true,
-        message: 'We sent a verification code to your email.',
-        userId: user.id,
-        requiresTwoFactor: true
-      };
+      await user.save();
+      const token = await authSessions.createAuthSession(user._id);
+      return authSuccess(user, 'Account created.', { token, requiresTwoFactor: false });
     },
 
     login: async (_, { email, password }) => {
@@ -1472,17 +1467,8 @@ const resolvers = {
         return { success: false, message: 'Incorrect email or password.' };
       }
 
-      const demoAuth = await createDemoAuthSession(user, 'Welcome back.');
-      if (demoAuth) return demoAuth;
-
-      await issueTwoFactorCode(user);
-
-      return {
-        success: true,
-        message: 'We sent a verification code to your email.',
-        userId: user.id,
-        requiresTwoFactor: true
-      };
+      const token = await authSessions.createAuthSession(user._id);
+      return authSuccess(user, 'Welcome back.', { token, requiresTwoFactor: false });
     },
 
     resendTwoFactorCode: async (_, { email }) => {
@@ -1538,7 +1524,11 @@ const resolvers = {
       user.passwordResetCodeExpires = new Date(Date.now() + RESET_CODE_TTL_MS);
       user.passwordResetAttempts = 0;
       await user.save();
-      await mailer.sendPasswordResetEmail(user.email, code);
+      try {
+        await mailer.sendPasswordResetEmail(user.email, code);
+      } catch (err) {
+        logger.error(err, { context: 'Password reset email delivery failed' });
+      }
 
       return response;
     },
@@ -1597,9 +1587,12 @@ const resolvers = {
       }
       const email = normalizeEmail(profile.email);
 
-      // Google has verified this email, so it is safe to attach the Google
-      // login to an existing account that uses the same address.
+      // A password account's email is not verified at registration. Do not
+      // automatically link it: another person could have registered it first.
       let user = (await User.findOne({ googleId: profile.sub })) || (await User.findOne({ email }));
+      if (user && !user.googleId) {
+        return { success: false, message: 'An account already uses this email. Sign in with your password or reset it.' };
+      }
       if (user && user.googleId && user.googleId !== profile.sub) {
         return { success: false, message: 'That email is already linked to a different Google account.' };
       }

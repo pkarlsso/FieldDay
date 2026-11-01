@@ -19,6 +19,9 @@ function getTransporter() {
 async function sendCodeEmail({ toEmail, code, subject, text, purpose }) {
   const transporter = getTransporter();
   if (!transporter) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Email delivery is not configured');
+    }
     // No SMTP configured — fall back to logging so the flow is still
     // testable locally without real email credentials.
     logger.info('Email delivery is not configured; using development code', { purpose, toEmail, code });
