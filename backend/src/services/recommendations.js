@@ -88,6 +88,15 @@ function recommendSessions(sessions, user, origin, limit) {
     .slice(0, limit);
 }
 
+function explainGorseSessions(sessions, scored, limit) {
+  const byId = new Map(scored.map((entry) => [String(entry.session._id), entry]));
+  return sessions.slice(0, limit).map((session) => {
+    const entry = byId.get(String(session._id));
+    if (!entry) throw new Error('Gorse result was not an eligible scored session');
+    return { ...entry, reasons: [...entry.reasons, 'Ranked by Gorse'] };
+  });
+}
+
 function validateRecommendationOptions({ origin, maxDistanceMiles = 50, limit = 10 }) {
   if (!Number.isFinite(maxDistanceMiles) || maxDistanceMiles < 1 || maxDistanceMiles > 250) {
     throw new Error('maxDistanceMiles must be between 1 and 250');
@@ -130,4 +139,4 @@ function recommendationQuery(user, origin, maxDistanceMiles, now = new Date()) {
   return query;
 }
 
-export { recommendSessions, recommendationQuery, validateRecommendationOptions };
+export { recommendSessions, explainGorseSessions, recommendationQuery, validateRecommendationOptions };
