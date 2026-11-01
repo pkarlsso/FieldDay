@@ -1,0 +1,75 @@
+FieldDay verification evidence: unit tests
+Run by: Ethan Ottinger (ejotting)
+Date: 2026-10-31 23:06 EDT
+Commit: 4088f4b on branch verification-check-1 (based on dev 6568179)
+Node: v24.14.0 on Windows 11
+Database: none (pure functions)
+Command: npm run test:unit
+----------------------------------------------------------------------
+
+> test:unit
+> node --test "backend/test/unit/*.test.js"
+
+▶ decodeImage
+  ✔ accepts JPEG, PNG and WebP images and returns their bytes (1.2279ms)
+  ✔ rejects a file whose bytes do not match the type it claims (0.4259ms)
+  ✔ rejects other image types (0.1621ms)
+  ✔ rejects web addresses, file paths and other non-data values (0.154ms)
+  ✔ rejects a file too small to hold an image header (0.126ms)
+  ✔ accepts a photo at the size limit and rejects one byte over (0.9939ms)
+✔ decodeImage (3.8833ms)
+▶ toDataUri
+  ✔ turns a stored photo back into the data URI it was decoded from (0.1611ms)
+✔ toDataUri (0.2596ms)
+▶ validatePasswordStrength
+  ✔ accepts a password that meets every rule (1.291ms)
+  ✔ accepts exactly 8 characters (0.1513ms)
+  ✔ rejects a password shorter than 8 characters (0.0942ms)
+  ✔ rejects a password missing any one character class (0.1158ms)
+  ✔ counts spaces and unicode symbols as special characters (0.1488ms)
+  ✔ rejects anything that is not a string (0.232ms)
+✔ validatePasswordStrength (3.256ms)
+▶ hashPassword and verifyPassword
+  ✔ stores an Argon2id hash, never the plain password (52.7771ms)
+  ✔ salts every hash, so the same password hashes differently (67.4953ms)
+  ✔ verifies the right password and rejects others (217.138ms)
+✔ hashPassword and verifyPassword (338.1716ms)
+▶ visibilityOf
+  ✔ treats sessions stored before visibility existed as public (0.6441ms)
+✔ visibilityOf (1.5432ms)
+▶ canViewSession
+  ✔ shows public sessions to everyone, signed in or not (1.0127ms)
+  ✔ shows friends-only sessions to the host’s friends but not strangers (0.215ms)
+  ✔ shows invite-only sessions to invitees but not the host’s other friends (0.1539ms)
+  ✔ always shows a session to its host and the people already in it (0.1336ms)
+  ✔ matches people whether lists hold ObjectIds, strings or populated users (0.2368ms)
+  ✔ gives and takes away access as friendships change (0.2007ms)
+✔ canViewSession (2.2788ms)
+▶ visibleSessionsFilter
+  ✔ only matches public sessions for someone not signed in (0.671ms)
+  ✔ adds the same rules canViewSession uses for a signed-in user (0.1424ms)
+  ✔ copes with a user who has no friends list (0.1516ms)
+✔ visibleSessionsFilter (1.1753ms)
+▶ generateCode
+  ✔ always returns six digits as a string (2.7296ms)
+  ✔ keeps leading zeros on small numbers (1.1583ms)
+  ✔ uses the full 000000-999999 range from a secure source (1.1067ms)
+✔ generateCode (5.9708ms)
+▶ hashCode
+  ✔ is a SHA-256 hex digest that does not contain the code (0.7334ms)
+  ✔ gives the same hash for the same code, so a submitted code can be checked (0.1785ms)
+  ✔ gives different hashes for different codes (0.2211ms)
+✔ hashCode (1.3886ms)
+▶ 2FA limits
+  ✔ expires a code after 10 minutes and allows 5 attempts (0.1445ms)
+✔ 2FA limits (0.2947ms)
+ℹ tests 33
+ℹ suites 10
+ℹ pass 33
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 664.9371
+----
+Exit code: 0

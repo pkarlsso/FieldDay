@@ -1,0 +1,113 @@
+FieldDay verification evidence: integration tests
+Run by: Ethan Ottinger (ejotting)
+Date: 2026-10-31 23:12 EDT
+Commit: 50af594 on branch verification-check-1 (based on dev 6568179)
+Node: v24.14.0 on Windows 11
+Database: throwaway local MongoDB 7.0.14 (mongodb-memory-server); each test creates and deletes its own records
+Command: npm run test:<name> for each test below, with AUTH_DEMO_BYPASS unset
+----------------------------------------------------------------------
+
+======== npm run test:authorization
+
+> test:authorization
+> node scripts/test-authorization.mjs
+
+◇ injected env (0) from backend\.env
+✓ The request's bearer token decides who the user is
+✓ All 13 protected operations reject requests without a valid identity
+✓ hostId, userId and raterId arguments are rejected by the schema
+✓ Sessions, joins, leaves, ratings, friends and profile edits act as the signed-in user
+✓ AUTH_DEMO_BYPASS only skips the emailed code; requests are still checked
+Authorization tests passed
+Exit code: 0
+
+======== npm run test:profile-setup
+
+> test:profile-setup
+> node scripts/test-profile-setup.mjs
+
+◇ injected env (0) from backend\.env
+✓ New accounts report which setup steps are missing
+✓ Photos must be real JPEG, PNG or WebP uploads owned by the user
+✓ Setup saves name, photo, sports, availability and bio
+✓ The saved profile loads for its owner only
+✓ Photos can be replaced and removed without leaving old files behind
+✓ Older accounts keep their inline photo and sports
+✓ A list of players loads all their photos with one query
+Profile setup tests passed
+Exit code: 0
+
+======== npm run test:session-membership
+
+> test:session-membership
+> node scripts/test-session-membership.mjs
+
+◇ injected env (0) from backend\.env
+✓ Joining adds the caller to the stored roster
+✓ Host, duplicate, full and unknown-session joins are rejected without changing anything
+✓ Leaving frees a spot; host and non-member leaves are rejected
+✓ Five people racing for two spots fill exactly two
+✓ Repeated joins by the same person add them once
+✓ Sessions can only be joined or left before they start
+Session membership tests passed
+Exit code: 0
+
+======== npm run test:session-visibility
+
+> test:session-visibility
+> node scripts/test-session-visibility.mjs
+
+◇ injected env (0) from backend\.env
+✓ Hosts choose public, friends-only or invite-only when creating a session
+✓ Discovery (list and map radius search) only returns sessions the caller may see
+✓ Session details are hidden from people who may not see the session
+✓ Only friends and invitees can join; anyone can still join public sessions
+✓ Inviting and uninviting take effect immediately; people who joined keep their spot
+✓ Becoming or no longer being friends with the host changes access straight away
+✓ Strangers cannot make themselves friends of a host
+Session visibility tests passed
+Exit code: 0
+
+======== npm run test:session-lifecycle
+
+> test:session-lifecycle
+> node scripts/test-session-lifecycle.mjs
+
+◇ injected env (0) from backend\.env
+✓ Invalid session inputs and end times are rejected without creating a session
+✓ Valid session stores capacity, skill level and end time in MongoDB
+✓ Capacity, skill level and end time are visible through discovery
+✓ Sessions end automatically at their end time
+✓ Players report no-shows and the majority decides
+✓ Rating skips no-shows and players you reported
+✓ The no-show check closes after 48 hours; older sessions are unaffected
+✓ My Sessions splits hosted, joined and ended sessions
+Session lifecycle tests passed
+Exit code: 0
+
+======== npm run test:accounts
+
+> test:accounts
+> npm run test:accounts --workspace backend
+
+
+> fieldday-backend@1.0.0 test:accounts
+> node scripts/integration-accounts.mjs
+
+◇ injected env (0) from .env
+23:12:34 error: Error: bad token
+    at googleAuth.verifyGoogleIdToken (<repo>/backend/scripts/integration-accounts.mjs:191:56)
+    at Object.googleSignIn (<repo>/backend/src/graphql/resolvers.js:1316:36)
+    at field.resolve (<repo>/backend/node_modules/@apollo/server/dist/esm/utils/schemaInstrumentation.js:36:28)
+    at executeField (<repo>\node_modules\graphql\execution\execute.js:733:20)
+    at <repo>\node_modules\graphql\execution\execute.js:614:22
+    at promiseReduce (<repo>\node_modules\graphql\jsutils\promiseReduce.js:25:9)
+    at executeFieldsSerially (<repo>\node_modules\graphql\execution\execute.js:610:43)
+    at executeOperation (<repo>\node_modules\graphql\execution\execute.js:582:14)
+    at execute (<repo>\node_modules\graphql\execution\execute.js:309:20)
+    at executeIncrementally (<repo>/backend/node_modules/@apollo/server/dist/esm/incrementalDeliveryPolyfill.js:21:12) {"service":"fieldday","error":"bad token"}
+(Use `node --trace-warnings ...` to show where the warning was created)
+23:12:34 info: Accounts integration test passed: sessions, password reset, Google, profile, ratings {"service":"fieldday"}
+Exit code: 0
+
+======== logs/exceptions.log after the run: 0 bytes (empty means no failures were swallowed by the logger)
