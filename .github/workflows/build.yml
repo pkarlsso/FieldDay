@@ -46,12 +46,16 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Install locked workspace dependencies
         run: npm ci
-      - name: Start backend and verify health
+      # The session and chat tests call the running server over HTTP, so they
+      # run in the same step as the server.
+      - name: Start backend, verify health and run HTTP tests
         run: |
           npm run start --workspace backend > backend.log 2>&1 &
           backend_pid=$!
           trap 'kill "$backend_pid" 2>/dev/null || true' EXIT
           curl --fail --retry 20 --retry-all-errors --retry-delay 2 http://localhost:4000/health
+          npm run test:integration
+          npm run test:chat
       # These scripts set a non-zero exit code when an assertion fails, so a
       # failing test fails the job. They clean up the records they create.
       - name: Integration tests
@@ -61,6 +65,7 @@ jobs:
           npm run test:session-membership
           npm run test:session-visibility
           npm run test:session-lifecycle
+          npm run test:sport-preferences
           npm run test:accounts
 
   checks:

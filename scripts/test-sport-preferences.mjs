@@ -162,6 +162,11 @@ try {
 
   console.log('\n✅ All sport preferences and skill levels tests passed!');
 
+} catch (error) {
+  // The shared winston logger handles uncaught errors without exiting, which
+  // would otherwise let a failing run end with exit code 0.
+  console.error(error);
+  process.exitCode = 1;
 } finally {
   const users = await User.find({ email: { $in: createdEmails } }, '_id');
   const userIds = users.map((user) => user._id);
