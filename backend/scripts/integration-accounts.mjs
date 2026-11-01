@@ -72,12 +72,11 @@ async function signUpAndVerify(name) {
   createdEmails.push(email);
   const signUp = await ok(`mutation($e:String!,$p:String!){signUp(email:$e,password:$p){${AUTH_FIELDS}}}`, { e: email, p: PASSWORD });
   assert.equal(signUp.signUp.success, true);
-  const verify = await ok(
-    `mutation($e:String!,$c:String!){verifyTwoFactorCode(email:$e,code:$c){${AUTH_FIELDS}}}`,
-    { e: email, c: codes.twoFactor[email] }
-  );
+  assert.equal(signUp.signUp.requiresTwoFactor, true);
+  assert.equal(signUp.signUp.token, null);
+  const verify = await ok(`mutation($e:String!,$c:String!){verifyTwoFactorCode(email:$e,code:$c){${AUTH_FIELDS}}}`, { e: email, c: codes.twoFactor[email] });
   assert.equal(verify.verifyTwoFactorCode.success, true);
-  assert.ok(verify.verifyTwoFactorCode.token, 'verification should return a session token');
+  assert.ok(verify.verifyTwoFactorCode.token);
   return { email, ...verify.verifyTwoFactorCode };
 }
 
@@ -89,6 +88,16 @@ try {
 
   // ---- #104 persistent sign-in -------------------------------------------
   const alice = await signUpAndVerify('alice');
+  const searchActor = await User.findById(alice.userId);
+  const search = 'query($n:String!){searchUsersByName(name:$n){id name}}';
+  await fails(search, { n: 'alice' }, null, 'signed in');
+  const bob = await signUpAndVerify('bob');
+  const results = await ok(search, { n: 'BOB' }, searchActor);
+  assert.ok(results.searchUsersByName.some((person) => person.id === bob.userId));
+  const byId = await ok(search, { n: bob.userId }, searchActor);
+  assert.ok(byId.searchUsersByName.some((person) => person.id === bob.userId));
+  const regexText = await ok(search, { n: '.*' }, searchActor);
+  assert.equal(regexText.searchUsersByName.length, 0, 'search treats regex characters literally');
   const restore = 'mutation($t:String!){restoreSession(token:$t){success message userId token}}';
 
   let restored = await ok(restore, { t: alice.token });
@@ -116,16 +125,13 @@ try {
   assert.equal(restored.restoreSession.success, false, 'an expired session must not restore');
 
   const second = await ok(
-    `mutation($e:String!,$p:String!){login(email:$e,password:$p){success}}`,
+    `mutation($e:String!,$p:String!){login(email:$e,password:$p){success token requiresTwoFactor}}`,
     { e: alice.email, p: PASSWORD }
   );
   assert.equal(second.login.success, true);
-  const secondVerify = await ok(
-    `mutation($e:String!,$c:String!){verifyTwoFactorCode(email:$e,code:$c){token}}`,
-    { e: alice.email, c: codes.twoFactor[alice.email] }
-  );
-  await ok('mutation($t:String!){logout(token:$t){success}}', { t: secondVerify.verifyTwoFactorCode.token });
-  restored = await ok(restore, { t: secondVerify.verifyTwoFactorCode.token });
+  assert.equal(second.login.requiresTwoFactor, false);
+  await ok('mutation($t:String!){logout(token:$t){success}}', { t: second.login.token });
+  restored = await ok(restore, { t: second.login.token });
   assert.equal(restored.restoreSession.success, false, 'logout must revoke the token');
   restored = await ok(restore, { t: 'not-a-real-token' });
   assert.equal(restored.restoreSession.success, false);
@@ -183,8 +189,8 @@ try {
 
   verifiedProfile = { sub: `${tag}-sub-2`, email: alice.email.toUpperCase(), emailVerified: true, name: 'Alice G' };
   const linked = (await ok(google, { t: 'x' })).googleSignIn;
-  assert.equal(linked.userId, alice.userId, 'links to the existing account with that email');
-  assert.equal((await User.findById(alice.userId)).googleId, `${tag}-sub-2`);
+  assert.equal(linked.success, false, 'does not link a Google login to an unverified password account');
+  assert.equal((await User.findById(alice.userId)).googleId, undefined);
 
   verifiedProfile = { sub: `${tag}-sub-3`, email: alice.email, emailVerified: true, name: 'Impostor' };
   assert.equal((await ok(google, { t: 'x' })).googleSignIn.success, false, 'email already tied to another Google account');
@@ -453,12 +459,9 @@ try {
   await server.stop();
 }
 
-// Signs in through the normal login + 2FA path and returns the session token.
+// Signs in with email and password and returns the session token.
 async function loginToken(email, password) {
-  await ok('mutation($e:String!,$p:String!){login(email:$e,password:$p){success}}', { e: email, p: password });
-  const verified = await ok(
-    'mutation($e:String!,$c:String!){verifyTwoFactorCode(email:$e,code:$c){token}}',
-    { e: email, c: codes.twoFactor[email] }
-  );
-  return verified.verifyTwoFactorCode.token;
+  const result = await ok('mutation($e:String!,$p:String!){login(email:$e,password:$p){success token}}', { e: email, p: password });
+  assert.equal(result.login.success, true);
+  return result.login.token;
 }

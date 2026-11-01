@@ -82,12 +82,6 @@ async function issueTwoFactorCode(user) {
   await mailer.sendTwoFactorEmail(user.email, code);
 }
 
-async function createDemoAuthSession(user, message) {
-  if (!authSessions.demoAuthBypassEnabled()) return null;
-  const token = await authSessions.createAuthSession(user._id);
-  return authSuccess(user, message, { token, requiresTwoFactor: false });
-}
-
 // The signed-in user, taken from the request's bearer token. Every operation
 // that acts for a user goes through this rather than trusting an ID the
 // client sends.
@@ -1111,6 +1105,17 @@ const resolvers = {
       return publicUserQuery(id);
     },
 
+    searchUsersByName: async (_, { name }, context) => {
+      const user = requireUser(context);
+      const term = name.trim().slice(0, 60);
+      if (term.length < 2) return [];
+      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const matches = [{ name: { $regex: escaped, $options: 'i' } }];
+      if (mongoose.isValidObjectId(term)) matches.push({ _id: term });
+      return User.find({ _id: { $ne: user._id }, $or: matches })
+        .select(PUBLIC_USER_FIELDS).sort({ name: 1, _id: 1 }).limit(20);
+    },
+
     getMyFriendRequests: async (_, { status = 'pending' }, context) => {
       const user = requireUser(context);
       const filter = { $or: [{ requester: user._id }, { recipient: user._id }] };
@@ -1499,22 +1504,12 @@ const resolvers = {
       const user = new User({
         name: normalizedEmail.split('@')[0],
         email: normalizedEmail,
-        passwordHash
+        passwordHash,
+        emailVerified: false
       });
 
-      if (authSessions.demoAuthBypassEnabled()) {
-        await user.save();
-        return createDemoAuthSession(user, 'Account created for demo testing.');
-      }
-
       await issueTwoFactorCode(user);
-
-      return {
-        success: true,
-        message: 'We sent a verification code to your email.',
-        userId: user.id,
-        requiresTwoFactor: true
-      };
+      return authSuccess(user, 'We sent a verification code to your email.', { requiresTwoFactor: true });
     },
 
     login: async (_, { email, password }) => {
@@ -1528,22 +1523,18 @@ const resolvers = {
         return { success: false, message: 'Incorrect email or password.' };
       }
 
-      const demoAuth = await createDemoAuthSession(user, 'Welcome back.');
-      if (demoAuth) return demoAuth;
+      if (!user.emailVerified) {
+        await issueTwoFactorCode(user);
+        return authSuccess(user, 'We sent a verification code to your email.', { requiresTwoFactor: true });
+      }
 
-      await issueTwoFactorCode(user);
-
-      return {
-        success: true,
-        message: 'We sent a verification code to your email.',
-        userId: user.id,
-        requiresTwoFactor: true
-      };
+      const token = await authSessions.createAuthSession(user._id);
+      return authSuccess(user, 'Welcome back.', { token, requiresTwoFactor: false });
     },
 
     resendTwoFactorCode: async (_, { email }) => {
       const user = await User.findOne({ email: normalizeEmail(email) });
-      if (!user) {
+      if (!user || user.emailVerified) {
         return { success: false, message: 'Account not found.' };
       }
 
@@ -1553,7 +1544,7 @@ const resolvers = {
 
     verifyTwoFactorCode: async (_, { email, code }) => {
       const user = await User.findOne({ email: normalizeEmail(email) });
-      if (!user || !user.twoFactorCodeHash || !user.twoFactorCodeExpires) {
+      if (!user || user.emailVerified || !user.twoFactorCodeHash || !user.twoFactorCodeExpires) {
         return { success: false, message: 'No verification code is pending. Please request a new one.' };
       }
 
@@ -1574,6 +1565,7 @@ const resolvers = {
       user.twoFactorCodeHash = null;
       user.twoFactorCodeExpires = null;
       user.twoFactorAttempts = 0;
+      user.emailVerified = true;
       await user.save();
 
       // The token is what lets the app keep the user signed in for 30 days.
@@ -1594,7 +1586,11 @@ const resolvers = {
       user.passwordResetCodeExpires = new Date(Date.now() + RESET_CODE_TTL_MS);
       user.passwordResetAttempts = 0;
       await user.save();
-      await mailer.sendPasswordResetEmail(user.email, code);
+      try {
+        await mailer.sendPasswordResetEmail(user.email, code);
+      } catch (err) {
+        logger.error(err, { context: 'Password reset email delivery failed' });
+      }
 
       return response;
     },
@@ -1653,9 +1649,12 @@ const resolvers = {
       }
       const email = normalizeEmail(profile.email);
 
-      // Google has verified this email, so it is safe to attach the Google
-      // login to an existing account that uses the same address.
+      // A password account's email is not verified at registration. Do not
+      // automatically link it: another person could have registered it first.
       let user = (await User.findOne({ googleId: profile.sub })) || (await User.findOne({ email }));
+      if (user && !user.googleId) {
+        return { success: false, message: 'An account already uses this email. Sign in with your password or reset it.' };
+      }
       if (user && user.googleId && user.googleId !== profile.sub) {
         return { success: false, message: 'That email is already linked to a different Google account.' };
       }

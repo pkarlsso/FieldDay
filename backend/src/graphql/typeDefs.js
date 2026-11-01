@@ -373,6 +373,7 @@ const typeDefs = `#graphql
     getMySessions: MySessions!
     getFriends(userId: ID!): [User]
     findUserById(id: ID!): PublicUser
+    searchUsersByName(name: String!): [PublicUser!]!
     getMyFriendRequests(status: String): [FriendRequest!]!
     getFriendCandidates: [PublicUser!]!
     checkEmailExists(email: String!): EmailCheckResult!

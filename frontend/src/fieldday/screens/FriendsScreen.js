@@ -23,8 +23,8 @@ const REQUESTS_QUERY = `
 `;
 
 const LOOKUP_QUERY = `
-  query FindUser($id: ID!) {
-    findUserById(id: $id) { id name profilePicture sports socialRating }
+  query FindUsers($name: String!) {
+    searchUsersByName(name: $name) { id name profilePicture sports socialRating }
   }
 `;
 
@@ -62,7 +62,7 @@ export default function FriendsScreen({ navigation }) {
   const [requests, setRequests] = useState([]);
   const [candidates, setCandidates] = useState([]);
   const [lookupId, setLookupId] = useState('');
-  const [lookupUser, setLookupUser] = useState(null);
+  const [lookupUsers, setLookupUsers] = useState([]);
   const [, setLoading] = useState(false);
 
   const refreshRequests = useCallback(() => {
@@ -83,7 +83,7 @@ export default function FriendsScreen({ navigation }) {
   const sendRequest = async (recipientId) => {
     try {
       await graphql(SEND_REQUEST, { id: recipientId });
-      setLookupUser(null);
+      setLookupUsers([]);
       setLookupId('');
       refreshRequests();
     } catch (err) {
@@ -98,17 +98,14 @@ export default function FriendsScreen({ navigation }) {
   };
 
   const lookup = async () => {
-    const id = lookupId.trim();
-    if (!id) return;
+    const name = lookupId.trim();
+    if (name.length < 2) return;
     try {
-      const data = await graphql(LOOKUP_QUERY, { id });
-      if (!data.findUserById) {
-        Alert.alert('User not found', 'Check the user ID and try again.');
-        return;
-      }
-      setLookupUser(data.findUserById);
+      const data = await graphql(LOOKUP_QUERY, { name });
+      setLookupUsers(data.searchUsersByName || []);
+      if (!data.searchUsersByName?.length) Alert.alert('No users found', 'Try another name.');
     } catch (err) {
-      Alert.alert('Could not look up user', err.message);
+      Alert.alert('Could not look up users', err.message);
     }
   };
 
@@ -127,15 +124,14 @@ export default function FriendsScreen({ navigation }) {
 
   // Why the person found by ID can't be sent a request, if they can't. The
   // server rejects these too; checking here means the button isn't offered.
-  const lookupBlocker = (() => {
-    if (!lookupUser) return null;
+  const lookupBlocker = (lookupUser) => {
     if (lookupUser.id === user?.id) return { label: 'This is you', icon: 'person-outline', color: colors.muted };
     if (friends.some((friend) => friend.id === lookupUser.id)) return { label: 'Already friends', icon: 'people-outline', color: colors.green };
     if (requests.some((request) => request.requester?.id === lookupUser.id || request.recipient?.id === lookupUser.id)) {
       return { label: 'Request pending', icon: 'time-outline', color: colors.gold };
     }
     return null;
-  })();
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
@@ -143,7 +139,7 @@ export default function FriendsScreen({ navigation }) {
       <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 120, gap: 16 }}>
         <Card>
           <Text style={{ color: colors.ink, fontSize: 18, fontWeight: '900' }}>Add someone you know</Text>
-          <Text style={{ color: colors.muted, marginTop: 5, lineHeight: 19 }}>Use their exact FieldDay user ID.</Text>
+          <Text style={{ color: colors.muted, marginTop: 5, lineHeight: 19 }}>Search for someone by name, or share your user ID.</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, padding: 10, borderRadius: 14, backgroundColor: colors.purpleSoft }}>
             <View style={{ flex: 1 }}>
               <Text style={{ color: colors.muted, fontSize: 11, fontWeight: '800' }}>Your user ID</Text>
@@ -165,25 +161,25 @@ export default function FriendsScreen({ navigation }) {
             <TextInput
               value={lookupId}
               onChangeText={setLookupId}
-              placeholder="User ID"
+              placeholder="Name or user ID"
               placeholderTextColor={colors.muted}
               autoCapitalize="none"
               style={{ flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: 14, paddingHorizontal: 12, color: colors.ink }}
             />
-            <PrimaryButton label="Find" icon="search-outline" onPress={lookup} disabled={!lookupId.trim()} />
+            <PrimaryButton label="Find" icon="search-outline" onPress={lookup} disabled={lookupId.trim().length < 2} />
           </View>
-          {lookupUser ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 }}>
+          {lookupUsers.map((lookupUser) => (
+            <View key={lookupUser.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 }}>
               <Avatar name={lookupUser.name} uri={lookupUser.profilePicture} color={colors.purple} />
               <View style={{ flex: 1 }}>
                 <Text style={{ color: colors.ink, fontWeight: '900' }}>{lookupUser.name}</Text>
                 <Text style={{ color: colors.muted, marginTop: 3 }}>{lookupUser.id}</Text>
               </View>
-              {lookupBlocker
-                ? <StatusBadge {...lookupBlocker} />
+              {lookupBlocker(lookupUser)
+                ? <StatusBadge {...lookupBlocker(lookupUser)} />
                 : <PrimaryButton label="Request" icon="person-add-outline" onPress={() => sendRequest(lookupUser.id)} />}
             </View>
-          ) : null}
+          ))}
         </Card>
 
         {incoming.length > 0 ? (
