@@ -1,11 +1,11 @@
 FieldDay verification evidence: integration tests
 Run by: Ethan Ottinger (ejotting)
-Date: 2026-10-31 23:49 EDT
-Commit: 3447bc9 on branch verification-check-1 (based on dev f46494e)
+Date: 2026-10-31 23:56 EDT
+Commit: 557e0a9 on branch verification-check-1 (includes dev 589722a)
 Node: v24.14.0 on Windows 11
 Database: throwaway local MongoDB 7.0.14 (mongodb-memory-server); each test creates and deletes its own records
 Server: test:integration and test:chat call this branch's backend over HTTP on port 4100
-Command: npm run test:<name> for each test below, with AUTH_DEMO_BYPASS unset
+Command: npm run test:<name> for each test below, with AUTH_DEMO_BYPASS=false
 ----------------------------------------------------------------------
 
 ======== npm run test:authorization
@@ -13,7 +13,7 @@ Command: npm run test:<name> for each test below, with AUTH_DEMO_BYPASS unset
 > test:authorization
 > node scripts/test-authorization.mjs
 
-◇ injected env (0) from backend\.env
+◇ injected env (2) from backend\.env
 ✓ The request's bearer token decides who the user is
 ✓ All 13 protected operations reject requests without a valid identity
 ✓ hostId, userId and raterId arguments are rejected by the schema
@@ -27,7 +27,7 @@ Exit code: 0
 > test:profile-setup
 > node scripts/test-profile-setup.mjs
 
-◇ injected env (0) from backend\.env
+◇ injected env (2) from backend\.env
 ✓ New accounts report which setup steps are missing
 ✓ Photos must be real JPEG, PNG or WebP uploads owned by the user
 ✓ Setup saves name, photo, sports, availability and bio
@@ -43,7 +43,7 @@ Exit code: 0
 > test:session-membership
 > node scripts/test-session-membership.mjs
 
-◇ injected env (0) from backend\.env
+◇ injected env (2) from backend\.env
 ✓ Joining adds the caller to the stored roster
 ✓ Host, duplicate, full and unknown-session joins are rejected without changing anything
 ✓ Leaving frees a spot; host and non-member leaves are rejected
@@ -58,7 +58,7 @@ Exit code: 0
 > test:session-visibility
 > node scripts/test-session-visibility.mjs
 
-◇ injected env (0) from backend\.env
+◇ injected env (2) from backend\.env
 ✓ Hosts choose public, friends-only or invite-only when creating a session
 ✓ Discovery (list and map radius search) only returns sessions the caller may see
 ✓ Session details are hidden from people who may not see the session
@@ -74,7 +74,7 @@ Exit code: 0
 > test:session-lifecycle
 > node scripts/test-session-lifecycle.mjs
 
-◇ injected env (0) from backend\.env
+◇ injected env (2) from backend\.env
 ✓ Invalid session inputs and end times are rejected without creating a session
 ✓ Valid session stores capacity, skill level and end time in MongoDB
 ✓ Capacity, skill level and end time are visible through discovery
@@ -91,7 +91,7 @@ Exit code: 0
 > test:sport-preferences
 > node scripts/test-sport-preferences.mjs
 
-◇ injected env (0) from backend\.env
+◇ injected env (2) from backend\.env
 Testing sport preferences and skill levels feature...
 ✓ User creation with sport skills works
 ✓ GraphQL updateProfile with sport skills works
@@ -108,6 +108,56 @@ Testing sport preferences and skill levels feature...
 ✅ All sport preferences and skill levels tests passed!
 Exit code: 0
 
+======== npm run test:realtime
+
+> test:realtime
+> node scripts/test-realtime.mjs
+
+◇ injected env (2) from backend\.env
+✓ Creating a session is announced to every connected client
+✓ Joining is announced and a refetch shows the new count
+✓ A newly full session rejects joins from a stale screen
+✓ Leaving is announced and frees the spot
+✓ Simultaneous joins never overfill a session
+✓ Concurrent join and leave do not overwrite each other
+✓ A reconnected client receives updates again
+✓ Sessions starting and ending are announced, and ended ones reject joins
+Realtime tests passed
+Exit code: 0
+
+======== npm run test:cooldown
+
+> test:cooldown
+> node scripts/test-cooldown.mjs
+
+◇ injected env (2) from backend\.env
+✓ A rating that drops the social rating below 2 starts a 2-day cooldown
+✓ Create and join are rejected during the cooldown
+✓ The cooldown end time is shown only to the suspended user
+✓ Further low ratings during a cooldown do not extend it
+✓ Create and join work again once the cooldown has ended
+✓ After expiry, only a rating that lowers the average again restarts the cooldown
+✓ The cooldown starts below 2.0 as shown in the app, not at it
+Cooldown tests passed
+Exit code: 0
+
+======== npm run test:attendance
+
+> test:attendance
+> node scripts/test-attendance-and-host-changes.mjs
+
+◇ injected env (2) from backend\.env
+✓ Check-in only works during the first 10 minutes and within 200 m
+✓ Players who did not check in are marked absent
+✓ A check-in no-show gets one automatic rating of 1, exactly once
+✓ Only players who checked in rate, and only each other
+✓ A peer-majority no-show gets one rating of 1 once the no-show check closes
+✓ Hosts can edit time, location and capacity (never below the player count)
+✓ Cancelled sessions leave discovery and cannot be joined, edited or rated
+✓ Sessions cannot be edited or cancelled once they start
+Attendance and host change tests passed
+Exit code: 0
+
 ======== npm run test:accounts
 
 > test:accounts
@@ -117,10 +167,10 @@ Exit code: 0
 > fieldday-backend@1.0.0 test:accounts
 > node scripts/integration-accounts.mjs
 
-◇ injected env (0) from .env
-23:50:05 error: Error: bad token
+◇ injected env (2) from .env
+23:57:02 error: Error: bad token
     at googleAuth.verifyGoogleIdToken (<repo>/backend/scripts/integration-accounts.mjs:196:56)
-    at Object.googleSignIn (<repo>/backend/src/graphql/resolvers.js:1316:36)
+    at Object.googleSignIn (<repo>/backend/src/graphql/resolvers.js:1587:36)
     at field.resolve (<repo>/backend/node_modules/@apollo/server/dist/esm/utils/schemaInstrumentation.js:36:28)
     at executeField (<repo>\node_modules\graphql\execution\execute.js:733:20)
     at <repo>\node_modules\graphql\execution\execute.js:614:22
@@ -130,7 +180,7 @@ Exit code: 0
     at execute (<repo>\node_modules\graphql\execution\execute.js:309:20)
     at executeIncrementally (<repo>/backend/node_modules/@apollo/server/dist/esm/incrementalDeliveryPolyfill.js:21:12) {"service":"fieldday","error":"bad token"}
 (Use `node --trace-warnings ...` to show where the warning was created)
-23:50:06 info: Accounts integration test passed: sessions, password reset, Google, profile, ratings {"service":"fieldday"}
+23:57:02 info: Accounts integration test passed: sessions, password reset, Google, profile, ratings {"service":"fieldday"}
 Exit code: 0
 
 ======== npm run test:integration
@@ -142,7 +192,7 @@ Exit code: 0
 > fieldday-backend@1.0.0 test:integration
 > node scripts/integration-session.mjs
 
-◇ injected env (0) from .env
+◇ injected env (2) from .env
 Integration session test passed: create -> join -> leave over HTTP with bearer tokens
 Exit code: 0
 
@@ -155,7 +205,7 @@ Exit code: 0
 > fieldday-backend@1.0.0 test:chat
 > node scripts/integration-chat.mjs
 
-◇ injected env (0) from .env
+◇ injected env (2) from .env
 Integration chat test passed: authorization -> persistence -> retry -> read-only history
 Exit code: 0
 
