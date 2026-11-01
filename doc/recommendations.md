@@ -6,6 +6,8 @@ The query returns only future, upcoming sessions that still have room and that t
 
 The deterministic profile ranking is the cold-start fallback. An optional self-hosted Gorse service can add collaborative ranking as join and recommendation-view signals accumulate. It is not a large language model; it learns from user/session interactions and session categories. New users still get the profile-based ranking until Gorse has enough useful activity.
 
+Live data is enabled by default, so Explore and the map use the configured backend. Set `EXPO_PUBLIC_LIVE_DATA=false` only when intentionally using the mock screens. Deploy a compatible backend before distributing this frontend.
+
 ## Local Gorse setup
 
 Install Docker Desktop, then from the repository root run:

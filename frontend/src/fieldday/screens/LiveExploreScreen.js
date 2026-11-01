@@ -72,7 +72,7 @@ export default function LiveExploreScreen({ navigation }) {
   }));
 
   const applyFilters = () => {
-    const next = { ...draft, origin };
+    const next = { ...draft, origin: draft.origin || origin };
     setShowFilters(false);
     load(next);
   };
