@@ -1,6 +1,6 @@
 # Manual Test Report: Live Home and My Sessions, End Times, No-Show Check and Session Inputs
 
-> **Draft:** Ethan's verdict on the phone build was "ok it works". Before submitting, he should confirm he did each step below.
+> Ethan's verdict on the phone build was "ok it works". On 2026-11-01 he confirmed he did every step below. No screenshots were taken during these sessions.
 
 ## Test identification
 

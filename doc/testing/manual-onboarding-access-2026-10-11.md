@@ -1,5 +1,7 @@
 # Manual Test Report: First-Run Profile Setup, Join Rules and Session Visibility
 
+> Results marked "confirmed by the tester" were reported by Ethan on 2026-11-01. No screenshots were taken during these sessions.
+
 ## Test identification
 
 - Test case IDs: MT-FR3-04, MT-NFR2-01
@@ -26,7 +28,7 @@
 | 2 | Finish setup without a photo (after C1). | Setup finishes with a name, at least one sport and weekly availability. | Finished. | Pass |
 | 3 | Create a friends-only session on the phone. | A stranger can't see it in Explore, and its link shows "Session not found". | In the web preview, a stranger couldn't see or join the session. | Pass |
 | 4 | From the web account, create a public session (run 2). | It shows up on the phone account. | First attempt: the web app showed "Failed to fetch" (see D1). After the fix, the web request returned 200. | Fail, then Pass |
-| 5 | Try joining your own session, a session you're already in, and a full session. | Each is refused with a clear message, and the roster doesn't change. | **Confirm** on the phone. `test:session-membership` covers it automatically. | **Confirm** |
+| 5 | Try joining your own session, a session you're already in, and a full session. | Each is refused with a clear message, and the roster doesn't change. | Confirmed by the tester: each join was refused. `test:session-membership` also covers this automatically. | Pass |
 
 ## Evidence
 

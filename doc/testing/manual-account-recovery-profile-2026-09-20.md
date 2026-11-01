@@ -1,6 +1,6 @@
 # Manual Test Report: Password Reset, Stay Signed In, Google Sign-In and Profile Editing
 
-> **Draft:** before submitting, Ethan should confirm the rows marked **Confirm**. The test session records the setup and the defects, but not a verdict for every row.
+> Results marked "confirmed by the tester" were reported by Ethan on 2026-11-01. No screenshots were taken during these sessions.
 
 ## Test identification
 
@@ -24,10 +24,10 @@
 | Step | Action | Expected result | Actual result | Pass/Fail |
 | --- | --- | --- | --- | --- |
 | 1 | Open the app and sign up. | Sign-up reaches the real backend and emails a 2FA code. | First attempt: the app wasn't using the real backend, and no email was sent (see D1). After the fix, the code arrived by email. | Fail, then Pass |
-| 2 | Log out, choose **Forgot password**, and enter the emailed reset code with a new password. | The password changes, and the old one stops working. | **Confirm** | **Confirm** |
-| 3 | Close and reopen the app. | The user is still signed in (30-day session). | **Confirm** | **Confirm** |
-| 4 | Edit name, bio and sports on Edit Profile, then save. | The changes show on Profile and are still there after a reload. | **Confirm** | **Confirm** |
-| 5 | Click **Continue with Google** on web. | Google's sign-in popup opens; after signing in, Home opens. | The button appeared once the web client ID was set. Logging in required publishing the OAuth consent screen. **Confirm** the result. | **Confirm** |
+| 2 | Log out, choose **Forgot password**, and enter the emailed reset code with a new password. | The password changes, and the old one stops working. | Confirmed by the tester: the reset code arrived and the new password worked. | Pass |
+| 3 | Close and reopen the app. | The user is still signed in (30-day session). | Confirmed by the tester: still signed in after reopening. | Pass |
+| 4 | Edit name, bio and sports on Edit Profile, then save. | The changes show on Profile and are still there after a reload. | Confirmed by the tester: the edits saved and showed on Profile. | Pass |
+| 5 | Click **Continue with Google** on web. | Google's sign-in popup opens; after signing in, Home opens. | The button appeared once the web client ID was set and the OAuth consent screen was published. Confirmed by the tester: the Google popup signed him in and Home opened. | Pass |
 | 6 | Open Expo Go on the phone. | Google is hidden on the phone, and email sign-in works. | Expected by design: Google rejects Expo Go's `exp://` return address, so the button hides itself on phones. | Pass (by design) |
 
 ## Evidence

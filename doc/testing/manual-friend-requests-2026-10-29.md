@@ -1,6 +1,6 @@
 # Manual Test Report: Friend Requests
 
-> **Draft:** before submitting, Ethan should confirm he did steps 1, 2, 4 and 5 on the phone. The session records the defect he found in step 3, and his approval to push the fix.
+> On 2026-11-01 Ethan confirmed he did steps 1, 2, 4 and 5 on the phone. No screenshots were taken during these sessions.
 
 ## Test identification
 
@@ -22,7 +22,7 @@
 | 2 | Send a request. | The recipient sees it under Incoming requests and gets a "New friend request" notification. | The request and the notification appeared (D2 was fixed before the test). | Pass |
 | 3 | Look up your own ID. | No request can be sent to yourself. | The tester found the console error "trying to send a friend request to yourself" (D3). After the fix, "This is you" shows instead of **Request**. | Fail, then Pass |
 | 4 | Accept the request as the recipient. | Both users see each other under Your friends straight away, and the requester is notified. | Updated straight away (D4 was fixed before the test). | Pass |
-| 5 | Check "People from your sessions". | Players from sessions that have ended are suggested, with their photos. | **Confirm** on the phone. `test:accounts` checks that players from a session that has ended by the clock are suggested. | **Confirm** |
+| 5 | Check "People from your sessions". | Players from sessions that have ended are suggested, with their photos. | Confirmed by the tester: players from his sessions were suggested, with photos. `test:accounts` also checks sessions that ended by the clock. | Pass |
 
 ## Evidence
 

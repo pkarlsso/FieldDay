@@ -1,6 +1,6 @@
 # Manual Test Report: Sign-Up, Log-In and Email 2FA
 
-> **Draft:** before submitting, Ethan should confirm the rows marked **Confirm**. The session records his overall verdict ("it works as expected", "it works") and the defects, but not each step.
+> Results marked "confirmed by the tester" were reported by Ethan on 2026-11-01. No screenshots were taken during these sessions.
 
 ## Test identification
 
@@ -29,11 +29,11 @@
 | Step | Action | Expected result | Actual result | Pass/Fail |
 | --- | --- | --- | --- | --- |
 | 1 | Enter a new email on the sign-up screen. | The email check finds no account and moves on to the password step. | It moved on to the password step and sent a code. | Pass |
-| 2 | Enter a seeded user's email. | The app says an account already exists. | **Confirm** | **Confirm** |
-| 3 | Type weak passwords, then a strong one. | The checklist blocks weak passwords. A strong one (8+ characters with upper, lower, number and symbol) is accepted. | **Confirm** | **Confirm** |
+| 2 | Enter a seeded user's email. | The app says an account already exists. | Confirmed by the tester: "account already exists" appeared. | Pass |
+| 3 | Type weak passwords, then a strong one. | The checklist blocks weak passwords. A strong one (8+ characters with upper, lower, number and symbol) is accepted. | Confirmed by the tester: weak passwords were blocked and a strong one was accepted. | Pass |
 | 4 | Submit sign-up with SMTP configured. | A 6-digit code arrives by email. | First attempt: no email arrived (see D1). After SMTP was configured, the code arrived in the inbox. | Fail, then Pass |
 | 5 | Enter the emailed code. | The account is verified and the app opens. | Verified and opened. | Pass |
-| 6 | Log out, then log back in with email, password and a new 2FA code. | Log-in succeeds and needs a new code. | **Confirm** | **Confirm** |
+| 6 | Log out, then log back in with email, password and a new 2FA code. | Log-in succeeds and needs a new code. | Confirmed by the tester: logged back in after entering a new code. | Pass |
 | 7 | Open the build in Expo Go on the iPhone (run 1). | The app loads on the phone. | It first failed with an SDK 54 vs Expo Go SDK 57 mismatch (see D2). After the upgrade it loaded, once Expo Go was signed in. The tester reported "it works as expected". | Fail, then Pass |
 | 8 | Repeat steps 1–6 on the `dev`-based branch in Expo Go (run 2). | Same results as run 1. | The tester reported "it works". | Pass |
 

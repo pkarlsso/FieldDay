@@ -1,6 +1,6 @@
 # Manual Test Report: Live Roster Refresh and Social-Rating Cooldown
 
-> **Draft:** before submitting, Ethan should confirm the rows marked **Confirm**. The test session records the setup, but not the result.
+> Results marked "confirmed by the tester" were reported by Ethan on 2026-11-01. No screenshots were taken during these sessions.
 
 ## Test identification
 
@@ -18,9 +18,9 @@
 
 | Step | Action | Expected result | Actual result | Pass/Fail |
 | --- | --- | --- | --- | --- |
-| 1 | Open the same session on the phone and on a second client. Join from the second client. | The phone's roster and spots-left update without a manual refresh. | **Confirm** | **Confirm** |
-| 2 | Give an account ratings that pull its social rating below 2.0. | A 2-day cooldown starts. | **Confirm** on the phone. `test:cooldown` covers it automatically. | **Confirm** |
-| 3 | Try to create or join a session as that account. | A cooldown notice with the end time appears, and the action is refused. | **Confirm** | **Confirm** |
+| 1 | Open the same session on the phone and on a second client. Join from the second client. | The phone's roster and spots-left update without a manual refresh. | Confirmed by the tester: the phone's roster updated without a refresh. | Pass |
+| 2 | Give an account ratings that pull its social rating below 2.0. | A 2-day cooldown starts. | Not run by hand. `test:cooldown` checks it, and passes in CI. | Not run (automated) |
+| 3 | Try to create or join a session as that account. | A cooldown notice with the end time appears, and the action is refused. | Not run by hand. `test:cooldown` checks that create and join are refused and that only the suspended user sees the end time. | Not run (automated) |
 
 ## Evidence
 

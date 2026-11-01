@@ -1,6 +1,6 @@
 # Manual Test Report: Log-In in the Main App, Profile Photo and Unsaved-Changes Prompt
 
-> **Draft:** before submitting, Ethan should confirm the phone rows marked **Confirm**. The web rows were run by Claude Code in a browser preview and their results were recorded during the session.
+> Results marked "confirmed by the tester" were reported by Ethan on 2026-11-01. No screenshots were taken during these sessions.
 
 ## Test identification
 
@@ -30,7 +30,7 @@
 | 5 | Edit the bio, then press back. | A "Save your changes?" prompt appears. | The prompt appeared. | Pass |
 | 6 | Choose **Keep editing**. | Stays on the screen with the edit intact. | Stayed, and the text was kept. | Pass |
 | 7 | Press back again and choose **Discard changes**. | Returns to Profile with the bio unchanged. | Returned with the bio unchanged. | Pass |
-| 8 | Repeat steps 1–7 on the iPhone in Expo Go, and save a real photo. | Same behaviour on iOS. The saved photo shows on Profile and in the Home header. | **Confirm** | **Confirm** |
+| 8 | Repeat steps 1–7 on the iPhone in Expo Go, and save a real photo. | Same behaviour on iOS. The saved photo shows on Profile and in the Home header. | Confirmed by the tester: on the iPhone, a photo was added and saved, and the "Save your changes?" prompt appeared. | Pass |
 
 ## Evidence
 
