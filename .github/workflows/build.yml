@@ -178,5 +178,11 @@ jobs:
             echo 'SBOM is unchanged.'
           else
             git commit -m 'chore: update SBOM'
-            git -c "http.extraheader=AUTHORIZATION: bearer ${GITHUB_TOKEN}" push origin HEAD:dev
+            # Git's HTTPS authentication uses the token as a Basic password.
+            # Pass the temporary header through Git's environment-based config
+            # so the credential is not written to the repository config.
+            auth=$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 | tr -d '\n')
+            echo "::add-mask::$auth"
+            GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+              GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" git push origin HEAD:dev
           fi
