@@ -1,7 +1,7 @@
 FieldDay verification evidence: integration tests
 Run by: Ethan Ottinger (ejotting)
-Date: 2026-10-31 23:56 EDT
-Commit: 557e0a9 on branch verification-check-1 (includes dev 589722a)
+Date: 2026-11-01 00:55 EDT
+Commit: a921a44 on branch verification-check-1 (includes dev 589722a)
 Node: v24.14.0 on Windows 11
 Database: throwaway local MongoDB 7.0.14 (mongodb-memory-server); each test creates and deletes its own records
 Server: test:integration and test:chat call this branch's backend over HTTP on port 4100
@@ -122,6 +122,9 @@ Exit code: 0
 ✓ Concurrent join and leave do not overwrite each other
 ✓ A reconnected client receives updates again
 ✓ Sessions starting and ending are announced, and ended ones reject joins
+✓ A friends-only session is announced to the host and their friends only
+✓ An invite-only session is announced to the host, invitees and players only, including joins and leaves
+✓ Clock events for private sessions follow the same rule
 Realtime tests passed
 Exit code: 0
 
@@ -168,9 +171,9 @@ Exit code: 0
 > node scripts/integration-accounts.mjs
 
 ◇ injected env (2) from .env
-23:57:02 error: Error: bad token
+00:55:30 error: Error: bad token
     at googleAuth.verifyGoogleIdToken (<repo>/backend/scripts/integration-accounts.mjs:196:56)
-    at Object.googleSignIn (<repo>/backend/src/graphql/resolvers.js:1587:36)
+    at Object.googleSignIn (<repo>/backend/src/graphql/resolvers.js:1589:36)
     at field.resolve (<repo>/backend/node_modules/@apollo/server/dist/esm/utils/schemaInstrumentation.js:36:28)
     at executeField (<repo>\node_modules\graphql\execution\execute.js:733:20)
     at <repo>\node_modules\graphql\execution\execute.js:614:22
@@ -180,7 +183,7 @@ Exit code: 0
     at execute (<repo>\node_modules\graphql\execution\execute.js:309:20)
     at executeIncrementally (<repo>/backend/node_modules/@apollo/server/dist/esm/incrementalDeliveryPolyfill.js:21:12) {"service":"fieldday","error":"bad token"}
 (Use `node --trace-warnings ...` to show where the warning was created)
-23:57:02 info: Accounts integration test passed: sessions, password reset, Google, profile, ratings {"service":"fieldday"}
+00:55:31 info: Accounts integration test passed: sessions, password reset, Google, profile, ratings {"service":"fieldday"}
 Exit code: 0
 
 ======== npm run test:integration
