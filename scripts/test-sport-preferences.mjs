@@ -1,7 +1,7 @@
 // Comprehensive tests for sport preferences and skill levels feature
 import assert from 'node:assert/strict';
 import mongoose from 'mongoose';
-import { ApolloServer } from '@apollo/server';
+import { ApolloServer } from '../backend/test/support/apollo.js';
 import { getConfig } from '../backend/src/config.js';
 import typeDefs from '../backend/src/graphql/typeDefs.js';
 import resolvers from '../backend/src/graphql/resolvers.js';
@@ -162,6 +162,11 @@ try {
 
   console.log('\n✅ All sport preferences and skill levels tests passed!');
 
+} catch (error) {
+  // The shared winston logger handles uncaught errors without exiting, which
+  // would otherwise let a failing run end with exit code 0.
+  console.error(error);
+  process.exitCode = 1;
 } finally {
   const users = await User.find({ email: { $in: createdEmails } }, '_id');
   const userIds = users.map((user) => user._id);

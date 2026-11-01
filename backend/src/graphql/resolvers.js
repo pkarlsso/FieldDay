@@ -1222,7 +1222,9 @@ const resolvers = {
         { returnDocument: 'after' }
       );
       if (!left) throw leaveRejection(await Session.findById(sessionId), user);
-      publishSessionUpdate(sessionId, 'left');
+      // The leaver may no longer see a private session, but their screen still
+      // shows it.
+      publishSessionUpdate(sessionId, 'left', { alsoNotify: [user._id] });
       return populatedSessionQuery(sessionId);
     },
 

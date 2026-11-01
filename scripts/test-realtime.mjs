@@ -1,10 +1,11 @@
 // Live roster updates (#207): Socket.IO events after create, join and leave,
 // sessions starting and ending, full sessions from stale screens, concurrent
-// joins for the last spot, and reconnecting clients.
+// joins for the last spot, reconnecting clients, and keeping private sessions'
+// events away from people who may not see them.
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import mongoose from 'mongoose';
-import { ApolloServer } from '@apollo/server';
+import { ApolloServer } from '../backend/test/support/apollo.js';
 import { io as connectClient } from 'socket.io-client';
 import { getConfig } from '../backend/src/config.js';
 import typeDefs from '../backend/src/graphql/typeDefs.js';
@@ -67,12 +68,13 @@ function watch(client) {
   });
   return {
     events,
-    next(sessionId, reason, timeoutMs = 5000) {
-      const find = () => events.find((event) => event.sessionId === sessionId && event.reason === reason);
+    // Resolves with the `count`th matching event (the first by default).
+    next(sessionId, reason, { count = 1, timeoutMs = 5000 } = {}) {
+      const find = () => events.filter((event) => event.sessionId === sessionId && event.reason === reason)[count - 1];
       return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
           waiters.delete(check);
-          reject(new Error(`no "${reason}" event for ${sessionId} within ${timeoutMs}ms`));
+          reject(new Error(`no "${reason}" event #${count} for ${sessionId} within ${timeoutMs}ms`));
         }, timeoutMs);
         function check() {
           const match = find();
@@ -94,7 +96,8 @@ function connected(client) {
 
 const createdEmails = [];
 const httpServer = http.createServer();
-attachRealtime(httpServer);
+// Test clients sign in with their user id as the token.
+attachRealtime(httpServer, { authenticate: (token) => User.findById(token) });
 await new Promise((resolve) => httpServer.listen(0, '127.0.0.1', resolve));
 const url = `http://127.0.0.1:${httpServer.address().port}`;
 // One client upgrades to a WebSocket; the other stays on HTTP long-polling,
@@ -103,6 +106,7 @@ const viewerA = connectClient(url, { reconnectionDelay: 100 });
 const viewerB = connectClient(url, { transports: ['polling'] });
 const a = watch(viewerA);
 const b = watch(viewerB);
+const signedInClients = [];
 
 try {
   await mongoose.connect(getConfig().mongoUri);
@@ -112,7 +116,7 @@ try {
       createdEmails.push(emailFor(name));
       // A top rating has no participation limit, so these players can join as
       // often as the tests need.
-      return User.create({ name, email: emailFor(name), socialRating: 5 });
+      return User.create({ name, email: emailFor(name), socialRating: 5, ratingSum: 5, totalRatings: 1 });
     })
   );
   const hostId = idOf(host);
@@ -128,7 +132,7 @@ try {
   console.log('✓ Joining is announced and a refetch shows the new count');
 
   await ok(JOIN, { s: sid }, p2);
-  await a.next(sid, 'joined');
+  await a.next(sid, 'joined', { count: 2 });
   const before = a.events.length;
   await fails(JOIN, { s: sid }, p3, 'Session is full');
   await new Promise((resolve) => setTimeout(resolve, 300));
@@ -190,6 +194,52 @@ try {
   await fails(JOIN, { s: missed }, p5, 'Only upcoming sessions');
   console.log('✓ Sessions starting and ending are announced, and ended ones reject joins');
 
+  // ---- private sessions only reach people who may see them --------------
+  const [friend, invitee, stranger] = await Promise.all(['friend', 'invitee', 'stranger'].map((name) => {
+    createdEmails.push(emailFor(name));
+    return User.create({ name, email: emailFor(name), socialRating: 5, ratingSum: 5, totalRatings: 1 });
+  }));
+  await User.updateOne({ _id: host._id }, { $addToSet: { friends: friend._id } });
+  await User.updateOne({ _id: friend._id }, { $addToSet: { friends: host._id } });
+  const signIn = (user) => {
+    const client = connectClient(url, { auth: { token: idOf(user) } });
+    signedInClients.push(client);
+    return client;
+  };
+  const clients = { host: signIn(host), friend: signIn(friend), invitee: signIn(invitee), stranger: signIn(stranger) };
+  await Promise.all(Object.values(clients).map(connected));
+  const heard = Object.fromEntries(Object.entries(clients).map(([name, client]) => [name, watch(client)]));
+  const nothingFor = async (watchers, sessionId) => {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    for (const [name, watcher] of Object.entries(watchers)) {
+      assert.ok(!watcher.events.some((event) => event.sessionId === sessionId), `${name} must not hear about ${sessionId}`);
+    }
+  };
+  const freshHost = await User.findById(host._id);
+
+  const friendsOnly = (await ok(CREATE, { input: validInput({ visibility: 'FRIENDS' }) }, freshHost)).createSession.id;
+  await Promise.all([heard.host.next(friendsOnly, 'created'), heard.friend.next(friendsOnly, 'created')]);
+  await nothingFor({ invitee: heard.invitee, stranger: heard.stranger, 'signed-out viewer A': a, 'signed-out viewer B': b }, friendsOnly);
+  console.log('✓ A friends-only session is announced to the host and their friends only');
+
+  const inviteOnly = (await ok(CREATE, { input: validInput({ visibility: 'INVITE_ONLY', inviteeIds: [idOf(invitee)] }) }, freshHost)).createSession.id;
+  await Promise.all([heard.host.next(inviteOnly, 'created'), heard.invitee.next(inviteOnly, 'created')]);
+  await ok(JOIN, { s: inviteOnly }, await User.findById(invitee._id));
+  await heard.host.next(inviteOnly, 'joined');
+  await ok(LEAVE, { s: inviteOnly }, await User.findById(invitee._id));
+  await Promise.all([heard.host.next(inviteOnly, 'left'), heard.invitee.next(inviteOnly, 'left')]);
+  await nothingFor({ friend: heard.friend, stranger: heard.stranger, 'signed-out viewer A': a, 'signed-out viewer B': b }, inviteOnly);
+  console.log('✓ An invite-only session is announced to the host, invitees and players only, including joins and leaves');
+
+  // The clock check only looks at the time since its last run, so start the
+  // session inside the window it checks next.
+  const t1 = Date.now();
+  await Session.updateOne({ _id: friendsOnly }, { startsAt: new Date(t1 + 1000), endsAt: new Date(t1 + 60 * 60 * 1000) });
+  await checkSessionClock(new Date(t1 + 2000));
+  await heard.friend.next(friendsOnly, 'started');
+  await nothingFor({ stranger: heard.stranger, 'signed-out viewer A': a }, friendsOnly);
+  console.log('✓ Clock events for private sessions follow the same rule');
+
   console.log('Realtime tests passed');
 } catch (error) {
   console.error(error);
@@ -197,6 +247,7 @@ try {
 } finally {
   viewerA.close();
   viewerB.close();
+  signedInClients.forEach((client) => client.close());
   await closeRealtime();
   await new Promise((resolve) => httpServer.close(resolve));
   const users = await User.find({ email: { $in: createdEmails } }, '_id');
