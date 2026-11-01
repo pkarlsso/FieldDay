@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test:logger": "node test-logger.js",
+    "test:unit": "node --test \"backend/test/unit/*.test.js\"",
     "build": "npm run build --workspace frontend",
     "check:backend": "node scripts/check-backend.mjs",
     "check": "node scripts/check.mjs",
