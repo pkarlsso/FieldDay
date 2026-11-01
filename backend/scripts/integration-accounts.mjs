@@ -16,11 +16,17 @@ import Session from '../src/models/Session.js';
 import Rating from '../src/models/Rating.js';
 import AuthSession from '../src/models/AuthSession.js';
 import FriendRequest from '../src/models/FriendRequest.js';
+import Conversation from '../src/models/Conversation.js';
 import Notification from '../src/models/Notification.js';
 import NotificationPreference from '../src/models/NotificationPreference.js';
 import logger from '../src/utils/logger.js';
 import SessionRegistration from '../src/models/SessionRegistration.mjs';
-import { getParticipationTier, recordRegistration } from '../src/utils/participationLimits.mjs';
+import {
+  NEW_PLAYER_TIER,
+  getParticipationTier,
+  getParticipationTierForUser,
+  recordRegistration
+} from '../src/utils/participationLimits.mjs';
 
 const tag = `accounts-${Date.now()}`;
 const emailFor = (name) => `${tag}-${name}@example.test`;
@@ -31,6 +37,11 @@ const codes = { twoFactor: {}, reset: {} };
 // The real senders would email a code; capture it instead.
 mailer.sendTwoFactorEmail = async (email, code) => { codes.twoFactor[email] = code; };
 mailer.sendPasswordResetEmail = async (email, code) => { codes.reset[email] = code; };
+
+// The shared logger records uncaught errors and keeps the process alive, which
+// would let a failed assertion end the run with exit code 0. A test should stop
+// with a failing exit code instead.
+logger.exitOnError = true;
 
 const server = new ApolloServer({ typeDefs, resolvers });
 await server.start();
@@ -270,9 +281,15 @@ try {
   assert.deepEqual(getParticipationTier(3.0), { minimumRating: 3.0, limit: 1, windowDays: 7 });
   assert.deepEqual(getParticipationTier(2.5), { minimumRating: 2.5, limit: 1, windowDays: 14 });
   assert.deepEqual(getParticipationTier(1.9), { minimumRating: 0, limit: 1, windowDays: 30 });
+  assert.equal(getParticipationTierForUser({ socialRating: 0, totalRatings: 0 }), NEW_PLAYER_TIER, 'unrated is not rated badly');
+  assert.deepEqual(getParticipationTierForUser({ socialRating: 1.9, totalRatings: 3 }), getParticipationTier(1.9));
+
+  // A brand-new account can create more than one session.
+  const newcomer = await User.create({ name: 'Newcomer', email: emailFor('newcomer') });
+  createdEmails.push(emailFor('newcomer'));
 
   const limitedCreate = await User.create({
-    name: 'Limited Creator', email: emailFor('limited-create'), socialRating: 3.0
+    name: 'Limited Creator', email: emailFor('limited-create'), socialRating: 3.0, ratingSum: 9, totalRatings: 3
   });
   createdEmails.push(emailFor('limited-create'));
   // The host is the signed-in user; sessions must start in the future.
@@ -292,8 +309,13 @@ try {
     input: { ...createInput, startsAt: daysFromNow(4) }
   }, limitedCreate, 'allows 1 new session registration per rolling 7 days');
 
+  for (const days of [3, 4]) {
+    const created = await ok(createSessionMutation, { input: { ...createInput, startsAt: daysFromNow(days) } }, newcomer);
+    sessionIds.push(created.createSession.id);
+  }
+
   const limitedJoin = await User.create({
-    name: 'Limited Joiner', email: emailFor('limited-join'), socialRating: 3.0
+    name: 'Limited Joiner', email: emailFor('limited-join'), socialRating: 3.0, ratingSum: 9, totalRatings: 3
   });
   createdEmails.push(emailFor('limited-join'));
   const joinStartsAt = new Date(daysFromNow(5));
@@ -370,6 +392,12 @@ try {
   assert.deepEqual((await User.findById(outsider._id)).friends.map(String), []);
   assert.deepEqual((await User.findById(host._id)).friends.map(String), [ids.guest]);
 
+  // Direct messages are only for friends: the accepted pair can open one, the
+  // declined pair cannot.
+  const directChat = 'mutation($id:ID!){getOrCreateDirectConversation(friendId:$id){id}}';
+  assert.ok((await ok(directChat, { id: ids.guest }, await User.findById(host._id))).getOrCreateDirectConversation.id);
+  await fails(directChat, { id: ids.host }, await User.findById(outsider._id), 'only message a friend');
+
   const notified = await Notification.find({ recipient: { $in: [guest._id, host._id] }, type: 'friend_request' });
   assert.ok(notified.some((n) => n.recipient.equals(guest._id) && n.title === 'New friend request'), 'the recipient is told about a request');
   assert.ok(notified.some((n) => n.recipient.equals(host._id) && n.title === 'Friend request accepted'), 'the requester is told it was accepted');
@@ -416,6 +444,7 @@ try {
     Session.deleteMany({ _id: { $in: sessionIds } }),
     AuthSession.deleteMany({ user: { $in: userIds } }),
     FriendRequest.deleteMany({ $or: [{ requester: { $in: userIds } }, { recipient: { $in: userIds } }] }),
+    Conversation.deleteMany({ kind: 'direct', participants: { $in: userIds } }),
     Notification.deleteMany({ recipient: { $in: userIds } }),
     NotificationPreference.deleteMany({ user: { $in: userIds } }),
     User.deleteMany({ _id: { $in: userIds } })

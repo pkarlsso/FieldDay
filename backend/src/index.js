@@ -84,22 +84,15 @@ async function startServer() {
   // Socket.IO shares the HTTP server so live session updates and chat use the
   // same host and port as GraphQL (path /socket.io).
   const httpServer = http.createServer(app);
+  // Signing in is optional for a connection: public-session updates go to
+  // everyone, private ones only to signed-in users who may see the session,
+  // and joining a chat checks for a signed-in user.
   const io = attachRealtime(httpServer, {
-    allowOrigin: (origin, req) => isAllowedOrigin(origin, `${req.socket.encrypted ? 'https' : 'http'}://${req.headers.host}`)
+    allowOrigin: (origin, req) => isAllowedOrigin(origin, `${req.socket.encrypted ? 'https' : 'http'}://${req.headers.host}`),
+    authenticate: (token) => authenticateRequest({ headers: { authorization: `Bearer ${token}` } })
   });
   startSessionClock();
 
-  // Session updates go to every connection (they carry only a session id), so
-  // signing in is optional here; joining a chat checks for a signed-in user.
-  io.use(async (socket, next) => {
-    try {
-      const token = socket.handshake.auth?.token;
-      if (token) socket.currentUser = await authenticateRequest({ headers: { authorization: `Bearer ${token}` } });
-      return next();
-    } catch (error) {
-      return next(error);
-    }
-  });
   io.on('connection', (socket) => {
     socket.on('joinConversation', async (conversationId, callback = () => {}) => {
       if (!socket.currentUser) return callback({ ok: false, error: 'You must be signed in to join a conversation.' });

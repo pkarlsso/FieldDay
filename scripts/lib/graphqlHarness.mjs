@@ -3,7 +3,7 @@
 // they (and their sessions, ratings and photos) can be deleted afterwards.
 import assert from 'node:assert/strict';
 import mongoose from 'mongoose';
-import { ApolloServer } from '@apollo/server';
+import { ApolloServer } from '../../backend/test/support/apollo.js';
 import { getConfig } from '../../backend/src/config.js';
 import typeDefs from '../../backend/src/graphql/typeDefs.js';
 import resolvers from '../../backend/src/graphql/resolvers.js';
@@ -12,6 +12,7 @@ import Session from '../../backend/src/models/Session.js';
 import Rating from '../../backend/src/models/Rating.js';
 import Media from '../../backend/src/models/Media.js';
 import AuthSession from '../../backend/src/models/AuthSession.js';
+import SessionRegistration from '../../backend/src/models/SessionRegistration.mjs';
 
 export const HOUR = 60 * 60 * 1000;
 
@@ -64,6 +65,7 @@ export async function startHarness(tag) {
       Session.deleteMany({ _id: { $in: sessionIds } }),
       Media.deleteMany({ owner: { $in: userIds } }),
       AuthSession.deleteMany({ user: { $in: userIds } }),
+      SessionRegistration.deleteMany({ user: { $in: userIds } }),
       User.deleteMany({ _id: { $in: userIds } })
     ]);
     await server.stop();

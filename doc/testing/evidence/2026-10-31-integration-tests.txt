@@ -1,0 +1,215 @@
+FieldDay verification evidence: integration tests
+Run by: Ethan Ottinger (ejotting)
+Date: 2026-11-01 00:55 EDT
+Commit: a921a44 on branch verification-check-1 (includes dev 589722a)
+Node: v24.14.0 on Windows 11
+Database: throwaway local MongoDB 7.0.14 (mongodb-memory-server); each test creates and deletes its own records
+Server: test:integration and test:chat call this branch's backend over HTTP on port 4100
+Command: npm run test:<name> for each test below, with AUTH_DEMO_BYPASS=false
+----------------------------------------------------------------------
+
+======== npm run test:authorization
+
+> test:authorization
+> node scripts/test-authorization.mjs
+
+◇ injected env (2) from backend\.env
+✓ The request's bearer token decides who the user is
+✓ All 13 protected operations reject requests without a valid identity
+✓ hostId, userId and raterId arguments are rejected by the schema
+✓ Sessions, joins, leaves, ratings, friends and profile edits act as the signed-in user
+✓ AUTH_DEMO_BYPASS only skips the emailed code; requests are still checked
+Authorization tests passed
+Exit code: 0
+
+======== npm run test:profile-setup
+
+> test:profile-setup
+> node scripts/test-profile-setup.mjs
+
+◇ injected env (2) from backend\.env
+✓ New accounts report which setup steps are missing
+✓ Photos must be real JPEG, PNG or WebP uploads owned by the user
+✓ Setup saves name, photo, sports, availability and bio
+✓ The saved profile loads for its owner only
+✓ Photos can be replaced and removed without leaving old files behind
+✓ Older accounts keep their inline photo and sports
+✓ A list of players loads all their photos with one query
+Profile setup tests passed
+Exit code: 0
+
+======== npm run test:session-membership
+
+> test:session-membership
+> node scripts/test-session-membership.mjs
+
+◇ injected env (2) from backend\.env
+✓ Joining adds the caller to the stored roster
+✓ Host, duplicate, full and unknown-session joins are rejected without changing anything
+✓ Leaving frees a spot; host and non-member leaves are rejected
+✓ Five people racing for two spots fill exactly two
+✓ Repeated joins by the same person add them once
+✓ Sessions can only be joined or left before they start
+Session membership tests passed
+Exit code: 0
+
+======== npm run test:session-visibility
+
+> test:session-visibility
+> node scripts/test-session-visibility.mjs
+
+◇ injected env (2) from backend\.env
+✓ Hosts choose public, friends-only or invite-only when creating a session
+✓ Discovery (list and map radius search) only returns sessions the caller may see
+✓ Session details are hidden from people who may not see the session
+✓ Only friends and invitees can join; anyone can still join public sessions
+✓ Inviting and uninviting take effect immediately; people who joined keep their spot
+✓ Becoming or no longer being friends with the host changes access straight away
+✓ Strangers cannot make themselves friends of a host
+Session visibility tests passed
+Exit code: 0
+
+======== npm run test:session-lifecycle
+
+> test:session-lifecycle
+> node scripts/test-session-lifecycle.mjs
+
+◇ injected env (2) from backend\.env
+✓ Invalid session inputs and end times are rejected without creating a session
+✓ Valid session stores capacity, skill level and end time in MongoDB
+✓ Capacity, skill level and end time are visible through discovery
+✓ Sessions end automatically at their end time
+✓ Players report no-shows and the majority decides
+✓ Rating skips no-shows and players you reported
+✓ The no-show check closes after 48 hours; older sessions are unaffected
+✓ My Sessions splits hosted, joined and ended sessions
+Session lifecycle tests passed
+Exit code: 0
+
+======== npm run test:sport-preferences
+
+> test:sport-preferences
+> node scripts/test-sport-preferences.mjs
+
+◇ injected env (2) from backend\.env
+Testing sport preferences and skill levels feature...
+✓ User creation with sport skills works
+✓ GraphQL updateProfile with sport skills works
+✓ Skill level validation (max 5) works
+✓ Skill level validation (min 1) works
+✓ Duplicate sport validation works
+✓ Max sports limit validation works
+✓ GraphQL query returns sport skills correctly
+✓ Backward compatibility with legacy sports format works
+✓ Sport name length validation works
+✓ Empty sport name validation works
+✓ Partial update with only sport skills works
+
+✅ All sport preferences and skill levels tests passed!
+Exit code: 0
+
+======== npm run test:realtime
+
+> test:realtime
+> node scripts/test-realtime.mjs
+
+◇ injected env (2) from backend\.env
+✓ Creating a session is announced to every connected client
+✓ Joining is announced and a refetch shows the new count
+✓ A newly full session rejects joins from a stale screen
+✓ Leaving is announced and frees the spot
+✓ Simultaneous joins never overfill a session
+✓ Concurrent join and leave do not overwrite each other
+✓ A reconnected client receives updates again
+✓ Sessions starting and ending are announced, and ended ones reject joins
+✓ A friends-only session is announced to the host and their friends only
+✓ An invite-only session is announced to the host, invitees and players only, including joins and leaves
+✓ Clock events for private sessions follow the same rule
+Realtime tests passed
+Exit code: 0
+
+======== npm run test:cooldown
+
+> test:cooldown
+> node scripts/test-cooldown.mjs
+
+◇ injected env (2) from backend\.env
+✓ A rating that drops the social rating below 2 starts a 2-day cooldown
+✓ Create and join are rejected during the cooldown
+✓ The cooldown end time is shown only to the suspended user
+✓ Further low ratings during a cooldown do not extend it
+✓ Create and join work again once the cooldown has ended
+✓ After expiry, only a rating that lowers the average again restarts the cooldown
+✓ The cooldown starts below 2.0 as shown in the app, not at it
+Cooldown tests passed
+Exit code: 0
+
+======== npm run test:attendance
+
+> test:attendance
+> node scripts/test-attendance-and-host-changes.mjs
+
+◇ injected env (2) from backend\.env
+✓ Check-in only works during the first 10 minutes and within 200 m
+✓ Players who did not check in are marked absent
+✓ A check-in no-show gets one automatic rating of 1, exactly once
+✓ Only players who checked in rate, and only each other
+✓ A peer-majority no-show gets one rating of 1 once the no-show check closes
+✓ Hosts can edit time, location and capacity (never below the player count)
+✓ Cancelled sessions leave discovery and cannot be joined, edited or rated
+✓ Sessions cannot be edited or cancelled once they start
+Attendance and host change tests passed
+Exit code: 0
+
+======== npm run test:accounts
+
+> test:accounts
+> npm run test:accounts --workspace backend
+
+
+> fieldday-backend@1.0.0 test:accounts
+> node scripts/integration-accounts.mjs
+
+◇ injected env (2) from .env
+00:55:30 error: Error: bad token
+    at googleAuth.verifyGoogleIdToken (<repo>/backend/scripts/integration-accounts.mjs:196:56)
+    at Object.googleSignIn (<repo>/backend/src/graphql/resolvers.js:1589:36)
+    at field.resolve (<repo>/backend/node_modules/@apollo/server/dist/esm/utils/schemaInstrumentation.js:36:28)
+    at executeField (<repo>\node_modules\graphql\execution\execute.js:733:20)
+    at <repo>\node_modules\graphql\execution\execute.js:614:22
+    at promiseReduce (<repo>\node_modules\graphql\jsutils\promiseReduce.js:25:9)
+    at executeFieldsSerially (<repo>\node_modules\graphql\execution\execute.js:610:43)
+    at executeOperation (<repo>\node_modules\graphql\execution\execute.js:582:14)
+    at execute (<repo>\node_modules\graphql\execution\execute.js:309:20)
+    at executeIncrementally (<repo>/backend/node_modules/@apollo/server/dist/esm/incrementalDeliveryPolyfill.js:21:12) {"service":"fieldday","error":"bad token"}
+(Use `node --trace-warnings ...` to show where the warning was created)
+00:55:31 info: Accounts integration test passed: sessions, password reset, Google, profile, ratings {"service":"fieldday"}
+Exit code: 0
+
+======== npm run test:integration
+
+> test:integration
+> npm run test:integration --workspace backend
+
+
+> fieldday-backend@1.0.0 test:integration
+> node scripts/integration-session.mjs
+
+◇ injected env (2) from .env
+Integration session test passed: create -> join -> leave over HTTP with bearer tokens
+Exit code: 0
+
+======== npm run test:chat
+
+> test:chat
+> npm run test:chat --workspace backend
+
+
+> fieldday-backend@1.0.0 test:chat
+> node scripts/integration-chat.mjs
+
+◇ injected env (2) from .env
+Integration chat test passed: authorization -> persistence -> retry -> read-only history
+Exit code: 0
+
+======== logs/exceptions.log after the run: 0 bytes (empty means no failures were swallowed by the logger)

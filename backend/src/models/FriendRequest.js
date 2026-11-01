@@ -15,9 +15,10 @@ friendRequestSchema.index(
 friendRequestSchema.index({ recipient: 1, status: 1, createdAt: -1 });
 friendRequestSchema.index({ requester: 1, status: 1, createdAt: -1 });
 
-friendRequestSchema.pre('save', function updateTimestamp(next) {
+// Mongoose 9 no longer passes a `next` callback to middleware; the hook is done
+// when it returns.
+friendRequestSchema.pre('save', function updateTimestamp() {
   this.updatedAt = new Date();
-  next();
 });
 
 export default mongoose.model('FriendRequest', friendRequestSchema);
