@@ -9,6 +9,7 @@
   "scripts": {
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "sbom": "cyclonedx-npm --ignore-npm-errors --omit dev --workspace backend --workspace frontend --include-workspace-root --gather-license-texts --output-reproducible --spec-version 1.6 --output-format JSON --output-file doc/SBOM.json --validate",
     "test:logger": "node test-logger.js",
     "test:unit": "node --test \"backend/test/unit/*.test.js\"",
     "build": "npm run build --workspace frontend",
@@ -33,6 +34,7 @@
     "simulate:local": "node scripts/simulate-local.mjs"
   },
   "devDependencies": {
+    "@cyclonedx/cyclonedx-npm": "^6.0.1",
     "@eslint/js": "^9.39.5",
     "@react-native/eslint-config": "^0.87.1",
     "eslint": "^9.39.5",
