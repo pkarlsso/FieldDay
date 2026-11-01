@@ -1,5 +1,5 @@
 node_modules/
-SBOM.json
+doc/SBOM.json
 .expo/
 .env
 *.log

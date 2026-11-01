@@ -9,7 +9,7 @@
   "scripts": {
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "sbom": "cyclonedx-npm --ignore-npm-errors --omit dev --workspace backend --workspace frontend --include-workspace-root --gather-license-texts --output-reproducible --spec-version 1.6 --output-format JSON --output-file SBOM.json --validate",
+    "sbom": "cyclonedx-npm --ignore-npm-errors --omit dev --workspace backend --workspace frontend --include-workspace-root --gather-license-texts --output-reproducible --spec-version 1.6 --output-format JSON --output-file doc/SBOM.json --validate",
     "test:logger": "node test-logger.js",
     "test:unit": "node --test \"backend/test/unit/*.test.js\"",
     "build": "npm run build --workspace frontend",
