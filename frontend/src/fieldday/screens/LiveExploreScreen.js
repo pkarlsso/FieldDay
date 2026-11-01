@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Card, Pill, ScreenHeader, SportIcon } from '../components/ui';
 import { colors, sports } from '../theme';
 import { DEFAULT_DISCOVERY_FILTER, getDiscoveryOrigin, loadDiscoverySessions } from '../discovery';
 import { formatSessionTime, playersLabel, skillLabel } from '../sessionInfo';
+import { useSessionUpdates } from '../useSessionUpdates';
 import logger from '../../logger';
 
 const sportOptions = Object.keys(sports);
@@ -22,7 +23,10 @@ export default function LiveExploreScreen({ navigation }) {
   const [locating, setLocating] = useState(true);
   const [origin, setOrigin] = useState(null);
   const [draft, setDraft] = useState(DEFAULT_DISCOVERY_FILTER);
+  // The filter behind the list on screen, so live updates refetch the same list.
+  const appliedFilter = useRef(null);
   const load = useCallback(async (nextFilter) => {
+    appliedFilter.current = nextFilter;
     try { setSessions(await loadDiscoverySessions(nextFilter)); setError(''); }
     catch (err) { setError(err.message); }
   }, []);
@@ -32,15 +36,22 @@ export default function LiveExploreScreen({ navigation }) {
       setOrigin(location);
       const next = { ...DEFAULT_DISCOVERY_FILTER, origin: location || undefined };
       setDraft(next);
+      appliedFilter.current = next;
       await loadDiscoverySessions(next).then(setSessions);
     }).catch(async (error) => {
       logger.warn('Could not determine discovery location:', error);
       setOrigin(null);
       const next = { ...DEFAULT_DISCOVERY_FILTER, origin: undefined };
       setDraft(next);
+      appliedFilter.current = next;
       await loadDiscoverySessions(next).then(setSessions);
     }).finally(() => setLocating(false));
   }, [load]);
+
+  // Player counts and open spots change as people join and leave elsewhere.
+  useSessionUpdates(useCallback(() => {
+    if (appliedFilter.current) load(appliedFilter.current);
+  }, [load]));
 
   const toggleSport = (sport) => setDraft((current) => ({
     ...current,

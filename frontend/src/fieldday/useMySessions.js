@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { loadMySessions } from './sessionInfo';
+import { affectsSessions, useSessionUpdates } from './useSessionUpdates';
 import logger from '../logger';
 
 // The signed-in user's hosted, joined and completed sessions. Refetched every
@@ -31,6 +32,14 @@ export function useMySessions() {
     fetchSessions();
     return () => { active.current = false; };
   }, [fetchSessions]));
+
+  // Live roster changes to sessions on this list (someone joins or leaves, or
+  // one starts or ends). Skipped while another screen is in front; focus
+  // refetches anyway.
+  useSessionUpdates(useCallback((events) => {
+    const ids = data ? [...data.hosted, ...data.joined].map((session) => session.id) : [];
+    if (active.current && affectsSessions(events, ids)) fetchSessions();
+  }, [data, fetchSessions]));
 
   const refresh = useCallback(async () => {
     setRefreshing(true);

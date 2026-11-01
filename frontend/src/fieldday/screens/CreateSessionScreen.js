@@ -5,6 +5,7 @@ import * as Location from 'expo-location';
 import MapView, { Marker } from 'react-native-maps';
 import { addResultsListener, isAvailable as hasAppleSearch, resolve, search } from '../../../modules/apple-search-completer/src';
 import { Card, IconButton, Pill, PrimaryButton, ScreenHeader } from '../components/ui';
+import CooldownNotice, { isCoolingDown } from '../components/CooldownNotice';
 import { colors, sports } from '../theme';
 import { CAPACITY_LIMITS, DEFAULT_SESSION_LENGTH_MS, SKILL_LEVELS, VISIBILITY_OPTIONS, validateSessionForm } from '../sessionInfo';
 import { useCurrentUser } from '../useCurrentUser';
@@ -73,6 +74,11 @@ export default function CreateSessionScreen({ navigation }) {
   const [suggestions, setSuggestions] = useState([]);
   const [geocoding, setGeocoding] = useState(false);
   const [loading, setLoading] = useState(false);
+  const user = useCurrentUser();
+  // Set when the server rejects a create because of a cooldown the profile
+  // didn't show yet (e.g. a rating landed while this screen was open).
+  const [blockedUntil, setBlockedUntil] = useState(null);
+  const cooldownUntil = blockedUntil || user?.cooldownUntil;
 
   useEffect(() => {
     if (location.trim().length < 3) {
@@ -214,7 +220,8 @@ export default function CreateSessionScreen({ navigation }) {
       resetForm();
       navigation.navigate('Sessions');
     } catch (error) {
-      Alert.alert('Could not create session', error.message);
+      if (error.code === 'ACCOUNT_COOLDOWN') setBlockedUntil(error.extensions.cooldownUntil);
+      else Alert.alert('Could not create session', error.message);
     } finally {
       setLoading(false);
     }
@@ -224,6 +231,7 @@ export default function CreateSessionScreen({ navigation }) {
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <ScreenHeader title="Create Session" />
       <ScrollView contentContainerStyle={{ padding: 18, gap: 14 }}>
+        <CooldownNotice until={cooldownUntil} />
         <Card style={{ gap: 10 }}>
           <Text style={{ color: colors.ink, fontSize: 18, fontWeight: '900' }}>Sport</Text>
           <View style={styles.pillRow}>
@@ -310,7 +318,7 @@ export default function CreateSessionScreen({ navigation }) {
             <Marker coordinate={locationPoint} />
           </MapView>
           <FieldError message={errors.location} />
-          <PrimaryButton label={loading ? 'Creating...' : 'Create Session'} onPress={create} disabled={loading} />
+          <PrimaryButton label={loading ? 'Creating...' : 'Create Session'} onPress={create} disabled={loading || isCoolingDown(cooldownUntil)} />
         </Card>
       </ScrollView>
     </View>

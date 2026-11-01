@@ -18,6 +18,8 @@
     "test:accounts": "npm run test:accounts --workspace backend",
     "test:sport-preferences": "node scripts/test-sport-preferences.mjs",
     "test:session-lifecycle": "node scripts/test-session-lifecycle.mjs",
+    "test:realtime": "node scripts/test-realtime.mjs",
+    "test:cooldown": "node scripts/test-cooldown.mjs",
     "test:session-membership": "node scripts/test-session-membership.mjs",
     "test:session-visibility": "node scripts/test-session-visibility.mjs",
     "test:authorization": "node scripts/test-authorization.mjs",
