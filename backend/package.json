@@ -12,7 +12,8 @@
     "test:integration": "node scripts/integration-session.mjs"
   },
   "dependencies": {
-    "@apollo/server": "^4.13.0",
+    "@apollo/server": "^5.5.1",
+    "@as-integrations/express4": "^1.1.2",
     "argon2": "^0.41.1",
     "cors": "^2.8.5",
     "dotenv": "^18.0.8",
@@ -20,7 +21,7 @@
     "google-auth-library": "^11.3.1",
     "graphql": "^16.10.0",
     "mongoose": "^9.11.4",
-    "nodemailer": "^10.2.1",
+    "nodemailer": "^10.3.1",
     "socket.io": "^4.8.4"
   }
 }
