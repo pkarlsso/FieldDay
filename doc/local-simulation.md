@@ -32,3 +32,7 @@ By default it creates 30 users and 30 sessions; set `SIM_USERS` to 4–100 and `
 The account for player 1 is `<run-id>-0@example.test` and the local-only password is `FielddayLocalTest!2026`. Log in using a frontend configured with `EXPO_PUBLIC_API_URL=http://127.0.0.1:4012/graphql` in an iOS simulator. With local SMTP unconfigured, the backend logs the test verification code in `logs/combined.log`. These are disposable credentials and the log contains verification codes; do not use this approach with real accounts or enable it in production. The simulator uses the Mac's localhost; a physical phone needs an appropriately configured local network address and is not covered by this localhost-only setup.
 
 Push delivery and one-hour session reminders are not demonstrated by this simulation. A ranking that stays the same is not proof of a trained model; test Gorse training and ranking quality over time with varied interactions separately. This environment does not alter AWS or the team's live MongoDB database.
+
+## GitHub Actions
+
+The synthetic simulation also runs in `.github/workflows/local-simulation.yml` on pull requests targeting `dev` or `main`, pushes to those branches, and manual dispatch. GitHub hosts an isolated MongoDB service, Gorse container and backend for each job. The runner and synthetic data are discarded after the job. Its 30 simultaneous requests are a regression smoke check, not a production stress or physical-device test.

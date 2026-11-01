@@ -102,7 +102,15 @@ try {
     httpLoad = { concurrentRequests: responses.length, succeeded: responses.filter(Boolean).length, elapsedMs: Date.now() - started };
     assert.equal(httpLoad.succeeded, users.length, 'concurrent HTTP requests must authenticate successfully');
   }
-  const gorseFeedbackCount = process.env.GORSE_BASE_URL ? (await Promise.all(users.map(user => hasGorseJoins(user)))).filter(Boolean).length : null;
+  let gorseFeedbackCount = null;
+  if (process.env.GORSE_BASE_URL) {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      gorseFeedbackCount = (await Promise.all(users.map(user => hasGorseJoins(user)))).filter(Boolean).length;
+      if (gorseFeedbackCount === users.length) break;
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    assert.equal(gorseFeedbackCount, users.length, 'all synthetic join events must reach Gorse');
+  }
   console.log(JSON.stringify({ httpLoad, gorseUsersWithJoinFeedback: gorseFeedbackCount, database: parsed.pathname.slice(1), run: tag, users: users.length, sessions: created.length, joins: joined, friendRequests: count, accepted: Math.ceil(count / 2), unreadNotificationsForPlayer3: notifications.getUnreadNotificationCount, nearbyBasketballSessions: search.getSessions.length, ratingsSubmitted: 1, recommendationsBefore: before.recommendedSessions.map(x => x.session.sport), recommendationsAfter: after.recommendedSessions.map(x => x.session.sport), note: 'Synthetic data; timing shifted only for the rating test. Ranking changes and real push delivery are not guaranteed.' }, null, 2));
 } catch (error) { console.error('Simulation failed:', error.message); process.exitCode = 1; }
 finally { await server.stop(); await mongoose.disconnect(); }
