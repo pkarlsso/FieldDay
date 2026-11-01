@@ -72,10 +72,12 @@ async function signUpAndVerify(name) {
   createdEmails.push(email);
   const signUp = await ok(`mutation($e:String!,$p:String!){signUp(email:$e,password:$p){${AUTH_FIELDS}}}`, { e: email, p: PASSWORD });
   assert.equal(signUp.signUp.success, true);
-  assert.equal(signUp.signUp.requiresTwoFactor, false);
-  assert.ok(signUp.signUp.token, 'signup should return a session token');
-  assert.equal(codes.twoFactor[email], undefined, 'signup should not send a verification code');
-  return { email, ...signUp.signUp };
+  assert.equal(signUp.signUp.requiresTwoFactor, true);
+  assert.equal(signUp.signUp.token, null);
+  const verify = await ok(`mutation($e:String!,$c:String!){verifyTwoFactorCode(email:$e,code:$c){${AUTH_FIELDS}}}`, { e: email, c: codes.twoFactor[email] });
+  assert.equal(verify.verifyTwoFactorCode.success, true);
+  assert.ok(verify.verifyTwoFactorCode.token);
+  return { email, ...verify.verifyTwoFactorCode };
 }
 
 const sessionIds = [];

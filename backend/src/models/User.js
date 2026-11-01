@@ -34,6 +34,8 @@ const userSchema = new mongoose.Schema({
 
   // Auth
   passwordHash: { type: String, default: null },
+  // Missing on legacy accounts, which retain their previous login behavior.
+  emailVerified: { type: Boolean, default: true },
   googleId: { type: String, unique: true, sparse: true },
   twoFactorCodeHash: { type: String, default: null },
   twoFactorCodeExpires: { type: Date, default: null },

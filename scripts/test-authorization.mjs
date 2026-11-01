@@ -9,7 +9,8 @@ import Session from '../backend/src/models/Session.js';
 import Rating from '../backend/src/models/Rating.js';
 import { idOf, moveSession, runTest, sessionInput, startHarness } from './lib/graphqlHarness.mjs';
 
-mailer.sendTwoFactorEmail = async () => {};
+let signupCode;
+mailer.sendTwoFactorEmail = async (_, code) => { signupCode = code; };
 
 const harness = await startHarness(`authz-test-${Date.now()}`);
 const { run, ok, fails, createUsers, fresh } = harness;
@@ -125,8 +126,10 @@ await runTest(harness, async () => {
   try {
     delete process.env.AUTH_DEMO_BYPASS;
     const normal = (await run(SIGN_UP, { e: email })).data.signUp;
-    assert.equal(normal.requiresTwoFactor, false);
-    assert.ok(normal.token, 'signup returns a session token');
+    assert.equal(normal.requiresTwoFactor, true);
+    assert.equal(normal.token, null, 'signup requires email verification');
+    const verification = (await run('mutation($e:String!,$c:String!){verifyTwoFactorCode(email:$e,code:$c){success token}}', { e: email, c: signupCode })).data.verifyTwoFactorCode;
+    assert.equal(verification.success, true);
     process.env.AUTH_DEMO_BYPASS = 'true';
     const demo = (await run('mutation($e:String!){login(email:$e,password:"Sup3r-secret!"){token requiresTwoFactor}}', { e: email })).data.login;
     assert.equal(demo.requiresTwoFactor, false);
