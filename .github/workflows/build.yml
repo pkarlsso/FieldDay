@@ -52,6 +52,16 @@ jobs:
           backend_pid=$!
           trap 'kill "$backend_pid" 2>/dev/null || true' EXIT
           curl --fail --retry 20 --retry-all-errors --retry-delay 2 http://localhost:4000/health
+      # These scripts set a non-zero exit code when an assertion fails, so a
+      # failing test fails the job. They clean up the records they create.
+      - name: Integration tests
+        run: |
+          npm run test:authorization
+          npm run test:profile-setup
+          npm run test:session-membership
+          npm run test:session-visibility
+          npm run test:session-lifecycle
+          npm run test:accounts
 
   checks:
     name: ${{ matrix.name }}
@@ -63,6 +73,9 @@ jobs:
         include:
           - name: Validate backend
             command: npm run check:backend
+            artifact_path: ''
+          - name: Unit tests
+            command: npm run test:unit
             artifact_path: ''
           - name: Build frontend
             command: npm run build
