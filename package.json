@@ -19,10 +19,13 @@
     "test:accounts": "npm run test:accounts --workspace backend",
     "test:sport-preferences": "node scripts/test-sport-preferences.mjs",
     "test:session-lifecycle": "node scripts/test-session-lifecycle.mjs",
+    "test:realtime": "node scripts/test-realtime.mjs",
+    "test:cooldown": "node scripts/test-cooldown.mjs",
     "test:session-membership": "node scripts/test-session-membership.mjs",
     "test:session-visibility": "node scripts/test-session-visibility.mjs",
     "test:authorization": "node scripts/test-authorization.mjs",
     "test:profile-setup": "node scripts/test-profile-setup.mjs",
+    "test:attendance": "node scripts/test-attendance-and-host-changes.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
     "export:shaped": "node backend/scripts/export-shaped-data.mjs",
     "test:shaped-export": "node scripts/test-shaped-export.mjs",
@@ -37,10 +40,12 @@
     "eslint-plugin-react-native": "^5.0.0",
     "eslint-plugin-react-refresh": "^0.5.7",
     "globals": "^15.15.0",
-    "typescript-eslint": "^8.72.0",
-    "patch-package": "^8.0.1"
+    "patch-package": "^8.0.1",
+    "typescript-eslint": "^8.72.0"
   },
   "dependencies": {
+    "proxy-addr": "^2.0.8",
+    "shell-quote": "^1.12.0",
     "winston": "^3.19.0"
   }
 }

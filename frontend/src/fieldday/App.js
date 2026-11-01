@@ -124,6 +124,7 @@ export default function App() {
         {/* First-run setup: the same form as Edit Profile, shown after sign-in until it is complete. */}
         <Stack.Screen name="ProfileSetup" component={EditProfileScreen} initialParams={{ onboarding: true }} />
         <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+        <Stack.Screen name="EditSession" component={CreateSessionScreen} />
         <Stack.Screen name="SessionDetails" component={useLiveData ? LiveSessionDetailsScreen : SessionDetailsScreen} />
         <Stack.Screen name="RateSession" component={useLiveData ? LiveRateSessionScreen : RateSessionScreen} />
         <Stack.Screen name="ReportNoShows" component={LiveNoShowScreen} />

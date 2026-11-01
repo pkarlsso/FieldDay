@@ -5,6 +5,7 @@ import * as Location from 'expo-location';
 import MapView, { Marker } from 'react-native-maps';
 import { addResultsListener, isAvailable as hasAppleSearch, resolve, search } from '../../../modules/apple-search-completer/src';
 import { Card, IconButton, Pill, PrimaryButton, ScreenHeader } from '../components/ui';
+import CooldownNotice, { isCoolingDown } from '../components/CooldownNotice';
 import { colors, sports } from '../theme';
 import { CAPACITY_LIMITS, DEFAULT_SESSION_LENGTH_MS, SKILL_LEVELS, VISIBILITY_OPTIONS, validateSessionForm } from '../sessionInfo';
 import { useCurrentUser } from '../useCurrentUser';
@@ -14,6 +15,11 @@ import logger from '../../logger';
 const MUTATION = `
   mutation CreateSession($input: CreateSessionInput!) {
     createSession(input: $input) { id sport startsAt location visibility }
+  }
+`;
+const EDIT_MUTATION = `
+  mutation EditSession($sessionId: ID!, $input: EditSessionInput!) {
+    editSession(sessionId: $sessionId, input: $input) { id sport startsAt location }
   }
 `;
 
@@ -54,16 +60,23 @@ function FieldError({ message }) {
   return message ? <Text style={styles.error}>{message}</Text> : null;
 }
 
-export default function CreateSessionScreen({ navigation }) {
-  const [sport, setSport] = useState(null);
-  const [startsAt, setStartsAt] = useState(defaultStartAt);
-  const [endsAt, setEndsAt] = useState(() => defaultEndsAt(startsAt));
-  const [location, setLocation] = useState(DEFAULT_LOCATION);
-  const [locationPoint, setLocationPoint] = useState(DEFAULT_LOCATION_POINT);
+// Also the Edit Session screen: given route.params.session, the host can change
+// its time, location and capacity. Sport and skill level stay fixed.
+export default function CreateSessionScreen({ navigation, route }) {
+  const editing = route?.params?.session;
+  const joinedCount = editing?.participants?.length ?? 0;
+  const [sport, setSport] = useState(editing?.sport ?? null);
+  const [startsAt, setStartsAt] = useState(() => (editing ? new Date(editing.startsAt) : defaultStartAt()));
+  const [endsAt, setEndsAt] = useState(() => (editing ? new Date(editing.endsAt) : defaultEndsAt(startsAt)));
+  const [location, setLocation] = useState(editing?.location ?? DEFAULT_LOCATION);
+  const [locationPoint, setLocationPoint] = useState(() => {
+    const coordinates = editing?.locationPoint?.coordinates;
+    return coordinates ? { longitude: coordinates[0], latitude: coordinates[1] } : DEFAULT_LOCATION_POINT;
+  });
   // False once the text is edited by hand, until a point is picked to match it.
   const [locationConfirmed, setLocationConfirmed] = useState(true);
-  const [maxParticipants, setMaxParticipants] = useState(DEFAULT_CAPACITY);
-  const [skillLevel, setSkillLevel] = useState(null);
+  const [maxParticipants, setMaxParticipants] = useState(editing?.maxParticipants ?? DEFAULT_CAPACITY);
+  const [skillLevel, setSkillLevel] = useState(editing?.skillLevel ?? null);
   const [visibility, setVisibility] = useState('PUBLIC');
   const [inviteeIds, setInviteeIds] = useState([]);
   const [errors, setErrors] = useState({});
@@ -73,6 +86,11 @@ export default function CreateSessionScreen({ navigation }) {
   const [suggestions, setSuggestions] = useState([]);
   const [geocoding, setGeocoding] = useState(false);
   const [loading, setLoading] = useState(false);
+  const user = useCurrentUser();
+  // Set when the server rejects a create because of a cooldown the profile
+  // didn't show yet (e.g. a rating landed while this screen was open).
+  const [blockedUntil, setBlockedUntil] = useState(null);
+  const cooldownUntil = blockedUntil || user?.cooldownUntil;
 
   useEffect(() => {
     if (location.trim().length < 3) {
@@ -166,7 +184,8 @@ export default function CreateSessionScreen({ navigation }) {
   }
 
   function changeCapacity(delta) {
-    setMaxParticipants((value) => Math.min(CAPACITY_LIMITS.max, Math.max(CAPACITY_LIMITS.min, value + delta)));
+    const min = Math.max(CAPACITY_LIMITS.min, joinedCount);
+    setMaxParticipants((value) => Math.min(CAPACITY_LIMITS.max, Math.max(min, value + delta)));
   }
 
   function toggleInvitee(id) {
@@ -189,13 +208,41 @@ export default function CreateSessionScreen({ navigation }) {
   }
 
   async function create() {
-    const formErrors = validateSessionForm({ sport, startsAt, endsAt, location, locationConfirmed, maxParticipants, skillLevel, visibility, inviteeIds });
+    const formErrors = validateSessionForm({ sport, startsAt, endsAt, location, locationConfirmed, maxParticipants, skillLevel, joinedCount, visibility, inviteeIds });
+    // Sport, skill level and visibility can't be edited (older sessions may have
+    // no level).
+    if (editing) {
+      delete formErrors.sport;
+      delete formErrors.skillLevel;
+      delete formErrors.visibility;
+    }
     setErrors(formErrors);
     if (Object.keys(formErrors).length) {
       Alert.alert('Check the session details', Object.values(formErrors).join('\n'));
       return;
     }
     setLoading(true);
+    if (editing) {
+      try {
+        await graphql(EDIT_MUTATION, {
+          sessionId: editing.id,
+          input: {
+            startsAt: startsAt.toISOString(),
+            endsAt: endsAt.toISOString(),
+            location: location.trim(),
+            locationPoint,
+            maxParticipants,
+          },
+        });
+        Alert.alert('Session updated', 'Players who joined will see the new details.');
+        navigation.goBack();
+      } catch (error) {
+        Alert.alert('Could not update session', error.message);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
     try {
       const data = await graphql(MUTATION, {
         input: {
@@ -214,7 +261,8 @@ export default function CreateSessionScreen({ navigation }) {
       resetForm();
       navigation.navigate('Sessions');
     } catch (error) {
-      Alert.alert('Could not create session', error.message);
+      if (error.code === 'ACCOUNT_COOLDOWN') setBlockedUntil(error.extensions.cooldownUntil);
+      else Alert.alert('Could not create session', error.message);
     } finally {
       setLoading(false);
     }
@@ -222,16 +270,26 @@ export default function CreateSessionScreen({ navigation }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <ScreenHeader title="Create Session" />
+      <ScreenHeader
+        title={editing ? 'Edit Session' : 'Create Session'}
+        left={editing ? <IconButton icon="chevron-back" onPress={() => navigation.goBack()} /> : undefined}
+      />
       <ScrollView contentContainerStyle={{ padding: 18, gap: 14 }}>
+        {editing ? null : <CooldownNotice until={cooldownUntil} />}
         <Card style={{ gap: 10 }}>
-          <Text style={{ color: colors.ink, fontSize: 18, fontWeight: '900' }}>Sport</Text>
-          <View style={styles.pillRow}>
-            {sportOptions.map((option) => (
-              <Pill key={option} label={option} active={sport === option} color={sports[option].color} onPress={() => setSport(option)} />
-            ))}
-          </View>
-          <FieldError message={errors.sport} />
+          {editing ? (
+            <Text style={{ color: colors.ink, fontSize: 18, fontWeight: '900' }}>{editing.sport}</Text>
+          ) : (
+            <>
+              <Text style={{ color: colors.ink, fontSize: 18, fontWeight: '900' }}>Sport</Text>
+              <View style={styles.pillRow}>
+                {sportOptions.map((option) => (
+                  <Pill key={option} label={option} active={sport === option} color={sports[option].color} onPress={() => setSport(option)} />
+                ))}
+              </View>
+              <FieldError message={errors.sport} />
+            </>
+          )}
           <Text style={styles.label}>Start date</Text>
           <DateTimePicker
             value={startsAt}
@@ -271,35 +329,41 @@ export default function CreateSessionScreen({ navigation }) {
             <IconButton icon="remove" onPress={() => changeCapacity(-1)} />
             <Text style={{ color: colors.ink, fontSize: 22, fontWeight: '900', minWidth: 36, textAlign: 'center' }}>{maxParticipants}</Text>
             <IconButton icon="add" onPress={() => changeCapacity(1)} />
-            <Text style={{ color: colors.muted, flex: 1 }}>including you</Text>
+            <Text style={{ color: colors.muted, flex: 1 }}>
+              {editing ? `including you · ${joinedCount} joined` : 'including you'}
+            </Text>
           </View>
           <FieldError message={errors.maxParticipants} />
-          <Text style={styles.label}>Skill level</Text>
-          <View style={styles.pillRow}>
-            {SKILL_LEVELS.map((level) => (
-              <Pill key={level.value} label={`${level.value} · ${level.label}`} active={skillLevel === level.value} onPress={() => setSkillLevel(level.value)} />
-            ))}
-          </View>
-          <FieldError message={errors.skillLevel} />
-          <Text style={styles.label}>Who can find and join</Text>
-          <View style={styles.pillRow}>
-            {VISIBILITY_OPTIONS.map((option) => (
-              <Pill key={option.value} label={option.label} active={visibility === option.value} onPress={() => setVisibility(option.value)} />
-            ))}
-          </View>
-          <Text style={{ color: colors.muted }}>{VISIBILITY_OPTIONS.find((option) => option.value === visibility).detail}</Text>
-          {visibility === 'INVITE_ONLY' ? (
-            friends.length ? (
+          {editing ? null : (
+            <>
+              <Text style={styles.label}>Skill level</Text>
               <View style={styles.pillRow}>
-                {friends.map((friend) => (
-                  <Pill key={friend.id} label={friend.name} active={inviteeIds.includes(friend.id)} onPress={() => toggleInvitee(friend.id)} />
+                {SKILL_LEVELS.map((level) => (
+                  <Pill key={level.value} label={`${level.value} · ${level.label}`} active={skillLevel === level.value} onPress={() => setSkillLevel(level.value)} />
                 ))}
               </View>
-            ) : (
-              <Text style={{ color: colors.muted }}>You have no friends to invite yet. Add the people you play with when you rate a session.</Text>
-            )
-          ) : null}
-          <FieldError message={errors.visibility} />
+              <FieldError message={errors.skillLevel} />
+              <Text style={styles.label}>Who can find and join</Text>
+              <View style={styles.pillRow}>
+                {VISIBILITY_OPTIONS.map((option) => (
+                  <Pill key={option.value} label={option.label} active={visibility === option.value} onPress={() => setVisibility(option.value)} />
+                ))}
+              </View>
+              <Text style={{ color: colors.muted }}>{VISIBILITY_OPTIONS.find((option) => option.value === visibility).detail}</Text>
+              {visibility === 'INVITE_ONLY' ? (
+                friends.length ? (
+                  <View style={styles.pillRow}>
+                    {friends.map((friend) => (
+                      <Pill key={friend.id} label={friend.name} active={inviteeIds.includes(friend.id)} onPress={() => toggleInvitee(friend.id)} />
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={{ color: colors.muted }}>You have no friends to invite yet. Add the people you play with when you rate a session.</Text>
+                )
+              ) : null}
+              <FieldError message={errors.visibility} />
+            </>
+          )}
           <Text style={styles.label}>Location</Text>
           <TextInput value={location} onChangeText={editLocation} style={styles.input} placeholder="Search for an address" />
           {suggestions.map((result, index) => <Text key={`${result.title || result.name}-${index}`} onPress={() => chooseSuggestion(result)} style={styles.suggestion}>
@@ -310,7 +374,11 @@ export default function CreateSessionScreen({ navigation }) {
             <Marker coordinate={locationPoint} />
           </MapView>
           <FieldError message={errors.location} />
-          <PrimaryButton label={loading ? 'Creating...' : 'Create Session'} onPress={create} disabled={loading} />
+          <PrimaryButton
+            label={editing ? (loading ? 'Saving...' : 'Save Changes') : (loading ? 'Creating...' : 'Create Session')}
+            onPress={create}
+            disabled={loading || (!editing && isCoolingDown(cooldownUntil))}
+          />
         </Card>
       </ScrollView>
     </View>

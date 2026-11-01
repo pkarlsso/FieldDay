@@ -11,6 +11,12 @@ export const API_URL =
   process.env.EXPO_PUBLIC_API_URL ||
   'https://sgbtn5pq84.execute-api.us-east-2.amazonaws.com/graphql';
 
+// Live session updates (Socket.IO) come from the same server as GraphQL, so
+// by default this is API_URL without the /graphql path.
+export const REALTIME_URL =
+  process.env.EXPO_PUBLIC_REALTIME_URL ||
+  API_URL.replace(/\/graphql\/?$/, '');
+
 // Google OAuth client IDs (public identifiers, not secrets). "Sign in with
 // Google" only appears once the ID for the platform being run is set.
 export const GOOGLE_CLIENT_IDS = {

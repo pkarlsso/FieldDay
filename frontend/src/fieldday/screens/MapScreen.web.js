@@ -2,13 +2,20 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { loadDiscoverySessions } from '../discovery';
 import { playersLabel, skillLabel } from '../sessionInfo';
+import { useSessionUpdates } from '../useSessionUpdates';
 import logger from '../../logger';
+
+const useLiveData = process.env.EXPO_PUBLIC_LIVE_DATA === 'true';
 
 export default function MapScreen() {
   const [sessions, setSessions] = React.useState([]);
-  React.useEffect(() => {
-    if (process.env.EXPO_PUBLIC_LIVE_DATA === 'true') loadDiscoverySessions({}).then(setSessions).catch((error) => logger.error('Could not load web map sessions:', error));
+  const loadSessions = React.useCallback(() => {
+    loadDiscoverySessions({}).then(setSessions).catch((error) => logger.error('Could not load web map sessions:', error));
   }, []);
+  React.useEffect(() => {
+    if (useLiveData) loadSessions();
+  }, [loadSessions]);
+  useSessionUpdates(loadSessions, { enabled: useLiveData });
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Map testing is available on iOS.</Text>

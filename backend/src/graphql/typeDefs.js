@@ -14,6 +14,10 @@ const typeDefs = `#graphql
     socialRating: Float
     totalRatings: Int
     friends: [User]
+    # When the user's cooldown ends (FR-8): their social rating dropped below 2,
+    # so they can't create or join sessions until then. Only the signed-in user
+    # sees their own; null for everyone else and when there is no cooldown.
+    cooldownUntil: String
     # True once the first-run setup has everything it needs.
     profileComplete: Boolean!
     # What first-run setup still needs: any of "name", "sports" and
@@ -123,15 +127,26 @@ const typeDefs = `#graphql
     visibility: SessionVisibility!
     # Who the host invited. Only the host sees this list; everyone else gets [].
     invitees: [User!]!
-    # "upcoming", "in_progress" (started, not ended) or "completed" (ended).
-    # Derived from the clock, so sessions end without anyone marking them.
+    # "upcoming", "in_progress" (started, not ended), "completed" (ended) or
+    # "cancelled" (by the host). Apart from cancelled it is derived from the
+    # clock, so sessions end without anyone marking them.
     status: String
+    cancelledAt: String
     rated: Boolean
     createdAt: String
     # When the session ended. Null until then.
     completedAt: String
-    # Last moment to answer "who didn't show up?". Null until the session ends.
+    # Last moment to answer "who didn't show up?". Null until the session ends,
+    # and always null for check-in sessions, which skip that step.
     noShowDeadline: String
+    # True when attendance comes from location check-in instead of no-show
+    # reports. Players check in from startsAt until checkInClosesAt, within
+    # checkInRadiusMeters of the session; anyone who doesn't is a no-show.
+    checkInRequired: Boolean!
+    checkInClosesAt: String
+    checkInRadiusMeters: Int
+    # When the signed-in user checked in, or null.
+    myCheckIn: String
     attendance: [Attendance!]!
     # The signed-in user's own no-show answer, or null if they haven't given one.
     myNoShowReport: NoShowReport
@@ -142,15 +157,19 @@ const typeDefs = `#graphql
   enum AttendanceStatus {
     SHOWED_UP
     NO_SHOW
+    # Check-in sessions only: check-in is still open and this player hasn't yet.
+    PENDING
   }
 
-  # One row per participant. NO_SHOW once most of the other players who
-  # answered the no-show check said this player didn't come.
+  # One row per participant. In check-in sessions, NO_SHOW once check-in closes
+  # without this player checking in. Otherwise NO_SHOW once most of the other
+  # players who answered the no-show check said this player didn't come.
   type Attendance {
     user: User!
     status: AttendanceStatus!
     # How many other players reported this player as a no-show.
     noShowReports: Int!
+    checkedInAt: String
   }
 
   type NoShowReport {
@@ -214,6 +233,17 @@ const typeDefs = `#graphql
     visibility: SessionVisibility
     # People to invite. Only allowed for INVITE_ONLY sessions.
     inviteeIds: [ID!]
+  }
+
+  # Only the fields sent are changed. Moving only startsAt keeps the session's
+  # length. location and locationPoint must be sent together.
+  input EditSessionInput {
+    startsAt: String
+    endsAt: String
+    location: String
+    locationPoint: LocationPointInput
+    # Never below the number of players who have already joined.
+    maxParticipants: Int
   }
 
   type RatingResult {
@@ -349,6 +379,10 @@ const typeDefs = `#graphql
     getRatingsBySession(sessionId: ID!): [Rating!]!
   }
 
+  # createSession and joinSession fail with code ACCOUNT_COOLDOWN (and the end
+  # time in extensions.cooldownUntil) while the user is in a cooldown.
+  # Changes to a session's roster are announced over Socket.IO; see
+  # doc/realtime.md.
   type Mutation {
     # The signed-in user becomes the host and first participant.
     createSession(input: CreateSessionInput!): Session
@@ -362,6 +396,13 @@ const typeDefs = `#graphql
     # Host only. Stops the person finding or joining the session; if they
     # already joined, they keep their spot.
     uninviteFromSession(sessionId: ID!, userId: ID!): Session!
+    # Host only, before the session starts.
+    editSession(sessionId: ID!, input: EditSessionInput!): Session!
+    # Host only, before the session starts. Cancelled sessions leave discovery
+    # and can't be joined.
+    cancelSession(sessionId: ID!): Session!
+    # Participants only, from startsAt until 10 minutes after, within 200 m.
+    checkInToSession(sessionId: ID!, latitude: Float!, longitude: Float!): Session!
     # Participants only, after the session ends and before noShowDeadline.
     # Pass an empty list if everyone showed up. Can be changed until you rate.
     reportNoShows(sessionId: ID!, noShowUserIds: [ID!]!): Session!
