@@ -1,9 +1,10 @@
 FieldDay verification evidence: integration tests
 Run by: Ethan Ottinger (ejotting)
-Date: 2026-10-31 23:12 EDT
-Commit: 50af594 on branch verification-check-1 (based on dev 6568179)
+Date: 2026-10-31 23:49 EDT
+Commit: 3447bc9 on branch verification-check-1 (based on dev f46494e)
 Node: v24.14.0 on Windows 11
 Database: throwaway local MongoDB 7.0.14 (mongodb-memory-server); each test creates and deletes its own records
+Server: test:integration and test:chat call this branch's backend over HTTP on port 4100
 Command: npm run test:<name> for each test below, with AUTH_DEMO_BYPASS unset
 ----------------------------------------------------------------------
 
@@ -85,6 +86,28 @@ Exit code: 0
 Session lifecycle tests passed
 Exit code: 0
 
+======== npm run test:sport-preferences
+
+> test:sport-preferences
+> node scripts/test-sport-preferences.mjs
+
+◇ injected env (0) from backend\.env
+Testing sport preferences and skill levels feature...
+✓ User creation with sport skills works
+✓ GraphQL updateProfile with sport skills works
+✓ Skill level validation (max 5) works
+✓ Skill level validation (min 1) works
+✓ Duplicate sport validation works
+✓ Max sports limit validation works
+✓ GraphQL query returns sport skills correctly
+✓ Backward compatibility with legacy sports format works
+✓ Sport name length validation works
+✓ Empty sport name validation works
+✓ Partial update with only sport skills works
+
+✅ All sport preferences and skill levels tests passed!
+Exit code: 0
+
 ======== npm run test:accounts
 
 > test:accounts
@@ -95,8 +118,8 @@ Exit code: 0
 > node scripts/integration-accounts.mjs
 
 ◇ injected env (0) from .env
-23:12:34 error: Error: bad token
-    at googleAuth.verifyGoogleIdToken (<repo>/backend/scripts/integration-accounts.mjs:191:56)
+23:50:05 error: Error: bad token
+    at googleAuth.verifyGoogleIdToken (<repo>/backend/scripts/integration-accounts.mjs:196:56)
     at Object.googleSignIn (<repo>/backend/src/graphql/resolvers.js:1316:36)
     at field.resolve (<repo>/backend/node_modules/@apollo/server/dist/esm/utils/schemaInstrumentation.js:36:28)
     at executeField (<repo>\node_modules\graphql\execution\execute.js:733:20)
@@ -107,7 +130,33 @@ Exit code: 0
     at execute (<repo>\node_modules\graphql\execution\execute.js:309:20)
     at executeIncrementally (<repo>/backend/node_modules/@apollo/server/dist/esm/incrementalDeliveryPolyfill.js:21:12) {"service":"fieldday","error":"bad token"}
 (Use `node --trace-warnings ...` to show where the warning was created)
-23:12:34 info: Accounts integration test passed: sessions, password reset, Google, profile, ratings {"service":"fieldday"}
+23:50:06 info: Accounts integration test passed: sessions, password reset, Google, profile, ratings {"service":"fieldday"}
+Exit code: 0
+
+======== npm run test:integration
+
+> test:integration
+> npm run test:integration --workspace backend
+
+
+> fieldday-backend@1.0.0 test:integration
+> node scripts/integration-session.mjs
+
+◇ injected env (0) from .env
+Integration session test passed: create -> join -> leave over HTTP with bearer tokens
+Exit code: 0
+
+======== npm run test:chat
+
+> test:chat
+> npm run test:chat --workspace backend
+
+
+> fieldday-backend@1.0.0 test:chat
+> node scripts/integration-chat.mjs
+
+◇ injected env (0) from .env
+Integration chat test passed: authorization -> persistence -> retry -> read-only history
 Exit code: 0
 
 ======== logs/exceptions.log after the run: 0 bytes (empty means no failures were swallowed by the logger)
