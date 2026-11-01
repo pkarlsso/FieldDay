@@ -27,6 +27,7 @@ import {
   bestEffort as bestEffortGorse,
   gorseConfig,
   gorseId,
+  hasGorseJoins,
   recommendedSessionIds,
   recordJoin as recordGorseJoin,
   recordRecommendationReads,
@@ -1041,6 +1042,7 @@ const resolvers = {
         const config = gorseConfig();
         if (!config) return baseline;
         await syncRecommendationsForUser(user, candidates);
+        if (!await hasGorseJoins(user)) return baseline;
         const rankedIds = await recommendedSessionIds(user, 300);
         if (!rankedIds?.length) return baseline;
         const byGorseId = new Map(candidates.map((session) => [

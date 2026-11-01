@@ -153,6 +153,14 @@ async function recommendedSessionIds(user, limit = 50) {
     .filter(Boolean);
 }
 
+async function hasGorseJoins(user) {
+  const config = gorseConfig();
+  if (!config) return false;
+  const id = gorseId('user', user._id, config.idSecret);
+  const feedback = await gorseRequest(`/api/user/${encodeURIComponent(id)}/feedback/join`, { config });
+  return Array.isArray(feedback) && feedback.length > 0;
+}
+
 async function syncRecommendationsForUser(user, sessions) {
   const config = gorseConfig();
   if (!config) return;
@@ -187,6 +195,7 @@ export {
   bestEffort,
   gorseConfig,
   gorseId,
+  hasGorseJoins,
   recommendedSessionIds,
   recordRecommendationReads,
   recordJoin,
