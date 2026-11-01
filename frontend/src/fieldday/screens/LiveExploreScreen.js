@@ -101,8 +101,8 @@ export default function LiveExploreScreen({ navigation }) {
       {error ? <Text style={{ color: colors.coral }}>{error}</Text> : null}
       {recommendations.length ? <View style={{ gap: 10 }}>
         <View>
-          <Text style={{ color: colors.ink, fontSize: 21, fontWeight: '900' }}>Recommended for you</Text>
-          <Text style={{ color: colors.muted, marginTop: 3 }}>Picked from your sports, skill level, and nearby open sessions.</Text>
+          <Text style={{ color: colors.ink, fontSize: 21, fontWeight: '900' }}>Picked for you</Text>
+          <Text style={{ color: colors.muted, marginTop: 3 }}>Games based on your interests and activity.</Text>
         </View>
         {recommendations.map(({ session, reasons }) => <TouchableOpacity key={`recommended-${session.id}`} onPress={() => navigation.navigate('SessionDetails', { sessionId: session.id })}>
           <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12, borderColor: colors.purpleSoft, borderWidth: 1 }}>
@@ -110,11 +110,12 @@ export default function LiveExploreScreen({ navigation }) {
             <View style={{ flex: 1 }}>
               <Text style={{ color: colors.ink, fontWeight: '900', fontSize: 16 }}>{session.sport} at {session.location}</Text>
               <Text style={{ color: colors.muted, marginTop: 4 }}>{formatSessionTime(session.startsAt)}{session.distanceMiles !== null ? ` • ${session.distanceMiles.toFixed(1)} mi` : ''}</Text>
-              <Text style={{ color: colors.purpleDark, marginTop: 4, fontWeight: '700' }}>{reasons.join(' · ')}</Text>
+              <Text style={{ color: colors.purpleDark, marginTop: 4, fontWeight: '700' }}>{reasons.filter((reason) => reason !== 'Ranked by Gorse').slice(0, 2).join(' · ') || 'A session you might enjoy'}</Text>
             </View>
           </Card>
         </TouchableOpacity>)}
       </View> : null}
+      {sessions.length ? <Text style={{ color: colors.ink, fontSize: 20, fontWeight: '900', marginTop: 8 }}>Explore sessions</Text> : null}
       {!sessions.length && !error && !locating ? <Text style={{ color: colors.muted }}>No sessions match these filters.</Text> : null}
       {sessions.map((session) => <TouchableOpacity key={session.id} onPress={() => navigation.navigate('SessionDetails', { sessionId: session.id })}>
         <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>

@@ -1,6 +1,6 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { recommendSessions, recommendationQuery, validateRecommendationOptions } from '../../src/services/recommendations.js';
+import { recommendSessions, explainGorseSessions, recommendationQuery, validateRecommendationOptions } from '../../src/services/recommendations.js';
 import { gorseId, hasGorseJoins, toGorseItem, toGorseUser } from '../../src/services/gorse.js';
 
 test('profile fallback favors a preferred sport and matching skill', () => {
@@ -61,4 +61,18 @@ test('new users use the profile fallback until they have a join signal', async (
     if (previousSecret === undefined) delete process.env.GORSE_ID_SECRET;
     else process.env.GORSE_ID_SECRET = previousSecret;
   }
+});
+
+
+test('Gorse selections outside the fallback top results retain their explanations', () => {
+  const user = { sportSkills: [{ sport: 'Basketball', skillLevel: 2 }] };
+  const sessions = Array.from({ length: 6 }, (_, i) => ({
+    _id: String(i), sport: i === 5 ? 'Tennis' : 'Basketball',
+    startsAt: new Date(Date.now() + 86400000), skillLevel: 2, maxParticipants: 5, participants: [],
+  }));
+  const scored = recommendSessions(sessions, user, null, sessions.length);
+  assert.ok(!scored.slice(0, 5).some((entry) => entry.session._id === '5'));
+  const [result] = explainGorseSessions([sessions[5]], scored, 1);
+  assert.ok(result.reasons.includes('Has open spots'));
+  assert.ok(result.reasons.includes('Ranked by Gorse'));
 });
