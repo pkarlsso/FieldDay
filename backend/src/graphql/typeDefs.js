@@ -190,6 +190,13 @@ const typeDefs = `#graphql
     completed: [Session!]!
   }
 
+  # A profile-based recommendation with a transparent score and explanation.
+  type RecommendedSession {
+    session: Session!
+    score: Float!
+    reasons: [String!]!
+  }
+
   type GeoPoint {
     type: String!
     coordinates: [Float!]!
@@ -359,11 +366,14 @@ const typeDefs = `#graphql
     getSession(id: ID!): Session
     # Only returns sessions the caller is allowed to see.
     getSessions(status: String, filter: SessionDiscoveryFilterInput): [Session]
+    # Ranked upcoming sessions based on the signed-in user's profile and location.
+    recommendedSessions(origin: LocationPointInput, maxDistanceMiles: Float = 50, limit: Int = 10): [RecommendedSession!]!
     # Ended sessions the signed-in user still has to rate.
     getCompletedSessions: [Session]
     getMySessions: MySessions!
     getFriends(userId: ID!): [User]
     findUserById(id: ID!): PublicUser
+    searchUsersByName(name: String!): [PublicUser!]!
     getMyFriendRequests(status: String): [FriendRequest!]!
     getFriendCandidates: [PublicUser!]!
     checkEmailExists(email: String!): EmailCheckResult!

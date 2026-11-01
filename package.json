@@ -30,7 +30,8 @@
     "seed:demo": "node scripts/seed-demo.mjs",
     "export:shaped": "node backend/scripts/export-shaped-data.mjs",
     "test:shaped-export": "node scripts/test-shaped-export.mjs",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "simulate:local": "node scripts/simulate-local.mjs"
   },
   "devDependencies": {
     "@cyclonedx/cyclonedx-npm": "^6.0.1",
