@@ -46,6 +46,19 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Install locked workspace dependencies
         run: npm ci
+      - name: Verify the standalone deployment bundle starts
+        run: |
+          (cd backend && zip -rq "$RUNNER_TEMP/fieldday-backend.zip" . -x '.env' 'node_modules/*')
+          mkdir -p "$RUNNER_TEMP/fieldday-backend"
+          unzip -q "$RUNNER_TEMP/fieldday-backend.zip" -d "$RUNNER_TEMP/fieldday-backend"
+          npm ci --omit=dev --prefix "$RUNNER_TEMP/fieldday-backend"
+          PORT=4001 DISABLE_NO_SHOW_RATINGS_JOB=true node "$RUNNER_TEMP/fieldday-backend/src/index.js" > "$RUNNER_TEMP/bundle.log" 2>&1 &
+          bundle_pid=$!
+          trap 'kill "$bundle_pid" 2>/dev/null || true' EXIT
+          if ! curl --fail --retry 20 --retry-all-errors --retry-delay 2 http://localhost:4001/health; then
+            cat "$RUNNER_TEMP/bundle.log"
+            exit 1
+          fi
       # The session and chat tests call the running server over HTTP, so they
       # run in the same step as the server.
       - name: Start backend, verify health and run HTTP tests

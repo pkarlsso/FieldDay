@@ -5,7 +5,7 @@ import { playersLabel, skillLabel } from '../sessionInfo';
 import { useSessionUpdates } from '../useSessionUpdates';
 import logger from '../../logger';
 
-const useLiveData = process.env.EXPO_PUBLIC_LIVE_DATA === 'true';
+const useLiveData = process.env.EXPO_PUBLIC_LIVE_DATA !== 'false';
 
 export default function MapScreen() {
   const [sessions, setSessions] = React.useState([]);
