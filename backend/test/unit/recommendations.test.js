@@ -1,7 +1,7 @@
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { recommendSessions, recommendationQuery, validateRecommendationOptions } from '../../src/services/recommendations.js';
-import { gorseId, toGorseItem, toGorseUser } from '../../src/services/gorse.js';
+import { gorseId, hasGorseJoins, toGorseItem, toGorseUser } from '../../src/services/gorse.js';
 
 test('profile fallback favors a preferred sport and matching skill', () => {
   const user = { sportSkills: [{ sport: 'Basketball', skillLevel: 3 }] };
@@ -37,4 +37,28 @@ test('Gorse records use pseudonymous IDs and omit account and location data', ()
   assert.deepEqual(Object.keys(gorseUser).sort(), ['Labels', 'UserId']);
   assert.ok(!JSON.stringify(item).includes('private address'));
   assert.ok(!('locationPoint' in item));
+});
+
+test('new users use the profile fallback until they have a join signal', async () => {
+  const previousUrl = process.env.GORSE_BASE_URL;
+  const previousSecret = process.env.GORSE_ID_SECRET;
+  process.env.GORSE_BASE_URL = 'http://127.0.0.1:8088';
+  process.env.GORSE_ID_SECRET = 'test-secret';
+  let feedback = [];
+  const fetchMock = mock.method(globalThis, 'fetch', async () => ({
+    ok: true,
+    status: 200,
+    json: async () => feedback,
+  }));
+  try {
+    assert.equal(await hasGorseJoins({ _id: 'new-user' }), false);
+    feedback = [{ FeedbackType: 'join' }];
+    assert.equal(await hasGorseJoins({ _id: 'new-user' }), true);
+  } finally {
+    fetchMock.mock.restore();
+    if (previousUrl === undefined) delete process.env.GORSE_BASE_URL;
+    else process.env.GORSE_BASE_URL = previousUrl;
+    if (previousSecret === undefined) delete process.env.GORSE_ID_SECRET;
+    else process.env.GORSE_ID_SECRET = previousSecret;
+  }
 });
