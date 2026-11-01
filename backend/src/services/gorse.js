@@ -38,7 +38,7 @@ function toGorseItem(session, secret) {
   const startsAt = session.startsAt ? new Date(session.startsAt) : null;
   return {
     ItemId: gorseId('session', session._id, secret),
-    IsHidden: Boolean(session.__gorseHidden)
+    IsHidden: Boolean(session.__gorseHidden) || session.status === 'cancelled'
       || Boolean(startsAt && Number.isFinite(startsAt.getTime()) && startsAt <= new Date()),
     Categories: [...new Set([session.sport]
       .map((value) => String(value || '').trim())
@@ -117,6 +117,14 @@ async function recordJoin(user, session) {
   // A user/session pair contributes one join signal even if they leave and
   // rejoin; POST would accumulate duplicate feedback weights.
   await gorseRequest('/api/feedback', { method: 'PUT', body: [feedback], config });
+}
+
+async function removeJoin(user, session) {
+  const config = gorseConfig();
+  if (!config) return;
+  const userId = encodeURIComponent(gorseId('user', user._id, config.idSecret));
+  const itemId = encodeURIComponent(gorseId('session', session._id, config.idSecret));
+  await gorseRequest(`/api/feedback/join/${userId}/${itemId}`, { method: 'DELETE', config });
 }
 
 async function recordRecommendationReads(user, sessions) {
@@ -199,6 +207,7 @@ export {
   recommendedSessionIds,
   recordRecommendationReads,
   recordJoin,
+  removeJoin,
   syncItems,
   syncFeedback,
   syncRecommendationsForUser,

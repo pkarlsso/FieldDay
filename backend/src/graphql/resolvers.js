@@ -30,6 +30,7 @@ import {
   hasGorseJoins,
   recommendedSessionIds,
   recordJoin as recordGorseJoin,
+  removeJoin as removeGorseJoin,
   recordRecommendationReads,
   syncItems as syncGorseItems,
   syncRecommendationsForUser,
@@ -1216,6 +1217,7 @@ const resolvers = {
 
       await session.save();
       publishSessionUpdate(session._id, 'edited');
+      bestEffortGorse(() => syncGorseItems([session]));
       return populatedSessionQuery(session._id);
     },
 
@@ -1227,6 +1229,7 @@ const resolvers = {
       session.cancelledAt = new Date();
       await session.save();
       publishSessionUpdate(session._id, 'cancelled');
+      bestEffortGorse(() => syncGorseItems([session]));
       return populatedSessionQuery(session._id);
     },
 
@@ -1277,6 +1280,7 @@ const resolvers = {
       // The leaver may no longer see a private session, but their screen still
       // shows it.
       publishSessionUpdate(sessionId, 'left', { alsoNotify: [user._id] });
+      bestEffortGorse(() => removeGorseJoin(user, left));
       return populatedSessionQuery(sessionId);
     },
 

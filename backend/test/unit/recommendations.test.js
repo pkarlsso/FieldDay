@@ -1,7 +1,28 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { recommendSessions, explainGorseSessions, recommendationQuery, validateRecommendationOptions } from '../../src/services/recommendations.js';
-import { gorseId, hasGorseJoins, toGorseItem, toGorseUser } from '../../src/services/gorse.js';
+import { gorseId, hasGorseJoins, removeJoin, toGorseItem, toGorseUser } from '../../src/services/gorse.js';
+
+test('cancelled sessions are hidden from Gorse', () => {
+  const session = { _id: 'cancelled', sport: 'Tennis', status: 'cancelled', startsAt: new Date(Date.now() + 86400000) };
+  assert.equal(toGorseItem(session, 'test-secret').IsHidden, true);
+  assert.equal(toGorseItem({ ...session, status: 'upcoming' }, 'test-secret').IsHidden, false);
+});
+
+test('leaving removes only that user and session join signal', async () => {
+  const previous = { ...process.env };
+  process.env.GORSE_BASE_URL = 'http://localhost:8088';
+  process.env.GORSE_ID_SECRET = 'test-secret';
+  const request = mock.method(globalThis, 'fetch', async () => ({ ok: true, status: 204 }));
+  try {
+    await removeJoin({ _id: 'user' }, { _id: 'session' });
+    assert.equal(request.mock.calls[0].arguments[1].method, 'DELETE');
+    assert.equal(request.mock.calls[0].arguments[0], `http://localhost:8088/api/feedback/join/${gorseId('user', 'user', 'test-secret')}/${gorseId('session', 'session', 'test-secret')}`);
+  } finally {
+    request.mock.restore();
+    process.env = previous;
+  }
+});
 
 test('profile fallback favors a preferred sport and matching skill', () => {
   const user = { sportSkills: [{ sport: 'Basketball', skillLevel: 3 }] };
