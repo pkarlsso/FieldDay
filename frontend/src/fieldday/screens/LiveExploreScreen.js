@@ -102,7 +102,7 @@ export default function LiveExploreScreen({ navigation }) {
       {recommendations.length ? <View style={{ gap: 10 }}>
         <View>
           <Text style={{ color: colors.ink, fontSize: 21, fontWeight: '900' }}>Picked for you</Text>
-          <Text style={{ color: colors.muted, marginTop: 3 }}>Games based on your interests and activity.</Text>
+          <Text style={{ color: colors.muted, marginTop: 3 }}>Games selected for your interests and location.</Text>
         </View>
         {recommendations.map(({ session, reasons }) => <TouchableOpacity key={`recommended-${session.id}`} onPress={() => navigation.navigate('SessionDetails', { sessionId: session.id })}>
           <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12, borderColor: colors.purpleSoft, borderWidth: 1 }}>
