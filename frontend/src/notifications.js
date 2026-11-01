@@ -4,6 +4,7 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { graphql } from './api';
+import { getAuthToken, subscribeAuthToken } from './authToken';
 import logger from './logger';
 
 const NotificationContext = createContext({ unreadCount: 0, refreshUnread: async () => {} });
@@ -74,22 +75,28 @@ export function NotificationProvider({ children }) {
   const [unreadCount, setUnreadCount] = useState(0);
 
   async function refreshUnread() {
+    const token = getAuthToken();
+    if (!token) {
+      setUnreadCount(0);
+      return;
+    }
     try {
       const data = await graphql(UNREAD_COUNT_QUERY);
-      setUnreadCount(data.getUnreadNotificationCount);
+      if (getAuthToken() === token) setUnreadCount(data.getUnreadNotificationCount);
     } catch {
       // The signed-out state has no notification count yet.
     }
   }
 
   useEffect(() => {
-    if (Platform.OS === 'web') return undefined;
-    const received = Notifications.addNotificationReceivedListener(refreshUnread);
-    const response = Notifications.addNotificationResponseReceivedListener(refreshUnread);
+    const unsubscribe = subscribeAuthToken(refreshUnread);
+    const received = Platform.OS === 'web' ? null : Notifications.addNotificationReceivedListener(refreshUnread);
+    const response = Platform.OS === 'web' ? null : Notifications.addNotificationResponseReceivedListener(refreshUnread);
     Promise.resolve().then(refreshUnread);
     return () => {
-      received.remove();
-      response.remove();
+      unsubscribe();
+      received?.remove();
+      response?.remove();
     };
   }, []);
 
