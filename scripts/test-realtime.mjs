@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import mongoose from 'mongoose';
-import { ApolloServer } from '@apollo/server';
+import { ApolloServer } from '../backend/test/support/apollo.js';
 import { io as connectClient } from 'socket.io-client';
 import { getConfig } from '../backend/src/config.js';
 import typeDefs from '../backend/src/graphql/typeDefs.js';

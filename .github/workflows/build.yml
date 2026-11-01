@@ -66,6 +66,9 @@ jobs:
           npm run test:session-visibility
           npm run test:session-lifecycle
           npm run test:sport-preferences
+          npm run test:realtime
+          npm run test:cooldown
+          npm run test:attendance
           npm run test:accounts
 
   checks:

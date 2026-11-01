@@ -7,7 +7,7 @@
 - Issues: [#279](https://github.com/pkarlsso/FieldDay/issues/279) location check-in, [#280](https://github.com/pkarlsso/FieldDay/issues/280) automatic rating of 1 for no-shows, [#281](https://github.com/pkarlsso/FieldDay/issues/281) host edit and cancel
 - Tester: Ethan Ottinger
 - Date: 2026-10-25, 20:17–20:52 EDT
-- Build tested: the `issues-279-281` branch at [`4fc1c36`](https://github.com/pkarlsso/FieldDay/commit/4fc1c36), [PR #296](https://github.com/pkarlsso/FieldDay/pull/296), which is open
+- Build tested: the `issues-279-281` branch at [`4fc1c36`](https://github.com/pkarlsso/FieldDay/commit/4fc1c36), [PR #296](https://github.com/pkarlsso/FieldDay/pull/296), merged on 2026-10-31
 - Environment:
   - App: iPhone with Expo Go (SDK 58) at `exp://10.0.0.19:8082`, plus the web preview
   - Backend: local, connected to the team's Atlas cluster, with the automatic no-show rating job switched off for the run (`DISABLE_NO_SHOW_JOB`)
@@ -25,7 +25,7 @@
 ## Evidence
 
 - [PR #296](https://github.com/pkarlsso/FieldDay/pull/296) and its [passing CI build](https://github.com/pkarlsso/FieldDay/actions/runs/40251100226). The PR description records the manual test.
-- PR #296 adds `test-attendance-and-host-changes.mjs`, which covers the check-in window and radius, automatic ratings for no-shows, and host edit and cancel.
+- `test:attendance`, added in PR #296, covers the check-in window and radius, automatic ratings for no-shows, and host edit and cancel. It passed in the [integration test run on 2026-10-31](evidence/2026-10-31-integration-tests.txt).
 
 ## Defects and follow-up
 
