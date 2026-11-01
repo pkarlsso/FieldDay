@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import MapView, { Callout, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { getDiscoveryOrigin, loadDiscoverySessions } from '../discovery';
 import { formatSessionTime, playersLabel, skillLabel } from '../sessionInfo';
+import { useSessionUpdates } from '../useSessionUpdates';
 import { colors, getSportConfig } from '../theme';
 import logger from '../../logger';
 
@@ -66,8 +67,7 @@ export default function MapScreen({ navigation }) {
     return () => { mounted = false; };
   }, []);
 
-  useEffect(() => {
-    if (!useLiveData) return undefined;
+  const loadSessions = useCallback(() => {
     loadDiscoverySessions({ origin }).then((data) => setSessions(data.filter(hasCoordinates).map((session) => ({
       id: session.id,
       sport: session.sport,
@@ -80,8 +80,13 @@ export default function MapScreen({ navigation }) {
       latitude: session.locationPoint.coordinates[1],
       longitude: session.locationPoint.coordinates[0],
     })))).catch((error) => logger.error('Could not load map sessions:', error));
-    return undefined;
   }, [origin]);
+
+  useEffect(() => {
+    if (useLiveData) loadSessions();
+  }, [loadSessions]);
+  // Keeps player counts on the markers current as people join and leave.
+  useSessionUpdates(loadSessions, { enabled: useLiveData });
 
   return (
     <View style={styles.container}>

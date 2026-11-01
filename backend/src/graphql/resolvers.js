@@ -26,6 +26,7 @@ import { VISIBILITIES, canViewSession, visibleSessionsFilter, visibilityOf } fro
 import mailer from '../utils/mailer.js';
 import googleAuth from '../utils/googleAuth.js';
 import logger from '../utils/logger.js';
+import { publishSessionUpdate } from '../realtime.js';
 
 const PROFILE_LIMITS = { name: 50, bio: 300, hometown: 80, sport: 30, sportCount: 10, pictureChars: 200000 };
 const MESSAGE_MAX_LENGTH = 2000;
@@ -44,7 +45,15 @@ const DEFAULT_SESSION_LENGTH_MS = 2 * HOUR_MS;
 const MAX_SESSION_LENGTH_MS = 24 * HOUR_MS;
 // How long after a session ends players can answer "who didn't show up?".
 const NO_SHOW_WINDOW_MS = 48 * HOUR_MS;
+// Players check in from the court during the session's first 10 minutes.
+const CHECK_IN_WINDOW_MS = 10 * 60 * 1000;
+const CHECK_IN_RADIUS_METERS = 200;
+// The rating a confirmed no-show is given automatically (feeds FR-8).
+const NO_SHOW_RATING = 1;
 const COMPLETED_SESSIONS_LIMIT = 20;
+// FR-8: when a new rating pulls someone's social rating below 2, they can't
+// create or join sessions for 2 days.
+const SOCIAL_RATING_COOLDOWN = { threshold: 2, durationMs: 48 * HOUR_MS };
 
 function normalizeEmail(email) {
   return email.trim().toLowerCase();
@@ -73,6 +82,23 @@ function requireUser(context) {
     throw new GraphQLError('You must be signed in to do that.', { extensions: { code: 'UNAUTHENTICATED' } });
   }
   return context.currentUser;
+}
+
+// When the user's social-rating cooldown ends, or null if they aren't in one.
+function activeCooldownUntil(user, now = new Date()) {
+  const until = user?.cooldownUntil ? new Date(user.cooldownUntil) : null;
+  return until && until > now ? until : null;
+}
+
+// Rejects create/join while the signed-in user is in a cooldown.
+function assertNotInCooldown(user) {
+  const until = activeCooldownUntil(user);
+  if (until) {
+    throw new GraphQLError(
+      `Your social rating dropped below ${SOCIAL_RATING_COOLDOWN.threshold}, so you can't create or join sessions until ${until.toISOString()}.`,
+      { extensions: { code: 'ACCOUNT_COOLDOWN', cooldownUntil: until.toISOString() } }
+    );
+  }
 }
 
 // profilePhoto is needed to resolve uploaded photos; sportSkills for `sports`.
@@ -335,9 +361,27 @@ function hasEnded(session, now = new Date()) {
   return session.status === 'completed' || sessionEnd(session) <= now;
 }
 
+function isCancelled(session) {
+  return session.status === 'cancelled';
+}
+
 function sessionStatus(session, now = new Date()) {
+  if (isCancelled(session)) return 'cancelled';
   if (hasEnded(session, now)) return 'completed';
   return new Date(session.startsAt) <= now ? 'in_progress' : 'upcoming';
+}
+
+function usesCheckIn(session) {
+  return Boolean(session.checkInRequired);
+}
+
+// Check-in is open from the start until 10 minutes after it, inclusive.
+function checkInClosesAt(session) {
+  return new Date(new Date(session.startsAt).getTime() + CHECK_IN_WINDOW_MS);
+}
+
+function checkInBy(session, userId) {
+  return (session.checkIns || []).find((checkIn) => idOf(checkIn.user) === String(userId));
 }
 
 // Stored as completed before end times and no-show reports existed. These
@@ -362,15 +406,26 @@ function noShowTally(session, userId) {
   return { flagged, answered: others.length };
 }
 
-// A no-show needs more than half of the other answers, so one player can't
-// mark someone absent on their own in a larger group.
-function isNoShow(session, userId) {
+// In check-in sessions, anyone who hadn't checked in when the window closed is
+// a no-show. Otherwise a no-show needs more than half of the other answers, so
+// one player can't mark someone absent on their own in a larger group.
+function isNoShow(session, userId, now = new Date()) {
+  if (usesCheckIn(session)) return checkInClosesAt(session) < now && !checkInBy(session, userId);
   const { flagged, answered } = noShowTally(session, userId);
   return flagged > 0 && flagged * 2 > answered;
 }
 
+// When attendance can no longer change: check-in sessions when check-in
+// closes, others when the no-show check closes. Null if no-shows are never
+// decided (cancelled, or completed before no-show reports existed).
+function noShowsFinalAt(session) {
+  if (isCancelled(session) || isLegacyCompleted(session)) return null;
+  return usesCheckIn(session) ? checkInClosesAt(session) : noShowDeadline(session);
+}
+
 function ratingEligibility(session, userId, now = new Date()) {
   if (!userId) return { eligible: false, reason: 'Sign in to rate this session.' };
+  if (isCancelled(session)) return { eligible: false, reason: 'This session was cancelled, so there is nothing to rate.' };
   if (!isParticipant(session, userId)) {
     return { eligible: false, reason: 'Only people who played in the session can rate it.' };
   }
@@ -381,7 +436,12 @@ function ratingEligibility(session, userId, now = new Date()) {
     return { eligible: false, reason: 'You have already rated this session.' };
   }
   if (isLegacyCompleted(session)) return { eligible: true, reason: null };
-  if (isNoShow(session, userId)) {
+  if (usesCheckIn(session)) {
+    return isNoShow(session, userId, now)
+      ? { eligible: false, reason: 'You didn\'t check in at the session, so you can\'t rate it.' }
+      : { eligible: true, reason: null };
+  }
+  if (isNoShow(session, userId, now)) {
     return { eligible: false, reason: 'Other players reported that you didn\'t show up, so you can\'t rate this session.' };
   }
   if (!noShowReportBy(session, userId)) {
@@ -407,6 +467,9 @@ function validateRatingSubmission(session, raterId, ratings) {
     if (reportedNoShows.some((id) => idOf(id) === String(userId))) {
       throw new Error('You can\'t rate a player you reported as a no-show');
     }
+    if (usesCheckIn(session) && isNoShow(session, userId)) {
+      throw new Error('You can\'t rate a player who didn\'t check in');
+    }
     if (seen.has(String(userId))) throw new Error('Each player can only be rated once per submission');
     seen.add(String(userId));
   }
@@ -415,15 +478,131 @@ function validateRatingSubmission(session, raterId, ratings) {
 // Atomically folds a new rating into the user's running average, so
 // concurrent submissions can't overwrite each other's counts. Mongoose 9
 // rejects update pipelines unless updatePipeline is set explicitly.
+//
+// The same update starts a cooldown when this rating pulls the average (rounded,
+// as the app shows it) below the threshold. A rating that raises the average
+// never starts one and an active cooldown is not extended, so once a cooldown
+// ends the user is free until another rating drags them down again.
 function applyRatingToUser(userId, value) {
+  const { threshold, durationMs } = SOCIAL_RATING_COOLDOWN;
+  const newRating = {
+    $round: [{ $divide: [{ $add: ['$ratingSum', value] }, { $add: ['$totalRatings', 1] }] }, 1]
+  };
+  const lowersAverage = {
+    $or: [{ $eq: ['$totalRatings', 0] }, { $lt: [{ $multiply: [value, '$totalRatings'] }, '$ratingSum'] }]
+  };
+  const inCooldown = { $gt: [{ $ifNull: ['$cooldownUntil', null] }, '$$NOW'] };
   return User.updateOne({ _id: userId }, [
-    { $set: { ratingSum: { $add: ['$ratingSum', value] }, totalRatings: { $add: ['$totalRatings', 1] } } },
+    {
+      $set: {
+        ratingSum: { $add: ['$ratingSum', value] },
+        totalRatings: { $add: ['$totalRatings', 1] },
+        cooldownUntil: {
+          $cond: [
+            { $and: [{ $lt: [newRating, threshold] }, lowersAverage, { $not: [inCooldown] }] },
+            { $add: ['$$NOW', durationMs] },
+            { $ifNull: ['$cooldownUntil', null] }
+          ]
+        }
+      }
+    },
     { $set: { socialRating: { $round: [{ $divide: ['$ratingSum', '$totalRatings'] }, 1] } } }
   ], { updatePipeline: true });
 }
 
+// Gives each confirmed no-show one rating of 1, once attendance is final. The
+// $ne guard claims a player atomically, so running this again (or twice at
+// once) can never apply the rating a second time.
+async function applyNoShowRatings(session, now = new Date()) {
+  const finalAt = noShowsFinalAt(session);
+  if (!finalAt || now <= finalAt) return;
+  for (const participant of session.participants) {
+    const userId = participant._id ?? participant;
+    if (!isNoShow(session, userId, now)) continue;
+    const claimed = await Session.updateOne(
+      { _id: session._id, noShowRated: { $ne: userId } },
+      { $addToSet: { noShowRated: userId } }
+    );
+    if (claimed.modifiedCount === 1) await applyRatingToUser(userId, NO_SHOW_RATING);
+  }
+  await Session.updateOne({ _id: session._id }, { $set: { noShowRatingsSettled: true } });
+}
+
+// Finds sessions whose attendance became final since the last run and applies
+// the no-show ratings they owe. The server runs this every minute.
+async function settleNoShowRatings(now = new Date()) {
+  const sessions = await Session.find({
+    noShowRatingsSettled: { $ne: true },
+    status: { $ne: 'cancelled' },
+    $or: [
+      { checkInRequired: true, startsAt: { $lt: new Date(now.getTime() - CHECK_IN_WINDOW_MS) } },
+      { checkInRequired: { $ne: true }, endsAt: { $lt: new Date(now.getTime() - NO_SHOW_WINDOW_MS) } }
+    ]
+  });
+  for (const session of sessions) await applyNoShowRatings(session, now);
+  return sessions.length;
+}
+
 function authSuccess(user, message, extra = {}) {
   return { success: true, message, userId: user.id, ...extra };
+}
+
+// The start, end and the date/time strings derived from the start. An omitted
+// end falls `lengthMs` after the start.
+function formatSessionTimes(startsAtInput, endsAtInput, lengthMs = DEFAULT_SESSION_LENGTH_MS) {
+  const startsAt = new Date(startsAtInput);
+  if (Number.isNaN(startsAt.getTime())) throw new Error('startsAt must be a valid ISO date');
+  if (startsAt <= new Date()) throw new Error('Choose a date and time in the future');
+
+  let endsAt = new Date(startsAt.getTime() + lengthMs);
+  if (isGiven(endsAtInput)) {
+    endsAt = new Date(endsAtInput);
+    if (Number.isNaN(endsAt.getTime())) throw new Error('endsAt must be a valid ISO date');
+  }
+  if (endsAt <= startsAt) throw new Error('The end time must be after the start time');
+  if (endsAt - startsAt > MAX_SESSION_LENGTH_MS) throw new Error('Sessions can last at most 24 hours');
+
+  return {
+    date: startsAt.toISOString().slice(0, 10),
+    time: startsAt.toISOString().slice(11, 16),
+    startsAt,
+    endsAt
+  };
+}
+
+function formatSessionLocation(locationInput, locationPoint) {
+  const location = cleanProfileText(locationInput, 'Location', SESSION_LIMITS.location, { required: true });
+  const { longitude, latitude } = locationPoint;
+  if (longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) {
+    throw new Error('locationPoint coordinates are out of range');
+  }
+  return { location, locationPoint: { type: 'Point', coordinates: [longitude, latitude] } };
+}
+
+function isGiven(value) {
+  return value !== undefined && value !== null;
+}
+
+function checkMaxParticipants(value) {
+  const { minParticipants, maxParticipants } = SESSION_LIMITS;
+  if (!Number.isInteger(value) || value < minParticipants || value > maxParticipants) {
+    throw new Error(`Maximum players must be a whole number from ${minParticipants} to ${maxParticipants}`);
+  }
+}
+
+// Loads a session for editSession/cancelSession: only its host, and only
+// before it starts.
+async function sessionForHostChange(sessionId, user) {
+  const session = await Session.findById(sessionId);
+  if (!session) throw new Error('Session not found');
+  if (!session.host || idOf(session.host) !== String(user._id)) {
+    throw new Error('Only the host can change this session');
+  }
+  if (isCancelled(session)) throw new Error('This session was cancelled');
+  if (new Date(session.startsAt) <= new Date()) {
+    throw new Error('Sessions can only be changed before they start');
+  }
+  return session;
 }
 
 // Validates everything FR-1 needs before a session is stored. The skill band
@@ -431,33 +610,11 @@ function authSuccess(user, message, extra = {}) {
 // skillLevel, so any band an older client sends is ignored.
 function formatSessionInput(input) {
   const sport = cleanProfileText(input.sport, 'Sport', SESSION_LIMITS.sport, { required: true });
-  const location = cleanProfileText(input.location, 'Location', SESSION_LIMITS.location, { required: true });
 
-  const startsAt = new Date(input.startsAt);
-  if (Number.isNaN(startsAt.getTime())) throw new Error('startsAt must be a valid ISO date');
-  if (startsAt <= new Date()) throw new Error('Choose a date and time in the future');
-
-  let endsAt = new Date(startsAt.getTime() + DEFAULT_SESSION_LENGTH_MS);
-  if (input.endsAt !== undefined && input.endsAt !== null) {
-    endsAt = new Date(input.endsAt);
-    if (Number.isNaN(endsAt.getTime())) throw new Error('endsAt must be a valid ISO date');
-    if (endsAt <= startsAt) throw new Error('The end time must be after the start time');
-    if (endsAt - startsAt > MAX_SESSION_LENGTH_MS) throw new Error('Sessions can last at most 24 hours');
-  }
-
-  const { longitude, latitude } = input.locationPoint;
-  if (longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) {
-    throw new Error('locationPoint coordinates are out of range');
-  }
-
-  const { minParticipants, maxParticipants } = SESSION_LIMITS;
   if (input.maxParticipants === undefined || input.maxParticipants === null) {
     throw new Error('Choose how many players can join');
   }
-  if (!Number.isInteger(input.maxParticipants)
-    || input.maxParticipants < minParticipants || input.maxParticipants > maxParticipants) {
-    throw new Error(`Maximum players must be a whole number from ${minParticipants} to ${maxParticipants}`);
-  }
+  checkMaxParticipants(input.maxParticipants);
 
   if (input.skillLevel === undefined || input.skillLevel === null) throw new Error('Choose a skill level');
   const skillBand = SKILL_LEVEL_RANGES[input.skillLevel];
@@ -471,12 +628,8 @@ function formatSessionInput(input) {
 
   return {
     sport,
-    location,
-    date: startsAt.toISOString().slice(0, 10),
-    time: startsAt.toISOString().slice(11, 16),
-    startsAt,
-    endsAt,
-    locationPoint: { type: 'Point', coordinates: [longitude, latitude] },
+    ...formatSessionTimes(input.startsAt, input.endsAt),
+    ...formatSessionLocation(input.location, input.locationPoint),
     skillLevel: input.skillLevel,
     skillMin: skillBand.min,
     skillMax: skillBand.max,
@@ -512,6 +665,7 @@ function joinRejection(session, user) {
   if (!session || !canViewSession(session, user)) return sessionNotFound();
   if (sameId(session.host, user._id)) return new Error('You are hosting this session, so you are already in it');
   if (isParticipant(session, user._id)) return new Error('You have already joined this session');
+  if (isCancelled(session)) return new Error('This session was cancelled');
   if (!isOpen(session)) return new Error('Only upcoming sessions can be joined');
   if (session.participants.length >= session.maxParticipants) return new Error('Session is full');
   return new Error('Could not join this session. Please try again.');
@@ -521,15 +675,17 @@ function leaveRejection(session, user) {
   if (!session || !canViewSession(session, user)) return sessionNotFound();
   if (sameId(session.host, user._id)) return new Error('The host cannot leave their session');
   if (!isParticipant(session, user._id)) return new Error('You are not in this session');
+  if (isCancelled(session)) return new Error('This session was cancelled');
   if (hasEnded(session)) return new Error('You cannot leave a session that has ended');
   if (!isOpen(session)) return new Error('You cannot leave a session that has already started');
   return new Error('Could not leave this session. Please try again.');
 }
 
 // Matches sessions that have ended: by status, by stored end time, or (older
-// sessions) 2 hours after they started.
+// sessions) 2 hours after they started. Cancelled sessions never count as ended.
 function endedSessionsFilter(now = new Date()) {
   return {
+    status: { $ne: 'cancelled' },
     $or: [
       { status: 'completed' },
       { endsAt: { $lte: now } },
@@ -598,7 +754,11 @@ function validateDiscoveryFilter(filter = {}) {
 
 function discoveryQuery(status, input, user) {
   const filter = validateDiscoveryFilter(input);
-  const query = { status: status || 'upcoming', ...visibleSessionsFilter(user) };
+  // Cancelled sessions are never discoverable, whatever status is asked for.
+  const query = {
+    status: status === 'cancelled' ? { $in: [] } : status || 'upcoming',
+    ...visibleSessionsFilter(user)
+  };
   if (query.status === 'upcoming') query.startsAt = { $gte: new Date() };
   if (filter.sports?.length) query.sport = { $in: filter.sports };
   if (filter.startsAfter || filter.startsBefore) {
@@ -662,19 +822,39 @@ const resolvers = {
     endsAt: (session) => sessionEnd(session).toISOString(),
     status: (session) => sessionStatus(session),
     createdAt: (session) => (session.createdAt ? new Date(session.createdAt).toISOString() : null),
-    completedAt: (session) => (hasEnded(session) ? sessionEnd(session).toISOString() : null),
-    noShowDeadline: (session) => (
-      hasEnded(session) && !isLegacyCompleted(session) ? noShowDeadline(session).toISOString() : null
+    completedAt: (session) => (
+      hasEnded(session) && !isCancelled(session) ? sessionEnd(session).toISOString() : null
     ),
+    cancelledAt: (session) => (session.cancelledAt ? new Date(session.cancelledAt).toISOString() : null),
+    // Check-in sessions skip the "who didn't show up?" step entirely.
+    noShowDeadline: (session) => (
+      hasEnded(session) && !isLegacyCompleted(session) && !isCancelled(session) && !usesCheckIn(session)
+        ? noShowDeadline(session).toISOString()
+        : null
+    ),
+    checkInRequired: (session) => usesCheckIn(session),
+    checkInClosesAt: (session) => (usesCheckIn(session) ? checkInClosesAt(session).toISOString() : null),
+    checkInRadiusMeters: (session) => (usesCheckIn(session) ? CHECK_IN_RADIUS_METERS : null),
     attendance: async (session) => {
       const participants = session.populated('participants')
         ? session.participants
         : await User.find({ _id: { $in: session.participants } });
-      return participants.filter(Boolean).map((user) => ({
-        user,
-        status: isNoShow(session, user._id) ? 'NO_SHOW' : 'SHOWED_UP',
-        noShowReports: noShowTally(session, user._id).flagged
-      }));
+      const now = new Date();
+      return participants.filter(Boolean).map((user) => {
+        const checkIn = checkInBy(session, user._id);
+        let status = isNoShow(session, user._id, now) ? 'NO_SHOW' : 'SHOWED_UP';
+        if (usesCheckIn(session) && !checkIn && now <= checkInClosesAt(session)) status = 'PENDING';
+        return {
+          user,
+          status,
+          noShowReports: noShowTally(session, user._id).flagged,
+          checkedInAt: checkIn ? new Date(checkIn.checkedInAt).toISOString() : null
+        };
+      });
+    },
+    myCheckIn: (session, _, context) => {
+      const checkIn = context.currentUser && checkInBy(session, context.currentUser._id);
+      return checkIn ? new Date(checkIn.checkedInAt).toISOString() : null;
     },
     myNoShowReport: (session, _, context) => {
       const report = context.currentUser && noShowReportBy(session, context.currentUser._id);
@@ -691,6 +871,11 @@ const resolvers = {
   },
 
   User: {
+    // Only shown to the user themselves.
+    cooldownUntil: (user, _, context) => {
+      if (!context.currentUser || String(context.currentUser._id) !== String(user._id)) return null;
+      return activeCooldownUntil(user)?.toISOString() ?? null;
+    },
     // Accounts created before per-sport skill levels only have `sports` and one
     // overall `skillLevel`, so fall back to those.
     sportSkills: (user) => sportSkillsOf(user),
@@ -850,12 +1035,14 @@ const resolvers = {
         .sort({ startsAt: 1 });
       const now = new Date();
       const isHost = (session) => session.host && idOf(session.host) === String(user._id);
+      // Cancelled sessions stay listed (with status "cancelled") until their
+      // planned end, so players see what happened, but never count as ended.
       const open = sessions.filter((session) => !hasEnded(session, now));
       return {
         hosted: open.filter(isHost),
         joined: open.filter((session) => !isHost(session)),
         completed: sessions
-          .filter((session) => hasEnded(session, now))
+          .filter((session) => hasEnded(session, now) && !isCancelled(session))
           .sort((a, b) => sessionEnd(b) - sessionEnd(a))
           .slice(0, COMPLETED_SESSIONS_LIMIT)
       };
@@ -926,6 +1113,7 @@ const resolvers = {
   Mutation: {
     createSession: async (_, { input }, context) => {
       const host = requireUser(context);
+      assertNotInCooldown(host);
       const { assertCanRegister, recordRegistration } = await getParticipationLimits();
       await assertCanRegister(host);
       const fields = formatSessionInput(input);
@@ -935,7 +1123,8 @@ const resolvers = {
         invitees,
         host: host._id,
         participants: [host._id],
-        status: 'upcoming'
+        status: 'upcoming',
+        checkInRequired: true
       });
       try {
         await recordRegistration(session._id, host._id);
@@ -943,14 +1132,62 @@ const resolvers = {
         await Session.deleteOne({ _id: session._id });
         throw error;
       }
+      publishSessionUpdate(session._id, 'created');
+      return populatedSessionQuery(session._id);
+    },
+
+    editSession: async (_, { sessionId, input }, context) => {
+      const user = requireUser(context);
+      const session = await sessionForHostChange(sessionId, user);
+
+      if (isGiven(input.startsAt) || isGiven(input.endsAt)) {
+        // Moving only the start keeps the session's length.
+        Object.assign(session, formatSessionTimes(
+          input.startsAt ?? session.startsAt,
+          input.endsAt,
+          sessionEnd(session) - new Date(session.startsAt)
+        ));
+      }
+      if (isGiven(input.location) || isGiven(input.locationPoint)) {
+        if (!isGiven(input.location) || !isGiven(input.locationPoint)) {
+          throw new Error('Send the location name and its map point together');
+        }
+        Object.assign(session, formatSessionLocation(input.location, input.locationPoint));
+      }
+      if (isGiven(input.maxParticipants)) {
+        checkMaxParticipants(input.maxParticipants);
+        const joined = session.participants.length;
+        if (input.maxParticipants < joined) {
+          throw new Error(`${joined} players have already joined, so maximum players can't be lower than ${joined}`);
+        }
+        session.maxParticipants = input.maxParticipants;
+      }
+
+      await session.save();
+      publishSessionUpdate(session._id, 'edited');
+      return populatedSessionQuery(session._id);
+    },
+
+    // Joined players will be notified here once notifications (#171/#246) exist.
+    cancelSession: async (_, { sessionId }, context) => {
+      const user = requireUser(context);
+      const session = await sessionForHostChange(sessionId, user);
+      session.status = 'cancelled';
+      session.cancelledAt = new Date();
+      await session.save();
+      publishSessionUpdate(session._id, 'cancelled');
       return populatedSessionQuery(session._id);
     },
 
     joinSession: async (_, { sessionId }, context) => {
       const user = requireUser(context);
+      assertNotInCooldown(user);
       const { assertCanRegister, recordRegistration } = await getParticipationLimits();
       await assertCanRegister(user);
       if (!mongoose.isValidObjectId(sessionId)) throw sessionNotFound();
+      // The open-spot check is part of the update's filter, so checking and
+      // writing are one step: two people can't both take the last spot, even if
+      // both saw it open on a stale screen.
       const joined = await Session.findOneAndUpdate(
         {
           $and: [
@@ -970,18 +1207,22 @@ const resolvers = {
         await Session.updateOne({ _id: joined._id }, { $pull: { participants: user._id } });
         throw error;
       }
+      publishSessionUpdate(sessionId, 'joined');
       return populatedSessionQuery(sessionId);
     },
 
     leaveSession: async (_, { sessionId }, context) => {
       const user = requireUser(context);
       if (!mongoose.isValidObjectId(sessionId)) throw sessionNotFound();
+      // $pull rather than saving a filtered copy, so a join landing at the same
+      // moment isn't overwritten.
       const left = await Session.findOneAndUpdate(
         { _id: sessionId, participants: user._id, host: { $ne: user._id }, ...openSessionFilter() },
         { $pull: { participants: user._id } },
         { returnDocument: 'after' }
       );
       if (!left) throw leaveRejection(await Session.findById(sessionId), user);
+      publishSessionUpdate(sessionId, 'left');
       return populatedSessionQuery(sessionId);
     },
 
@@ -1014,6 +1255,8 @@ const resolvers = {
       const session = await Session.findById(sessionId);
       if (!session) throw new Error('Session not found');
       if (!isParticipant(session, user._id)) throw new Error('Only players in this session can report no-shows');
+      if (isCancelled(session)) throw new Error('This session was cancelled');
+      if (usesCheckIn(session)) throw new Error('Attendance for this session comes from check-ins, so there is nothing to report');
       if (!hasEnded(session)) throw new Error('You can report no-shows once the session has ended');
       if (isLegacyCompleted(session)) throw new Error('No-show reports were not collected for this session');
       if (new Date() > noShowDeadline(session)) throw new Error('The no-show check for this session has closed');
@@ -1035,6 +1278,34 @@ const resolvers = {
         session.noShowReports.push({ reporter: user._id, noShows, reportedAt: new Date() });
       }
       await session.save();
+      return populatedSessionQuery(session._id);
+    },
+
+    checkInToSession: async (_, { sessionId, latitude, longitude }, context) => {
+      const user = requireUser(context);
+      const session = await Session.findById(sessionId);
+      if (!session) throw new Error('Session not found');
+      if (!isParticipant(session, user._id)) throw new Error('Only players in this session can check in');
+      if (isCancelled(session)) throw new Error('This session was cancelled');
+      if (!usesCheckIn(session)) throw new Error('This session doesn\'t use check-in');
+      if (longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) {
+        throw new Error('Your location coordinates are out of range');
+      }
+
+      const now = new Date();
+      if (now < new Date(session.startsAt)) throw new Error('Check-in opens when the session starts');
+      if (now > checkInClosesAt(session)) throw new Error('Check-in closed 10 minutes after the session started');
+      const meters = distanceMiles(session, { latitude, longitude }) * MILES_TO_METERS;
+      if (meters > CHECK_IN_RADIUS_METERS) {
+        throw new Error(`You need to be within ${CHECK_IN_RADIUS_METERS} m of the session to check in. You're about ${Math.round(meters)} m away.`);
+      }
+
+      // The filter keeps a double tap from storing two check-ins.
+      await Session.updateOne(
+        { _id: session._id, 'checkIns.user': { $ne: user._id } },
+        { $push: { checkIns: { user: user._id, checkedInAt: now } } }
+      );
+      publishSessionUpdate(session._id, 'checked_in');
       return populatedSessionQuery(session._id);
     },
 
@@ -1497,4 +1768,5 @@ const resolvers = {
   }
 };
 
+export { settleNoShowRatings };
 export default resolvers;

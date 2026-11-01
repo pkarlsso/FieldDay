@@ -2,7 +2,7 @@ import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react
 import { Card, NotificationButton, PrimaryButton, ScreenHeader } from '../components/ui';
 import SessionRow from '../components/SessionRow';
 import { colors } from '../theme';
-import { groupMySessions, needsNoShowCheck } from '../sessionInfo';
+import { groupMySessions, isCancelled, needsNoShowCheck } from '../sessionInfo';
 import { useMySessions } from '../useMySessions';
 
 function completedBadge(session) {
@@ -10,6 +10,8 @@ function completedBadge(session) {
   if (session.ratingEligibility.eligible) return { label: 'Rate', icon: 'star', color: colors.coral };
   return { label: 'Done', icon: 'checkmark-circle', color: colors.green };
 }
+
+const cancelledBadge = { label: 'Cancelled', icon: 'close-circle-outline', color: colors.coral };
 
 function Section({ title, empty, children }) {
   const hasItems = Array.isArray(children) ? children.length > 0 : Boolean(children);
@@ -70,13 +72,13 @@ export default function LiveSessionsScreen({ navigation }) {
 
             <Section title="Hosting" empty="You are not hosting any upcoming sessions.">
               {groups.hostedUpcoming.map((session) => (
-                <SessionRow key={session.id} session={session} onPress={() => open(session)} badge={{ label: 'Host', icon: 'star-outline', color: colors.purple }} />
+                <SessionRow key={session.id} session={session} onPress={() => open(session)} badge={isCancelled(session) ? cancelledBadge : { label: 'Host', icon: 'star-outline', color: colors.purple }} />
               ))}
             </Section>
 
             <Section title="Joined" empty="You have not joined any upcoming sessions. Find one in Explore.">
               {groups.joinedUpcoming.map((session) => (
-                <SessionRow key={session.id} session={session} onPress={() => open(session)} />
+                <SessionRow key={session.id} session={session} onPress={() => open(session)} badge={isCancelled(session) ? cancelledBadge : undefined} />
               ))}
             </Section>
 

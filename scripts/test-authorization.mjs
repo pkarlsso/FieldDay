@@ -86,6 +86,8 @@ await runTest(harness, async () => {
   assert.equal((await Session.findById(created.id)).participants.length, 2, 'carol cannot remove bob');
 
   await ok('mutation($s:ID!){joinSession(sessionId:$s){id}}', { s: created.id }, await fresh(carol));
+  // Rated through the peer no-show vote, as sessions created before check-in are.
+  await Session.updateOne({ _id: created.id }, { checkInRequired: false });
   await moveSession(created.id, 3, -1);
   const SUBMIT = 'mutation($s:ID!,$x:[RatingInput!]!){submitRatings(sessionId:$s,ratings:$x){success}}';
   const REPORT = 'mutation($s:ID!){reportNoShows(sessionId:$s,noShowUserIds:[]){id}}';
