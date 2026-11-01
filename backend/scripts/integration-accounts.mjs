@@ -16,6 +16,7 @@ import Session from '../src/models/Session.js';
 import Rating from '../src/models/Rating.js';
 import AuthSession from '../src/models/AuthSession.js';
 import FriendRequest from '../src/models/FriendRequest.js';
+import Conversation from '../src/models/Conversation.js';
 import Notification from '../src/models/Notification.js';
 import NotificationPreference from '../src/models/NotificationPreference.js';
 import logger from '../src/utils/logger.js';
@@ -375,6 +376,12 @@ try {
   assert.deepEqual((await User.findById(outsider._id)).friends.map(String), []);
   assert.deepEqual((await User.findById(host._id)).friends.map(String), [ids.guest]);
 
+  // Direct messages are only for friends: the accepted pair can open one, the
+  // declined pair cannot.
+  const directChat = 'mutation($id:ID!){getOrCreateDirectConversation(friendId:$id){id}}';
+  assert.ok((await ok(directChat, { id: ids.guest }, await User.findById(host._id))).getOrCreateDirectConversation.id);
+  await fails(directChat, { id: ids.host }, await User.findById(outsider._id), 'only message a friend');
+
   const notified = await Notification.find({ recipient: { $in: [guest._id, host._id] }, type: 'friend_request' });
   assert.ok(notified.some((n) => n.recipient.equals(guest._id) && n.title === 'New friend request'), 'the recipient is told about a request');
   assert.ok(notified.some((n) => n.recipient.equals(host._id) && n.title === 'Friend request accepted'), 'the requester is told it was accepted');
@@ -421,6 +428,7 @@ try {
     Session.deleteMany({ _id: { $in: sessionIds } }),
     AuthSession.deleteMany({ user: { $in: userIds } }),
     FriendRequest.deleteMany({ $or: [{ requester: { $in: userIds } }, { recipient: { $in: userIds } }] }),
+    Conversation.deleteMany({ kind: 'direct', participants: { $in: userIds } }),
     Notification.deleteMany({ recipient: { $in: userIds } }),
     NotificationPreference.deleteMany({ user: { $in: userIds } }),
     User.deleteMany({ _id: { $in: userIds } })
