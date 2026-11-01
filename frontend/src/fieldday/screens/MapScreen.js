@@ -24,7 +24,7 @@ const DEMO_SESSIONS = [
   { id: 's6', sport: 'Running', startsAt: '2026-04-16T18:30:00', location: 'Discovery Park Loop', latitude: 40.438, longitude: -86.912 },
   { id: 's7', sport: 'Baseball', startsAt: '2026-04-17T17:45:00', location: 'Slater Hill', latitude: 40.416, longitude: -86.923 },
 ];
-const useLiveData = process.env.EXPO_PUBLIC_LIVE_DATA === 'true';
+const useLiveData = process.env.EXPO_PUBLIC_LIVE_DATA !== 'false';
 
 function SessionMarkerIcon({ sport, selected }) {
   const config = getSportConfig(sport);

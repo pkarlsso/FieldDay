@@ -46,7 +46,7 @@ export default function LiveHomeScreen({ navigation }) {
       <ScreenHeader
         eyebrow="FIELD DAY"
         title={user ? `Welcome back, ${firstName(user)}` : 'Welcome back'}
-        subtitle="Your upcoming sessions and what needs your attention."
+        subtitle="Your games, all in one place."
         right={
           <HeaderActionRow>
             <NotificationButton onPress={() => navigation.navigate('Notifications')} />
@@ -61,7 +61,7 @@ export default function LiveHomeScreen({ navigation }) {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.purple} />}
       >
         <CooldownNotice until={user?.cooldownUntil} />
-        <Card style={{ backgroundColor: colors.purple }}>
+        <Card style={{ backgroundColor: colors.purple, borderColor: colors.purple, padding: 20 }}>
           <TouchableOpacity activeOpacity={0.86} disabled={!nextSession} onPress={() => nextSession && open(nextSession)}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
               {nextSession ? (
@@ -143,7 +143,7 @@ export default function LiveHomeScreen({ navigation }) {
 
         {data ? (
           <Card>
-            <Text style={{ color: colors.ink, fontSize: 20, fontWeight: '900', marginBottom: 4 }}>Recent activity</Text>
+            <Text style={{ color: colors.ink, fontSize: 20, fontWeight: '900', marginBottom: 4 }}>Your activity</Text>
             {activity.length ? activity.map((item, index) => (
               <ListRow key={item.id} first={index === 0} icon={item.icon} label={item.label} detail={`${item.detail} • ${formatSessionTime(item.at)}`} />
             )) : (

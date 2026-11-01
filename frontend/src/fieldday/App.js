@@ -39,7 +39,7 @@ import ResetPasswordScreen from '../screens/auth/ResetPasswordScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
-const useLiveData = process.env.EXPO_PUBLIC_LIVE_DATA === 'true';
+const useLiveData = process.env.EXPO_PUBLIC_LIVE_DATA !== 'false';
 
 const tabIcons = {
   HomeTab: 'home-variant-outline',
