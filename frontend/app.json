@@ -1,7 +1,13 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "FieldDay",
+    "slug": "fieldday",
+    "owner": "gogbalor",
+    "extra": {
+      "eas": {
+        "projectId": "dd004d66-cf1c-41a0-823f-64efc93b48f7"
+      }
+    },
     "scheme": "fieldday",
     "version": "0.1.0",
     "orientation": "portrait",
@@ -10,9 +16,10 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "FieldDay uses your location to show nearby sport sessions on the map and to check you in when you arrive at a session."
+        "NSLocationWhenInUseUsageDescription": "FieldDay uses your location to show nearby sport sessions on the map and to check you in when you arrive at a session.",
+        "ITSAppUsesNonExemptEncryption": false
       },
-      "bundleIdentifier": "com.anonymous.frontend"
+      "bundleIdentifier": "com.gogbalor.fieldday"
     },
     "android": {
       "adaptiveIcon": {
@@ -24,6 +31,12 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.487036458278-d4mb997n2e93p7a67rjnv7dsrak3ev92"
+        }
+      ],
       "expo-status-bar",
       "expo-notifications",
       [
