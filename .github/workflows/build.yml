@@ -64,6 +64,9 @@ jobs:
           - name: Validate backend
             command: npm run check:backend
             artifact_path: ''
+          - name: Frontend unit tests
+            command: npm run test:unit
+            artifact_path: ''
           - name: Build frontend
             command: npm run build
             artifact_path: frontend/dist/

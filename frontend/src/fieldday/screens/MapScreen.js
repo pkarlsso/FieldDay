@@ -28,8 +28,8 @@ const useLiveData = process.env.EXPO_PUBLIC_LIVE_DATA === 'true';
 function SessionMarkerIcon({ sport, selected }) {
   const config = getSportConfig(sport);
   return (
-    <View style={[styles.markerOuter, selected && { borderColor: config.color, borderWidth: 3 }]}>
-      <View style={[styles.markerInner, { backgroundColor: config.color }]}>
+    <View testID={`session-marker-${sport}`} style={[styles.markerOuter, selected && { borderColor: config.color, borderWidth: 3 }]}>
+      <View testID={`session-marker-background-${sport}`} style={[styles.markerInner, { backgroundColor: config.color }]}>
         <MaterialCommunityIcons name={config.icon} size={20} color={colors.card} />
       </View>
     </View>
