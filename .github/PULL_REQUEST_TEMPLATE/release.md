@@ -4,10 +4,9 @@
 
 ## Completed issues
 
-<!-- Add a separate Closes #NUMBER line for each fully completed issue included
-in this release. Use real issue numbers, not feature PR numbers.
-GitHub closes these issues only when this PR merges into main.
-Use Refs #NUMBER for partial work that must remain open. -->
+<!-- List the completed issue numbers included in this release for review.
+Issues are closed by the release workflow from Refs #NUMBER entries in the
+feature PRs merged into dev. Use real issue numbers, not feature PR numbers. -->
 
 ## Included feature PRs
 
