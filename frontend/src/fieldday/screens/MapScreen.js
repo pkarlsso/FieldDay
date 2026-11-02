@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import MapView, { Callout, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { getDiscoveryOrigin, loadDiscoverySessions } from '../discovery';
@@ -23,7 +23,10 @@ const DEMO_SESSIONS = [
   { id: 's6', sport: 'Running', startsAt: '2026-04-16T18:30:00', location: 'Discovery Park Loop', latitude: 40.438, longitude: -86.912 },
   { id: 's7', sport: 'Baseball', startsAt: '2026-04-17T17:45:00', location: 'Slater Hill', latitude: 40.416, longitude: -86.923 },
 ];
-const useLiveData = process.env.EXPO_PUBLIC_LIVE_DATA === 'true';
+
+function isLiveDataEnabled() {
+  return process.env.EXPO_PUBLIC_LIVE_DATA === 'true';
+}
 
 function SessionMarkerIcon({ sport, selected }) {
   const config = getSportConfig(sport);
@@ -41,11 +44,15 @@ function hasCoordinates(session) {
 }
 
 export default function MapScreen({ navigation }) {
+  const useLiveData = isLiveDataEnabled();
   const [region, setRegion] = useState(DEFAULT_REGION);
-  const [loading, setLoading] = useState(true);
-  const [sessions, setSessions] = useState(DEMO_SESSIONS);
+  const [locationLoading, setLocationLoading] = useState(true);
+  const [sessionsLoading, setSessionsLoading] = useState(useLiveData);
+  const [sessions, setSessions] = useState(useLiveData ? [] : DEMO_SESSIONS);
   const [selectedSessionId, setSelectedSessionId] = useState(null);
   const [origin, setOrigin] = useState(null);
+  const [sessionError, setSessionError] = useState(null);
+  const [reloadCount, setReloadCount] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -55,33 +62,48 @@ export default function MapScreen({ navigation }) {
         if (mounted) {
           setOrigin(location);
           setRegion({ ...DEFAULT_REGION, latitude: location.latitude, longitude: location.longitude });
+          setSessionsLoading(true);
+          setSessionError(null);
         }
       }
-      if (mounted) setLoading(false);
+      if (mounted) setLocationLoading(false);
     }
     locateUser().catch((error) => {
       logger.warn('Could not determine map location:', error);
-      if (mounted) setLoading(false);
+      if (mounted) setLocationLoading(false);
     });
     return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
     if (!useLiveData) return undefined;
-    loadDiscoverySessions({ origin }).then((data) => setSessions(data.filter(hasCoordinates).map((session) => ({
-      id: session.id,
-      sport: session.sport,
-      startsAt: session.startsAt,
-      location: session.location,
-      skillLevel: session.skillLevel,
-      skillRange: session.skillRange,
-      maxParticipants: session.maxParticipants,
-      participants: session.participants,
-      latitude: session.locationPoint.coordinates[1],
-      longitude: session.locationPoint.coordinates[0],
-    })))).catch((error) => logger.error('Could not load map sessions:', error));
-    return undefined;
-  }, [origin]);
+
+    let mounted = true;
+    loadDiscoverySessions({ origin }).then((data) => {
+      if (!mounted) return;
+      setSessions(data.filter(hasCoordinates).map((session) => ({
+        id: session.id,
+        sport: session.sport,
+        startsAt: session.startsAt,
+        location: session.location,
+        skillLevel: session.skillLevel,
+        skillRange: session.skillRange,
+        maxParticipants: session.maxParticipants,
+        participants: session.participants,
+        latitude: session.locationPoint.coordinates[1],
+        longitude: session.locationPoint.coordinates[0],
+      })));
+    }).catch((error) => {
+      logger.error('Could not load map sessions:', error);
+      if (mounted) setSessionError('Nearby sessions could not be loaded. Try again.');
+    }).finally(() => {
+      if (mounted) setSessionsLoading(false);
+    });
+
+    return () => { mounted = false; };
+  }, [origin, reloadCount, useLiveData]);
+
+  const loading = locationLoading || (useLiveData && sessionsLoading);
 
   return (
     <View style={styles.container}>
@@ -121,7 +143,24 @@ export default function MapScreen({ navigation }) {
           </Marker>
         ))}
       </MapView>
-      {loading && <View style={styles.status}><ActivityIndicator /><Text>Finding your location</Text></View>}
+      {loading && <View style={styles.status}><ActivityIndicator /><Text>{useLiveData ? 'Loading map sessions…' : 'Finding your location'}</Text></View>}
+      {!loading && sessionError && (
+        <View style={styles.notice} accessibilityRole="alert">
+          <Text style={styles.noticeText}>{sessionError}</Text>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Retry map loading" onPress={() => {
+            setSessionsLoading(true);
+            setSessionError(null);
+            setReloadCount((count) => count + 1);
+          }} style={styles.retryButton}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      {!loading && !sessionError && useLiveData && sessions.length === 0 && (
+        <View style={styles.notice} accessibilityRole="text">
+          <Text style={styles.noticeText}>No sessions are available nearby.</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -130,6 +169,10 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { flex: 1 },
   status: { position: 'absolute', top: 58, alignSelf: 'center', flexDirection: 'row', gap: 8, backgroundColor: '#fff', padding: 10, borderRadius: 8 },
+  notice: { position: 'absolute', top: 58, left: 18, right: 18, alignItems: 'center', gap: 10, backgroundColor: colors.card, padding: 14, borderRadius: 12, shadowColor: colors.ink, shadowOpacity: 0.12, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
+  noticeText: { color: colors.text, textAlign: 'center' },
+  retryButton: { backgroundColor: colors.purple, borderRadius: 8, paddingHorizontal: 16, paddingVertical: 9 },
+  retryButtonText: { color: colors.card, fontWeight: '700' },
   markerOuter: {
     width: 40,
     height: 40,
