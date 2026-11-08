@@ -60,12 +60,13 @@ const MAX_SESSION_LENGTH_MS = 24 * HOUR_MS;
 // How long after a session ends players can answer "who didn't show up?".
 const NO_SHOW_WINDOW_MS = 48 * HOUR_MS;
 // Sessions are frozen this long before they start (#361): the host can't edit
-// or cancel them and players can't leave, so plans don't change last minute.
-const CHANGE_FREEZE_MS = 2 * HOUR_MS;
+// or cancel them and players can't leave, so plans don't change at the last
+// second. Kept short so spontaneous sessions (started on the spot) still work.
+const CHANGE_FREEZE_MS = 5 * 60 * 1000;
 // The roster check happens this long before the start (#376). A full-only
 // session stops taking players then. A regular session with only the host is
 // called off then; one with 2+ players keeps taking players until it starts.
-const JOIN_CUTOFF_MS = HOUR_MS;
+const JOIN_CUTOFF_MS = 5 * 60 * 1000;
 // One person is not a group (#360): a session needs at least this many players
 // to go ahead.
 const MIN_PLAYERS = 2;
@@ -385,7 +386,7 @@ function changesFreezeAt(session) {
   return new Date(new Date(session.startsAt).getTime() - CHANGE_FREEZE_MS);
 }
 
-// When it's decided whether the session goes ahead: 1 hour before the start.
+// When it's decided whether the session goes ahead: 5 minutes before the start.
 function rosterCheckAt(session) {
   return new Date(new Date(session.startsAt).getTime() - JOIN_CUTOFF_MS);
 }
@@ -404,8 +405,8 @@ function joinClosesAt(session) {
 
 // Why a session isn't going ahead, or null if it is. Decided at the roster
 // check: a full-only session that isn't full, or any session with fewer than 2
-// players. Players can't leave by then and these sessions stop taking new
-// ones, so the answer can't change afterwards. Cancelled sessions have their
+// players. Leaving locks at the same moment and these sessions stop taking
+// new players, so the answer can't change afterwards. Cancelled sessions have their
 // own status.
 function invalidReason(session, now = new Date()) {
   if (isCancelled(session) || isLegacyCompleted(session)) return null;
@@ -700,7 +701,7 @@ function checkMaxParticipants(value) {
 }
 
 // Loads a session for editSession/cancelSession: only its host, and only until
-// 2 hours before it starts (#361).
+// 5 minutes before it starts (#361).
 async function sessionForHostChange(sessionId, user) {
   const session = await Session.findById(sessionId);
   if (!session) throw new Error('Session not found');
@@ -712,7 +713,7 @@ async function sessionForHostChange(sessionId, user) {
     throw new Error('Sessions can only be changed before they start');
   }
   if (changesFreezeAt(session) <= new Date()) {
-    throw new Error('Sessions can\'t be changed or cancelled in the 2 hours before they start');
+    throw new Error('Sessions can\'t be changed or cancelled in the 5 minutes before they start');
   }
   return session;
 }
@@ -783,7 +784,7 @@ function joinableSessionFilter(now = new Date()) {
   return { status: 'upcoming', ...joinOpenFilter(now) };
 }
 
-// Players can leave until 2 hours before the start (#361).
+// Players can leave until 5 minutes before the start (#361).
 function leavableSessionFilter(now = new Date()) {
   return { status: 'upcoming', startsAt: { $gt: new Date(now.getTime() + CHANGE_FREEZE_MS) } };
 }
@@ -802,7 +803,7 @@ function joinRejection(session, user) {
   const invalid = invalidReason(session);
   if (invalid) return new Error(`${invalid} It can't be joined.`);
   if (joinClosesAt(session) <= new Date()) {
-    return new Error('This session only happens if it\'s full, so joining closed 1 hour before it starts');
+    return new Error('This session only happens if it\'s full, so joining closed 5 minutes before it starts');
   }
   if (session.participants.length >= session.maxParticipants) return new Error('Session is full');
   return new Error('Could not join this session. Please try again.');
@@ -816,7 +817,7 @@ function leaveRejection(session, user) {
   if (hasEnded(session)) return new Error('You cannot leave a session that has ended');
   if (!isOpen(session)) return new Error('You cannot leave a session that has already started');
   if (changesFreezeAt(session) <= new Date()) {
-    return new Error('You can\'t leave a session in the 2 hours before it starts');
+    return new Error('You can\'t leave a session in the 5 minutes before it starts');
   }
   return new Error('Could not leave this session. Please try again.');
 }
@@ -1337,10 +1338,10 @@ const resolvers = {
           input.endsAt,
           sessionEnd(session) - new Date(session.startsAt)
         ));
-        // A moved session must still be outside the 2-hour freeze (#361), or
-        // the host could dodge it by pulling the start closer.
+        // A moved session must still be outside the 5-minute freeze (#361),
+        // or the host could dodge it by pulling the start closer.
         if (changesFreezeAt(session) <= new Date()) {
-          throw new Error('Choose a start at least 2 hours from now');
+          throw new Error('Choose a start at least 5 minutes from now');
         }
       }
       if (isGiven(input.fullOnly)) session.fullOnly = input.fullOnly;

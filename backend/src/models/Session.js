@@ -47,7 +47,7 @@ const sessionSchema = new mongoose.Schema({
   status: { type: String, enum: ['upcoming', 'in_progress', 'completed', 'cancelled'], default: 'completed' },
   cancelledAt: { type: Date },
   // "Only show up if the session is full" (#375): unless every spot is taken
-  // when joining closes (1 hour before the start for every session, #376),
+  // when joining closes (5 minutes before the start, #376),
   // the session doesn't happen and nobody is counted as a no-show.
   fullOnly: { type: Boolean, default: false },
   // Set once the players of a session that didn't go ahead (too few players,

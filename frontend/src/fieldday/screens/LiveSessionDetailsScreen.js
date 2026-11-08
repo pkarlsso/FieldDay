@@ -136,13 +136,13 @@ export default function LiveSessionDetailsScreen({ route, navigation }) {
   if (isHost && !session.fullOnly) {
     // The host only has to go once someone else joins (#360).
     leaveNote = hostIsAlone(session)
-      ? `Nobody else has joined yet, so you only need to go if someone does. If nobody joins by ${formatSessionTime(session.joinClosesAt)}, 1 hour before the start, the session is called off. `
+      ? `Nobody else has joined yet, so you only need to go if someone does. If nobody joins by ${formatSessionTime(session.joinClosesAt)}, 5 minutes before the start, the session is called off. `
       : 'Other players have joined, so you\'re expected to show up. ';
   }
   if (!isHost) {
     leaveNote = frozen
-      ? 'This session starts within 2 hours, so you can no longer leave it. '
-      : `You can leave until ${formatSessionTime(session.changesFreezeAt)}, 2 hours before it starts. `;
+      ? 'This session starts within 5 minutes, so you can no longer leave it. '
+      : `You can leave until ${formatSessionTime(session.changesFreezeAt)}, 5 minutes before it starts. `;
   }
 
   return (
@@ -198,7 +198,7 @@ export default function LiveSessionDetailsScreen({ route, navigation }) {
             <PrimaryButton label="Edit session" icon="create-outline" variant="secondary" disabled={busy} onPress={() => navigation.navigate('EditSession', { session })} />
             <PrimaryButton label="Cancel session" variant="destructive" disabled={busy} onPress={confirmCancel} />
             <Text style={{ color: colors.muted, lineHeight: 20 }}>
-              You can edit or cancel until {formatSessionTime(session.changesFreezeAt)}, 2 hours before it starts.
+              You can edit or cancel until {formatSessionTime(session.changesFreezeAt)}, 5 minutes before it starts.
             </Text>
           </View>
         ) : null}
@@ -207,7 +207,7 @@ export default function LiveSessionDetailsScreen({ route, navigation }) {
           <Card style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
             <Ionicons name="lock-closed-outline" size={18} color={colors.muted} />
             <Text style={{ color: colors.text, flex: 1, lineHeight: 20 }}>
-              This session starts within 2 hours, so it can no longer be edited or cancelled.
+              This session starts within 5 minutes, so it can no longer be edited or cancelled.
             </Text>
           </Card>
         ) : null}

@@ -292,7 +292,7 @@ export default function CreateSessionScreen({ navigation, route }) {
         {editing ? null : <CooldownNotice until={cooldownUntil} />}
         {editing ? (
           <Text style={{ color: colors.muted, lineHeight: 19 }}>
-            Sessions lock 2 hours before they start: after that they can&apos;t be edited or cancelled, and players can&apos;t leave.
+            Sessions lock 5 minutes before they start: after that they can&apos;t be edited or cancelled, and players can&apos;t leave.
           </Text>
         ) : null}
         <Card style={{ gap: 10 }}>
@@ -360,8 +360,8 @@ export default function CreateSessionScreen({ navigation, route }) {
           </View>
           <Text style={{ color: colors.muted, lineHeight: 19 }}>
             {fullOnly
-              ? `Joining closes 1 hour before the start. If all ${maxParticipants} spots aren't taken by then, the session is called off and nobody needs to show up.`
-              : 'The session goes ahead as long as at least one other player joins by 1 hour before it starts. Once 2 people are in, others can keep joining until the start.'}
+              ? `Joining closes 5 minutes before the start. If all ${maxParticipants} spots aren't taken by then, the session is called off and nobody needs to show up.`
+              : 'The session goes ahead as long as at least one other player joins by 5 minutes before it starts. Once 2 people are in, others can keep joining until the start.'}
           </Text>
           {editing ? null : (
             <>

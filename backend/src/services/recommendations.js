@@ -123,11 +123,11 @@ function recommendationQuery(user, origin, maxDistanceMiles, now = new Date()) {
       ] },
       { host: { $ne: user._id } },
       { participants: { $ne: user._id } },
-      // Only sessions that can still be joined: before the roster check 1 hour
-      // ahead, or until the start for a regular session with 2+ players
-      // (mirrors joinClosesAt in the resolvers).
+      // Only sessions that can still be joined: before the roster check 5
+      // minutes ahead, or until the start for a regular session with 2+
+      // players (mirrors joinClosesAt in the resolvers).
       { $or: [
-        { startsAt: { $gt: new Date(now.getTime() + 60 * 60 * 1000) } },
+        { startsAt: { $gt: new Date(now.getTime() + 5 * 60 * 1000) } },
         { fullOnly: { $ne: true }, $expr: { $gte: [{ $size: { $ifNull: ['$participants', []] } }, 2] } },
       ] },
     ],

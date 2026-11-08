@@ -19,12 +19,13 @@ export const VISIBILITY_OPTIONS = [
 // Mirrors the backend: sessions default to 2 hours and last at most 24.
 export const DEFAULT_SESSION_LENGTH_MS = 2 * 60 * 60 * 1000;
 export const MAX_SESSION_LENGTH_MS = 24 * 60 * 60 * 1000;
-// Mirrors the backend: sessions freeze (no edits, cancels or leaving) 2 hours
-// before they start, and full-only sessions stop taking players 1 hour before.
-export const CHANGE_FREEZE_MS = 2 * 60 * 60 * 1000;
-export const FULL_ONLY_JOIN_CUTOFF_MS = 60 * 60 * 1000;
+// Mirrors the backend: sessions freeze (no edits, cancels or leaving) 5
+// minutes before they start, and the roster check happens then too: full-only
+// sessions stop taking players, and solo sessions are called off.
+export const CHANGE_FREEZE_MS = 5 * 60 * 1000;
+export const JOIN_CUTOFF_MS = 5 * 60 * 1000;
 
-// True once the 2-hour freeze before the start has begun.
+// True once the 5-minute freeze before the start has begun.
 export function changesFrozen(session, now = new Date()) {
   const freezeAt = session.changesFreezeAt
     ? new Date(session.changesFreezeAt)
@@ -40,10 +41,10 @@ export function commitmentWarning({ startsAt, fullOnly, maxParticipants, hosting
   const freezeAt = formatSessionTime(new Date(start - CHANGE_FREEZE_MS));
   const noShow = 'Players who don\'t come can be reported as no-shows, which gives them a rating of 1.';
   const exit = hosting
-    ? `You can edit or cancel it until ${freezeAt}, 2 hours before it starts.`
-    : `You can leave until ${freezeAt}, 2 hours before it starts.`;
+    ? `You can edit or cancel it until ${freezeAt}, 5 minutes before it starts.`
+    : `You can leave until ${freezeAt}, 5 minutes before it starts.`;
   if (fullOnly) {
-    const closesAt = formatSessionTime(new Date(start - FULL_ONLY_JOIN_CUTOFF_MS));
+    const closesAt = formatSessionTime(new Date(start - JOIN_CUTOFF_MS));
     return {
       title: hosting ? 'Only if full' : 'You\'re expected if it fills up',
       message: `This session only happens if all ${maxParticipants} spots are taken by ${closesAt}, when joining closes. `
@@ -57,7 +58,7 @@ export function commitmentWarning({ startsAt, fullOnly, maxParticipants, hosting
     return {
       title: 'You\'re expected if someone joins',
       message: 'As the host, you only need to show up if at least one other player joins. '
-        + 'If nobody has joined by 1 hour before it starts, the session is called off and nobody is marked as a no-show. '
+        + 'If nobody has joined by 5 minutes before it starts, the session is called off and nobody is marked as a no-show. '
         + `Once someone joins, you're expected to be there unless you cancel in time. ${exit} After that it's locked. ${noShow}`,
     };
   }
@@ -117,13 +118,13 @@ export function formatSessionRange(startsAt, endsAt) {
 // When editing, `joinedCount` is how many players have already joined, since
 // capacity can't drop below that.
 // `editing` adds the edit-only rule that a moved session must still start at
-// least 2 hours from now.
+// least 5 minutes from now.
 export function validateSessionForm({ sport, startsAt, endsAt, location, locationConfirmed, maxParticipants, skillLevel, joinedCount = 0, visibility = 'PUBLIC', inviteeIds = [], editing = false }) {
   const errors = {};
   if (!sport) errors.sport = 'Choose a sport.';
   if (!(startsAt instanceof Date) || Number.isNaN(startsAt.getTime())) errors.startsAt = 'Choose a date and time.';
   else if (startsAt <= new Date()) errors.startsAt = 'Choose a date and time in the future.';
-  else if (editing && startsAt.getTime() - Date.now() <= CHANGE_FREEZE_MS) errors.startsAt = 'Choose a start at least 2 hours from now.';
+  else if (editing && startsAt.getTime() - Date.now() <= CHANGE_FREEZE_MS) errors.startsAt = 'Choose a start at least 5 minutes from now.';
   else if (!(endsAt instanceof Date) || endsAt <= startsAt) errors.endsAt = 'Choose an end time after the start.';
   else if (endsAt - startsAt > MAX_SESSION_LENGTH_MS) errors.endsAt = 'Sessions can last at most 24 hours.';
   if (!location.trim()) errors.location = 'Enter where the session is.';

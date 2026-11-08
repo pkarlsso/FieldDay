@@ -1,5 +1,5 @@
 // Check-in removal (#358), sessions that don't go ahead (#360, #375, #376),
-// the 2-hour change freeze (#361), automatic no-show ratings (#280) and host
+// the 5-minute change freeze (#361), automatic no-show ratings (#280) and host
 // edit / cancel (#281).
 import assert from 'node:assert/strict';
 import mongoose from 'mongoose';
@@ -17,6 +17,8 @@ const emailFor = (name) => `${tag}-${name}@example.test`;
 const SECOND = 1000;
 const MINUTE = 60 * SECOND;
 const HOUR = 60 * MINUTE;
+// The change lock (#361) and the roster check / join cutoff (#376).
+const WINDOW = 5 * MINUTE;
 
 const server = new ApolloServer({ typeDefs, resolvers });
 await server.start();
@@ -132,13 +134,13 @@ try {
 
   // ---- #360 a session with only the host doesn't go ahead -----------------
   const solo = await newSession();
-  await startSession(solo, -(HOUR + MINUTE));
+  await startSession(solo, -(WINDOW + MINUTE));
   const soloEarly = (await ok(GET, { id: solo }, host)).getSession;
-  assert.equal(soloEarly.status, 'upcoming', 'open to players until the roster check 1 hour before');
-  assert.equal(new Date(soloEarly.startsAt) - new Date(soloEarly.joinClosesAt), HOUR, 'a host on their own has until 1 hour before');
-  await startSession(solo, -(HOUR - MINUTE));
+  assert.equal(soloEarly.status, 'upcoming', 'open to players until the roster check 5 minutes before');
+  assert.equal(new Date(soloEarly.startsAt) - new Date(soloEarly.joinClosesAt), WINDOW, 'a host on their own has until 5 minutes before');
+  await startSession(solo, -(WINDOW - MINUTE));
   const soloChecked = (await ok(GET, { id: solo }, host)).getSession;
-  assert.equal(soloChecked.status, 'invalid', 'still only the host 1 hour before, so it is not happening');
+  assert.equal(soloChecked.status, 'invalid', 'still only the host 5 minutes before, so it is not happening');
   await fails(JOIN, { s: solo }, c, 'Nobody else joined');
   await startSession(solo, MINUTE);
   const soloStarted = (await ok(GET, { id: solo }, host)).getSession;
@@ -185,12 +187,12 @@ try {
   const fullOnly = await newSession({ maxParticipants: 4, fullOnly: true });
   const fo = (await ok(GET, { id: fullOnly }, a)).getSession;
   assert.equal(fo.fullOnly, true);
-  assert.equal(new Date(fo.startsAt) - new Date(fo.joinClosesAt), HOUR, 'joining closes 1 hour before');
+  assert.equal(new Date(fo.startsAt) - new Date(fo.joinClosesAt), WINDOW, 'joining closes 5 minutes before');
   await ok(JOIN, { s: fullOnly }, a);
-  await startSession(fullOnly, -(HOUR + MINUTE));
+  await startSession(fullOnly, -(WINDOW + MINUTE));
   await ok(JOIN, { s: fullOnly }, b);
   assert.equal((await ok(GET, { id: fullOnly }, a)).getSession.status, 'upcoming', 'still upcoming while joining is open');
-  await startSession(fullOnly, -(HOUR - MINUTE));
+  await startSession(fullOnly, -(WINDOW - MINUTE));
   await fails(JOIN, { s: fullOnly }, c, 'didn\'t fill up');
   const off = (await ok(GET, { id: fullOnly }, a)).getSession;
   assert.equal(off.status, 'invalid', 'not full when joining closed, so it is off before it starts');
@@ -208,19 +210,19 @@ try {
   const filled = await newSession({ maxParticipants: 3, fullOnly: true });
   await ok(JOIN, { s: filled }, a);
   await ok(JOIN, { s: filled }, b);
-  await startSession(filled, -30 * MINUTE);
+  await startSession(filled, -(WINDOW - MINUTE));
   assert.equal((await ok(GET, { id: filled }, a)).getSession.status, 'upcoming', 'a full full-only session goes ahead');
   await startSession(filled, 3 * HOUR);
   const filledEnded = (await ok(GET, { id: filled }, a)).getSession;
   assert.equal(filledEnded.status, 'completed');
   assert.ok(filledEnded.noShowDeadline);
 
-  console.log('✓ Full-only sessions close to joins 1 hour early and are off unless full');
+  console.log('✓ Full-only sessions close to joins 5 minutes early and are off unless full');
 
   // A regular session with 2+ players keeps taking players until it starts.
   const regular = await newSession();
   await ok(JOIN, { s: regular }, a);
-  await startSession(regular, -30 * MINUTE);
+  await startSession(regular, -(WINDOW - MINUTE));
   const regularLate = (await ok(GET, { id: regular }, b)).getSession;
   assert.equal(regularLate.status, 'upcoming');
   assert.equal(regularLate.joinClosesAt, regularLate.startsAt, 'with 2 players, joining stays open until the start');
@@ -230,23 +232,23 @@ try {
   await fails(JOIN, { s: regular }, c, 'Only upcoming sessions');
   console.log('✓ Regular sessions with 2+ players take joins until they start');
 
-  // ---- #361 sessions freeze 2 hours before they start ---------------------
+  // ---- #361 sessions freeze 5 minutes before they start ------------------
   const soon = await newSession();
   await ok(JOIN, { s: soon }, a);
-  await startSession(soon, -(2 * HOUR + MINUTE));
+  await startSession(soon, -(WINDOW + MINUTE));
   const notYet = (await ok(GET, { id: soon }, a)).getSession;
-  assert.equal(new Date(notYet.startsAt) - new Date(notYet.changesFreezeAt), 2 * HOUR);
+  assert.equal(new Date(notYet.startsAt) - new Date(notYet.changesFreezeAt), WINDOW);
   await ok(EDIT, { s: soon, input: { maxParticipants: 7 } }, host);
-  await fails(EDIT, { s: soon, input: { startsAt: new Date(Date.now() + 90 * MINUTE).toISOString() } }, host, 'at least 2 hours from now');
-  await startSession(soon, -(2 * HOUR - MINUTE));
-  await fails(EDIT, { s: soon, input: { maxParticipants: 8 } }, host, 'in the 2 hours before');
-  await fails(CANCEL, { s: soon }, host, 'in the 2 hours before');
-  await fails(LEAVE, { s: soon }, a, 'in the 2 hours before');
+  await fails(EDIT, { s: soon, input: { startsAt: new Date(Date.now() + 3 * MINUTE).toISOString() } }, host, 'at least 5 minutes from now');
+  await startSession(soon, -(WINDOW - MINUTE));
+  await fails(EDIT, { s: soon, input: { maxParticipants: 8 } }, host, 'in the 5 minutes before');
+  await fails(CANCEL, { s: soon }, host, 'in the 5 minutes before');
+  await fails(LEAVE, { s: soon }, a, 'in the 5 minutes before');
   const frozenSession = await Session.findById(soon);
   assert.equal(frozenSession.status, 'upcoming', 'rejected changes store nothing');
   assert.ok(frozenSession.participants.some((id) => id.equals(a._id)), 'a is still in');
   await ok(JOIN, { s: soon }, b);
-  console.log('✓ Sessions can\'t be edited, cancelled or left in the 2 hours before they start');
+  console.log('✓ Sessions can\'t be edited, cancelled or left in the 5 minutes before they start');
 
   // Sessions from before check-in keep the peer vote; its result becomes final
   // when the no-show check closes.

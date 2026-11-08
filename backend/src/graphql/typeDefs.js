@@ -129,7 +129,7 @@ const typeDefs = `#graphql
     invitees: [User!]!
     # "upcoming", "in_progress" (started, not ended), "completed" (ended),
     # "invalid" or "cancelled". "invalid" means not going ahead (fewer than 2
-    # players, or a fullOnly session that isn't full, 1 hour before the start)
+    # players, or a fullOnly session that isn't full, 5 minutes before the start)
     # and lasts until the planned end, after which the session
     # reads "cancelled" with invalidReason set. "cancelled" with no
     # invalidReason was cancelled by the host. Apart from a host cancel it is
@@ -147,10 +147,10 @@ const typeDefs = `#graphql
     # joinClosesAt, the session doesn't go ahead.
     fullOnly: Boolean!
     # Last moment to join: startsAt for a regular session with 2+ players,
-    # otherwise 1 hour before startsAt (when a session with only the host, or
+    # otherwise 5 minutes before startsAt (when a session with only the host, or
     # a fullOnly session that isn't full, is called off).
     joinClosesAt: String!
-    # 2 hours before startsAt. After this the host can't edit or cancel the
+    # 5 minutes before startsAt. After this the host can't edit or cancel the
     # session and players can't leave it.
     changesFreezeAt: String!
     # Why the session didn't go ahead (status "invalid", or "cancelled" once
@@ -421,8 +421,8 @@ const typeDefs = `#graphql
     # Host only. Stops the person finding or joining the session; if they
     # already joined, they keep their spot.
     uninviteFromSession(sessionId: ID!, userId: ID!): Session!
-    # Host only, until changesFreezeAt (2 hours before the start). A new start
-    # must also be at least 2 hours away.
+    # Host only, until changesFreezeAt (5 minutes before the start). A new
+    # start must also be at least 5 minutes away.
     editSession(sessionId: ID!, input: EditSessionInput!): Session!
     # Host only, until changesFreezeAt. Cancelled sessions leave discovery and
     # can't be joined.
