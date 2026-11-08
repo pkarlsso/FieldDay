@@ -1,4 +1,4 @@
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar, Card, HeaderActionRow, IconButton, NotificationButton, PrimaryButton, ScreenHeader, SportIcon, Stat } from '../components/ui';
 import { colors } from '../theme';
@@ -121,7 +121,13 @@ export default function ProfileScreen({ navigation }) {
             <Text style={{ color: colors.muted, lineHeight: 20 }}>No friends yet. Rate a session to add the people you played with.</Text>
           ) : null}
           {friends.map((friend, index) => (
-            <View key={friend.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: colors.line }}>
+            <TouchableOpacity
+              key={friend.id}
+              accessibilityRole="button"
+              accessibilityLabel={`View ${friend.name}'s profile`}
+              onPress={() => navigation.navigate('UserProfile', { userId: friend.id })}
+              style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: colors.line }}
+            >
               <Avatar name={friend.name} uri={friend.profilePicture} color={colors.green} size={42} />
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={{ color: colors.ink, fontWeight: '900' }}>{friend.name}</Text>
@@ -133,7 +139,7 @@ export default function ProfileScreen({ navigation }) {
                   <Text style={{ color: colors.gold, fontWeight: '900' }}>{friend.socialRating.toFixed(1)}</Text>
                 </View>
               ) : null}
-            </View>
+            </TouchableOpacity>
           ))}
         </Card>
 

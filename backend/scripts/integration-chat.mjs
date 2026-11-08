@@ -69,6 +69,11 @@ try {
   await expectError(sendMutation, { conversationId, body: 'I left', clientMessageId: 'former-1' }, tokens.get(String(users[1]._id)), 'no longer send');
   const history = await graphql(messagesQuery, { conversationId }, tokens.get(String(users[1]._id)));
   if (history.getConversationMessages.messages.length !== 2) throw new Error('former participant lost read access');
+  // #359: a session chat leaves the chat list once you leave the session.
+  const formerList = await graphql(conversationsQuery, {}, tokens.get(String(users[1]._id)));
+  if (formerList.getConversations.some(({ id }) => id === conversationId)) throw new Error('a left session chat is still listed');
+  const stillIn = await graphql(conversationsQuery, {}, tokens.get(String(users[0]._id)));
+  if (!stillIn.getConversations.some(({ id }) => id === conversationId)) throw new Error('current players lost the session chat');
 
   process.stdout.write('Integration chat test passed: authorization -> persistence -> retry -> read-only history\n');
 } finally {

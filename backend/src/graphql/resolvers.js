@@ -118,7 +118,7 @@ function assertNotInCooldown(user) {
 }
 
 // profilePhoto is needed to resolve uploaded photos; sportSkills for `sports`.
-const PUBLIC_USER_FIELDS = 'name bio hometown profilePicture profilePhoto sports sportSkills skillLevel socialRating';
+const PUBLIC_USER_FIELDS = 'name bio hometown profilePicture profilePhoto sports sportSkills skillLevel socialRating totalRatings';
 
 function publicUserQuery(id) {
   return User.findById(id).select(PUBLIC_USER_FIELDS);
@@ -1035,7 +1035,9 @@ const resolvers = {
   PublicUser: {
     id: (user) => String(user._id || user.id),
     profilePicture: (user, _, context) => profilePictureOf(user, context),
-    sports: (user) => sportSkillsOf(user).map(({ sport }) => sport)
+    sports: (user) => sportSkillsOf(user).map(({ sport }) => sport),
+    sportSkills: (user) => sportSkillsOf(user),
+    totalRatings: (user) => user.totalRatings || 0
   },
 
   FriendRequest: {
@@ -1091,8 +1093,14 @@ const resolvers = {
       const user = requireUser(context);
       const sessions = await Session.find({ participants: user._id }).select('_id participants');
       await Promise.all(sessions.map(ensureSessionConversation));
+      // Session chats are listed only while the user is still in the session
+      // (#359). Someone who left stays in the conversation's participants, so
+      // matching on those would keep showing chats they left.
       const conversations = await Conversation.find({
-        $or: [{ participants: user._id }, { session: { $in: sessions.map(({ _id }) => _id) } }]
+        $or: [
+          { kind: 'direct', participants: user._id },
+          { kind: 'session', session: { $in: sessions.map(({ _id }) => _id) } }
+        ]
       }).sort({ lastMessageAt: -1, createdAt: -1 });
       return Promise.all(conversations.map((conversation) => conversationView(conversation, user)));
     },

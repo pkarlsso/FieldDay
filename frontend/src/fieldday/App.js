@@ -5,6 +5,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import ExploreScreen from './screens/ExploreScreen';
 import LiveExploreScreen from './screens/LiveExploreScreen';
@@ -26,6 +27,7 @@ import LiveSessionDetailsScreen from './screens/LiveSessionDetailsScreen';
 import SessionsScreen from './screens/SessionsScreen';
 import LiveSessionsScreen from './screens/LiveSessionsScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import UserProfileScreen from './screens/UserProfileScreen';
 import { colors } from './theme';
 import { NotificationProvider } from '../notifications';
 import { restoreSession, screenAfterSignIn } from '../session';
@@ -110,6 +112,7 @@ export default function App() {
   }
 
   return (
+    <SafeAreaProvider>
     <NotificationProvider>
       <NavigationContainer>
         <StatusBar style="dark" />
@@ -130,10 +133,12 @@ export default function App() {
         <Stack.Screen name="ReportNoShows" component={LiveNoShowScreen} />
         <Stack.Screen name="SessionComplete" component={SessionCompleteScreen} />
         <Stack.Screen name="ChatDetail" component={ChatDetailScreen} />
+        <Stack.Screen name="UserProfile" component={UserProfileScreen} />
         <Stack.Screen name="Notifications" component={NotificationsScreen} />
         <Stack.Screen name="Settings" component={SettingsScreen} />
         </Stack.Navigator>
       </NavigationContainer>
     </NotificationProvider>
+    </SafeAreaProvider>
   );
 }

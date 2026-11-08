@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { Card, IconButton, PrimaryButton, ScreenHeader, StatusBadge } from '../components/ui';
@@ -126,6 +126,9 @@ export default function LiveSessionDetailsScreen({ route, navigation }) {
   const owesNoShowCheck = joined && needsNoShowCheck(session);
   const canChangeNoShows = joined && ended && session.myNoShowReport
     && new Date(session.noShowDeadline) > new Date() && session.ratingEligibility.eligible;
+  const openProfile = (userId) => {
+    if (userId && userId !== CURRENT_USER_ID) navigation.navigate('UserProfile', { userId });
+  };
 
   let joinLabel = 'Join Session';
   if (joined) joinLabel = frozen ? 'Leaving is locked' : 'Leave Session';
@@ -158,7 +161,19 @@ export default function LiveSessionDetailsScreen({ route, navigation }) {
           <Text style={{ color: colors.ink, fontSize: 22, fontWeight: '900' }}>{sessionTitle(session)}</Text>
           <Text style={{ color: colors.text }}>{formatSessionRange(session.startsAt, session.endsAt)}</Text>
           <Text style={{ color: colors.text }}>{playersLabel(session)} • {skillLabel(session)}</Text>
-          <Text style={{ color: colors.text }}>Host: {isHost ? 'You' : session.host?.name}</Text>
+          {isHost ? (
+            <Text style={{ color: colors.text }}>Host: You</Text>
+          ) : (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={`View ${session.host?.name}'s profile`}
+              onPress={() => openProfile(session.host?.id)}
+            >
+              <Text style={{ color: colors.text }}>
+                Host: <Text style={{ color: colors.purple, fontWeight: '800' }}>{session.host?.name}</Text>
+              </Text>
+            </TouchableOpacity>
+          )}
         </Card>
 
         {error ? <Text style={{ color: colors.coral }}>{error}</Text> : null}
@@ -261,15 +276,24 @@ export default function LiveSessionDetailsScreen({ route, navigation }) {
           <Text style={{ color: colors.ink, fontWeight: '900', fontSize: 18 }}>Players</Text>
           {session.participants.map((user) => {
             const attendance = attendanceFor(session, user.id);
+            const isMe = user.id === CURRENT_USER_ID;
             return (
-              <View key={user.id} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, gap: 8 }}>
-                <Text style={{ color: colors.text, flex: 1 }}>
-                  {user.name}{user.id === session.host?.id ? ' (host)' : ''}
+              <TouchableOpacity
+                key={user.id}
+                disabled={isMe}
+                accessibilityRole="button"
+                accessibilityLabel={isMe ? undefined : `View ${user.name}'s profile`}
+                onPress={() => openProfile(user.id)}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, gap: 8, minHeight: 32 }}
+              >
+                <Text style={{ color: isMe ? colors.text : colors.purple, fontWeight: isMe ? '400' : '800', flex: 1 }}>
+                  {isMe ? 'You' : user.name}{user.id === session.host?.id ? ' (host)' : ''}
                 </Text>
                 {attendance?.status === 'NO_SHOW' ? (
                   <StatusBadge label="No-show" icon="close-circle" color={colors.coral} />
                 ) : null}
-              </View>
+                {isMe ? null : <Ionicons name="chevron-forward" size={16} color={colors.muted} />}
+              </TouchableOpacity>
             );
           })}
         </Card>

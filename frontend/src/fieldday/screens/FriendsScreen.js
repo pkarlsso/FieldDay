@@ -119,6 +119,8 @@ export default function FriendsScreen({ navigation }) {
     }
   };
 
+  const openProfile = (userId) => navigation.navigate('UserProfile', { userId });
+
   const incoming = requests.filter((request) => request.recipient?.id === user?.id);
   const outgoing = requests.filter((request) => request.requester?.id === user?.id);
 
@@ -171,10 +173,10 @@ export default function FriendsScreen({ navigation }) {
           {lookupUsers.map((lookupUser) => (
             <View key={lookupUser.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 }}>
               <Avatar name={lookupUser.name} uri={lookupUser.profilePicture} color={colors.purple} />
-              <View style={{ flex: 1 }}>
+              <TouchableOpacity style={{ flex: 1 }} accessibilityRole="button" onPress={() => openProfile(lookupUser.id)}>
                 <Text style={{ color: colors.ink, fontWeight: '900' }}>{lookupUser.name}</Text>
                 <Text style={{ color: colors.muted, marginTop: 3 }}>{lookupUser.id}</Text>
-              </View>
+              </TouchableOpacity>
               {lookupBlocker(lookupUser)
                 ? <StatusBadge {...lookupBlocker(lookupUser)} />
                 : <PrimaryButton label="Request" icon="person-add-outline" onPress={() => sendRequest(lookupUser.id)} />}
@@ -188,7 +190,7 @@ export default function FriendsScreen({ navigation }) {
             {incoming.map((request) => (
               <Card key={request.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <Avatar name={request.requester.name} uri={request.requester.profilePicture} color={colors.purple} />
-                <View style={{ flex: 1 }}><Text style={{ color: colors.ink, fontWeight: '900' }}>{request.requester.name}</Text><Text style={{ color: colors.muted, marginTop: 3 }}>Wants to connect</Text></View>
+                <TouchableOpacity style={{ flex: 1 }} accessibilityRole="button" onPress={() => openProfile(request.requester.id)}><Text style={{ color: colors.ink, fontWeight: '900' }}>{request.requester.name}</Text><Text style={{ color: colors.muted, marginTop: 3 }}>Wants to connect</Text></TouchableOpacity>
                 <TouchableOpacity onPress={() => updateRequest(request.id, ACCEPT_REQUEST)}><StatusBadge label="Accept" icon="checkmark" color={colors.green} /></TouchableOpacity>
                 <TouchableOpacity onPress={() => updateRequest(request.id, DECLINE_REQUEST)}><StatusBadge label="Decline" icon="close" color={colors.coral} /></TouchableOpacity>
               </Card>
@@ -199,14 +201,14 @@ export default function FriendsScreen({ navigation }) {
         {outgoing.length > 0 ? (
           <View style={{ gap: 10 }}>
             <Text style={{ color: colors.ink, fontSize: 21, fontWeight: '900' }}>Sent requests</Text>
-            {outgoing.map((request) => <Card key={request.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><Avatar name={request.recipient.name} uri={request.recipient.profilePicture} color={colors.purple} /><Text style={{ flex: 1, color: colors.ink, fontWeight: '900' }}>{request.recipient.name}</Text><StatusBadge label="Pending" icon="time-outline" color={colors.gold} /></Card>)}
+            {outgoing.map((request) => <Card key={request.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><Avatar name={request.recipient.name} uri={request.recipient.profilePicture} color={colors.purple} /><Text onPress={() => openProfile(request.recipient.id)} style={{ flex: 1, color: colors.ink, fontWeight: '900' }}>{request.recipient.name}</Text><StatusBadge label="Pending" icon="time-outline" color={colors.gold} /></Card>)}
           </View>
         ) : null}
 
         {candidates.length > 0 ? (
           <View style={{ gap: 10 }}>
             <Text style={{ color: colors.ink, fontSize: 21, fontWeight: '900' }}>People from your sessions</Text>
-            {candidates.map((candidate) => <Card key={candidate.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><Avatar name={candidate.name} uri={candidate.profilePicture} color={colors.purple} /><Text style={{ flex: 1, color: colors.ink, fontWeight: '900' }}>{candidate.name}</Text><TouchableOpacity onPress={() => sendRequest(candidate.id)}><StatusBadge label="Add" icon="person-add-outline" color={colors.purple} /></TouchableOpacity></Card>)}
+            {candidates.map((candidate) => <Card key={candidate.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><Avatar name={candidate.name} uri={candidate.profilePicture} color={colors.purple} /><Text onPress={() => openProfile(candidate.id)} style={{ flex: 1, color: colors.ink, fontWeight: '900' }}>{candidate.name}</Text><TouchableOpacity onPress={() => sendRequest(candidate.id)}><StatusBadge label="Add" icon="person-add-outline" color={colors.purple} /></TouchableOpacity></Card>)}
           </View>
         ) : null}
 
@@ -221,7 +223,9 @@ export default function FriendsScreen({ navigation }) {
         {friends.map((friend) => (
           <TouchableOpacity key={friend.id} activeOpacity={0.88} onPress={() => openDirectChat(friend.id)}>
             <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <Avatar name={friend.name} uri={friend.profilePicture} color={colors.purple} size={48} />
+            <TouchableOpacity accessibilityRole="button" accessibilityLabel={`View ${friend.name}'s profile`} onPress={() => openProfile(friend.id)}>
+              <Avatar name={friend.name} uri={friend.profilePicture} color={colors.purple} size={48} />
+            </TouchableOpacity>
             <View style={{ flex: 1 }}>
               <Text style={{ color: colors.ink, fontWeight: '900', fontSize: 15 }}>{friend.name}</Text>
               {friend.sports?.length ? (
