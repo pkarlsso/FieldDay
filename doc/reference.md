@@ -56,7 +56,7 @@ The public application interface is GraphQL. The schema is defined in `backend/s
 ### Socket.IO interface
 
 | Event | Direction | Payload | Meaning |
-| --- | --- | --- |
+| --- | --- | --- |---|
 | `session:updated` | Server to client | `{ sessionId, reason, at }` | A session was created, edited, cancelled, joined, left, checked in, started, or ended. The client must refetch through GraphQL. |
 | `joinConversation` | Client to server | `conversationId`, callback | Requests access to a conversation room; access is verified server-side. |
 | `message` | Server to client | Message object | Delivers a new message to authorized conversation members. |
