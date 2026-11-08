@@ -191,7 +191,3 @@ This guide covers common tasks in FieldDay and tasks for working on the project.
 4. Install or update the build through TestFlight on a phone and test sign-in and the flows affected by your change.
 
 **Expected result:** The intended group can access the new build and the tested flows work. See [Automatic TestFlight builds](testflight-automation.md) for the planned GitHub Actions setup and its prerequisites; check whether it has reached `main` before relying on it.
-
-## GenAI usage statement
-
-OpenAI Codex was used to inspect the FieldDay repository and draft this how-to guide, including the task steps and troubleshooting notes. Gabriel should review, test, and revise the guide in his own words before submitting it; the assignment requires the student to author the majority of the content.
