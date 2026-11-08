@@ -5,6 +5,8 @@ node_modules/
 .DS_Store
 assets/
 
+.vscode/github-accounts.json
+
 # Expo app configuration references these source assets.
 !frontend/assets/
 !frontend/assets/**

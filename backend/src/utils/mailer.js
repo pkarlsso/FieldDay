@@ -1,4 +1,16 @@
-const nodemailer = require('nodemailer');
+import nodemailer from 'nodemailer';
+import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
+import logger from './logger.js';
+
+let sesClient;
+
+async function sendSesEmail(client, from, to, subject, text) {
+  await client.send(new SendEmailCommand({
+    FromEmailAddress: from,
+    Destination: { ToAddresses: [to] },
+    Content: { Simple: { Subject: { Data: subject, Charset: 'UTF-8' }, Body: { Text: { Data: text, Charset: 'UTF-8' } } } }
+  }));
+}
 
 // Built lazily (not at module load) because index.js requires this module
 // before it calls dotenv.config(), so process.env.SMTP_* wouldn't be
@@ -16,11 +28,22 @@ function getTransporter() {
 }
 
 async function sendCodeEmail({ toEmail, code, subject, text, purpose }) {
+  if (process.env.EMAIL_PROVIDER === 'ses') {
+    if (!process.env.SES_FROM || !process.env.AWS_REGION) {
+      throw new Error('SES_FROM and AWS_REGION are required for SES email delivery');
+    }
+    sesClient ||= new SESv2Client({ region: process.env.AWS_REGION });
+    await sendSesEmail(sesClient, process.env.SES_FROM, toEmail, subject, text);
+    return;
+  }
   const transporter = getTransporter();
   if (!transporter) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('Email delivery is not configured');
+    }
     // No SMTP configured — fall back to logging so the flow is still
     // testable locally without real email credentials.
-    console.log(`[dev] ${purpose} code for ${toEmail}: ${code}`);
+    logger.info('Email delivery is not configured; using development code', { purpose, toEmail, code });
     return;
   }
   await transporter.sendMail({
@@ -54,4 +77,7 @@ function sendPasswordResetEmail(toEmail, code) {
   });
 }
 
-module.exports = { sendTwoFactorEmail, sendPasswordResetEmail };
+const mailer = { sendTwoFactorEmail, sendPasswordResetEmail };
+
+export { sendTwoFactorEmail, sendPasswordResetEmail, sendSesEmail };
+export default mailer;

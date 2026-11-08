@@ -1,26 +1,70 @@
-const { ApolloServer } = require('@apollo/server');
-const { expressMiddleware } = require('@apollo/server/express4');
-const express = require('express');
-const cors = require('cors');
-const mongoose = require('mongoose');
-const typeDefs = require('./graphql/typeDefs');
-const resolvers = require('./graphql/resolvers');
-const { getConfig } = require('./config');
-const { authenticateRequest } = require('./utils/authSession');
+import http from 'node:http';
+import { ApolloServer } from '@apollo/server';
+import { expressMiddleware } from '@as-integrations/express5';
+import express from 'express';
+import cors from 'cors';
+import mongoose from 'mongoose';
+import typeDefs from './graphql/typeDefs.js';
+import resolvers, { notifyInvalidSessions, settleNoShowRatings } from './graphql/resolvers.js';
+import { getConfig } from './config.js';
+import { authenticateRequest, demoAuthBypassEnabled } from './utils/authSession.js';
+import logger from './utils/logger.js';
+import { attachRealtime, startSessionClock } from './realtime.js';
+import Conversation from './models/Conversation.js';
+import Session from './models/Session.js';
+import chatEvents from './utils/chatEvents.js';
+
+// Requests without an Origin header (native apps, curl) are allowed; browser
+// requests must come from this server or an origin in CSRF_ALLOWED_ORIGINS.
+function isAllowedOrigin(origin, requestOrigin) {
+  if (!origin) return true;
+  const configuredOrigins = (process.env.CSRF_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map(value => value.trim())
+    .filter(Boolean);
+  return origin === requestOrigin || configuredOrigins.includes(origin);
+}
+
+function csrfProtection(req, res, next) {
+  if (!isAllowedOrigin(req.get('origin'), `${req.protocol}://${req.get('host')}`)) {
+    return res.status(403).json({ error: 'Cross-origin request blocked' });
+  }
+  return next();
+}
 
 async function startServer() {
-  // False positive: the API uses no cookies or sessions, so it has no ambient credentials for CSRF to abuse.
+  // CSRF protection is applied to browser requests on the GraphQL route below.
+  // Native requests use bearer headers rather than ambient cookies or sessions.
   // nosemgrep: javascript.express.security.audit.express-check-csurf-middleware-usage.express-check-csurf-middleware-usage
   const app = express();
   const { mongoUri, port } = getConfig();
 
   await mongoose.connect(mongoUri);
-  console.log('Connected to MongoDB Atlas');
+  logger.info('Connected to MongoDB Atlas');
+  if (demoAuthBypassEnabled()) {
+    logger.warn('AUTH_DEMO_BYPASS is on: sign up and login skip the emailed 2FA code. Turn it off for real users.');
+  }
 
-  const server = new ApolloServer({ typeDefs, resolvers });
+  const server = new ApolloServer({
+    typeDefs,
+    resolvers,
+    plugins: [{
+      async requestDidStart() {
+        return {
+          async didEncounterErrors({ operationName, errors }) {
+            logger.error('GraphQL request encountered errors', {
+              operationName,
+              errors: errors.map((error) => ({ message: error.message, path: error.path }))
+            });
+          }
+        };
+      }
+    }]
+  });
   await server.start();
 
-  app.use('/graphql', cors(), express.json(), expressMiddleware(server, {
+  // Raised from the 100kb default so profile pictures (up to ~200k chars) fit.
+  app.use('/graphql', csrfProtection, cors(), express.json({ limit: '300kb' }), expressMiddleware(server, {
     // Makes the signed-in user (from the "Authorization: Bearer <token>" header)
     // available to resolvers as context.currentUser.
     context: async ({ req }) => ({ currentUser: await authenticateRequest(req) })
@@ -28,12 +72,57 @@ async function startServer() {
 
   app.get('/health', (_, res) => res.json({ status: 'ok' }));
 
-  app.listen(port, '0.0.0.0', () => {
-    console.log(`GraphQL server running at http://localhost:${port}/graphql`);
+  // No-shows get their automatic rating of 1 once attendance is final. Set
+  // DISABLE_NO_SHOW_RATINGS_JOB=true when a local server shares a database with
+  // the deployed one, so only one server hands these out.
+  if (process.env.DISABLE_NO_SHOW_RATINGS_JOB !== 'true') {
+    setInterval(() => {
+      settleNoShowRatings().catch((err) => logger.error('Failed to apply no-show ratings', { error: err.message }));
+      notifyInvalidSessions().catch((err) => logger.error('Failed to announce sessions that are off', { error: err.message }));
+    }, 60 * 1000);
+  }
+
+  // Socket.IO shares the HTTP server so live session updates and chat use the
+  // same host and port as GraphQL (path /socket.io).
+  const httpServer = http.createServer(app);
+  // Signing in is optional for a connection: public-session updates go to
+  // everyone, private ones only to signed-in users who may see the session,
+  // and joining a chat checks for a signed-in user.
+  const io = attachRealtime(httpServer, {
+    allowOrigin: (origin, req) => isAllowedOrigin(origin, `${req.socket.encrypted ? 'https' : 'http'}://${req.headers.host}`),
+    authenticate: (token) => authenticateRequest({ headers: { authorization: `Bearer ${token}` } })
+  });
+  startSessionClock();
+
+  io.on('connection', (socket) => {
+    socket.on('joinConversation', async (conversationId, callback = () => {}) => {
+      if (!socket.currentUser) return callback({ ok: false, error: 'You must be signed in to join a conversation.' });
+      try {
+        const conversation = await Conversation.findById(conversationId);
+        if (!conversation) return callback({ ok: false, error: 'Conversation not found' });
+        let allowed = conversation.participants.some((id) => id.equals(socket.currentUser._id));
+        if (conversation.kind === 'session') {
+          const session = await Session.findById(conversation.session).select('participants');
+          allowed = Boolean(session?.participants.some((id) => id.equals(socket.currentUser._id)));
+        }
+        if (!allowed) return callback({ ok: false, error: 'You cannot access this conversation' });
+        await socket.join(`conversation:${conversationId}`);
+        return callback({ ok: true });
+      } catch (error) {
+        return callback({ ok: false, error: error.name === 'CastError' ? 'Conversation not found' : 'Unable to join conversation' });
+      }
+    });
+  });
+  chatEvents.on('message', (conversationId, message) => {
+    io.to(`conversation:${conversationId}`).emit('message', message);
+  });
+
+  httpServer.listen(port, '0.0.0.0', () => {
+    logger.info(`GraphQL server running at http://localhost:${port}/graphql`);
   });
 }
 
 startServer().catch(err => {
-  console.error('Failed to start server:', err);
+  logger.error('Failed to start server', err);
   process.exit(1);
 });

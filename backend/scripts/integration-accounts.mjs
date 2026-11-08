@@ -1,24 +1,32 @@
-/* global console */
 // Exercises password reset, Google sign-in, persistent sign-in, profile editing
 // and ratings against the database in MONGODB_URI. It runs the GraphQL schema
 // in-process (no server needed), stubs out email and Google, and deletes every
 // document it creates.
 import assert from 'node:assert/strict';
 import mongoose from 'mongoose';
-import { createRequire } from 'node:module';
-
-const require = createRequire(import.meta.url);
-const { ApolloServer } = require('@apollo/server');
-const { getConfig } = require('../backend/src/config.js');
-const typeDefs = require('../backend/src/graphql/typeDefs.js');
-const resolvers = require('../backend/src/graphql/resolvers.js');
-const mailer = require('../backend/src/utils/mailer.js');
-const googleAuth = require('../backend/src/utils/googleAuth.js');
-const { authenticateRequest } = require('../backend/src/utils/authSession.js');
-const User = require('../backend/src/models/User.js');
-const Session = require('../backend/src/models/Session.js');
-const Rating = require('../backend/src/models/Rating.js');
-const AuthSession = require('../backend/src/models/AuthSession.js');
+import { ApolloServer } from '@apollo/server';
+import { getConfig } from '../src/config.js';
+import typeDefs from '../src/graphql/typeDefs.js';
+import resolvers from '../src/graphql/resolvers.js';
+import mailer from '../src/utils/mailer.js';
+import googleAuth from '../src/utils/googleAuth.js';
+import { authenticateRequest } from '../src/utils/authSession.js';
+import User from '../src/models/User.js';
+import Session from '../src/models/Session.js';
+import Rating from '../src/models/Rating.js';
+import AuthSession from '../src/models/AuthSession.js';
+import FriendRequest from '../src/models/FriendRequest.js';
+import Conversation from '../src/models/Conversation.js';
+import Notification from '../src/models/Notification.js';
+import NotificationPreference from '../src/models/NotificationPreference.js';
+import logger from '../src/utils/logger.js';
+import SessionRegistration from '../src/models/SessionRegistration.mjs';
+import {
+  NEW_PLAYER_TIER,
+  getParticipationTier,
+  getParticipationTierForUser,
+  recordRegistration
+} from '../src/utils/participationLimits.mjs';
 
 const tag = `accounts-${Date.now()}`;
 const emailFor = (name) => `${tag}-${name}@example.test`;
@@ -29,6 +37,11 @@ const codes = { twoFactor: {}, reset: {} };
 // The real senders would email a code; capture it instead.
 mailer.sendTwoFactorEmail = async (email, code) => { codes.twoFactor[email] = code; };
 mailer.sendPasswordResetEmail = async (email, code) => { codes.reset[email] = code; };
+
+// The shared logger records uncaught errors and keeps the process alive, which
+// would let a failed assertion end the run with exit code 0. A test should stop
+// with a failing exit code instead.
+logger.exitOnError = true;
 
 const server = new ApolloServer({ typeDefs, resolvers });
 await server.start();
@@ -59,12 +72,11 @@ async function signUpAndVerify(name) {
   createdEmails.push(email);
   const signUp = await ok(`mutation($e:String!,$p:String!){signUp(email:$e,password:$p){${AUTH_FIELDS}}}`, { e: email, p: PASSWORD });
   assert.equal(signUp.signUp.success, true);
-  const verify = await ok(
-    `mutation($e:String!,$c:String!){verifyTwoFactorCode(email:$e,code:$c){${AUTH_FIELDS}}}`,
-    { e: email, c: codes.twoFactor[email] }
-  );
+  assert.equal(signUp.signUp.requiresTwoFactor, true);
+  assert.equal(signUp.signUp.token, null);
+  const verify = await ok(`mutation($e:String!,$c:String!){verifyTwoFactorCode(email:$e,code:$c){${AUTH_FIELDS}}}`, { e: email, c: codes.twoFactor[email] });
   assert.equal(verify.verifyTwoFactorCode.success, true);
-  assert.ok(verify.verifyTwoFactorCode.token, 'verification should return a session token');
+  assert.ok(verify.verifyTwoFactorCode.token);
   return { email, ...verify.verifyTwoFactorCode };
 }
 
@@ -72,10 +84,20 @@ const sessionIds = [];
 
 try {
   await mongoose.connect(getConfig().mongoUri);
-  await Promise.all([User.init(), Rating.init(), AuthSession.init()]);
+  await Promise.all([User.init(), SessionRegistration.init(), Rating.init(), AuthSession.init(), FriendRequest.init()]);
 
   // ---- #104 persistent sign-in -------------------------------------------
   const alice = await signUpAndVerify('alice');
+  const searchActor = await User.findById(alice.userId);
+  const search = 'query($n:String!){searchUsersByName(name:$n){id name}}';
+  await fails(search, { n: 'alice' }, null, 'signed in');
+  const bob = await signUpAndVerify('bob');
+  const results = await ok(search, { n: 'BOB' }, searchActor);
+  assert.ok(results.searchUsersByName.some((person) => person.id === bob.userId));
+  const byId = await ok(search, { n: bob.userId }, searchActor);
+  assert.ok(byId.searchUsersByName.some((person) => person.id === bob.userId));
+  const regexText = await ok(search, { n: '.*' }, searchActor);
+  assert.equal(regexText.searchUsersByName.length, 0, 'search treats regex characters literally');
   const restore = 'mutation($t:String!){restoreSession(token:$t){success message userId token}}';
 
   let restored = await ok(restore, { t: alice.token });
@@ -103,16 +125,13 @@ try {
   assert.equal(restored.restoreSession.success, false, 'an expired session must not restore');
 
   const second = await ok(
-    `mutation($e:String!,$p:String!){login(email:$e,password:$p){success}}`,
+    `mutation($e:String!,$p:String!){login(email:$e,password:$p){success token requiresTwoFactor}}`,
     { e: alice.email, p: PASSWORD }
   );
   assert.equal(second.login.success, true);
-  const secondVerify = await ok(
-    `mutation($e:String!,$c:String!){verifyTwoFactorCode(email:$e,code:$c){token}}`,
-    { e: alice.email, c: codes.twoFactor[alice.email] }
-  );
-  await ok('mutation($t:String!){logout(token:$t){success}}', { t: secondVerify.verifyTwoFactorCode.token });
-  restored = await ok(restore, { t: secondVerify.verifyTwoFactorCode.token });
+  assert.equal(second.login.requiresTwoFactor, false);
+  await ok('mutation($t:String!){logout(token:$t){success}}', { t: second.login.token });
+  restored = await ok(restore, { t: second.login.token });
   assert.equal(restored.restoreSession.success, false, 'logout must revoke the token');
   restored = await ok(restore, { t: 'not-a-real-token' });
   assert.equal(restored.restoreSession.success, false);
@@ -170,8 +189,8 @@ try {
 
   verifiedProfile = { sub: `${tag}-sub-2`, email: alice.email.toUpperCase(), emailVerified: true, name: 'Alice G' };
   const linked = (await ok(google, { t: 'x' })).googleSignIn;
-  assert.equal(linked.userId, alice.userId, 'links to the existing account with that email');
-  assert.equal((await User.findById(alice.userId)).googleId, `${tag}-sub-2`);
+  assert.equal(linked.success, false, 'does not link a Google login to an unverified password account');
+  assert.equal((await User.findById(alice.userId)).googleId, undefined);
 
   verifiedProfile = { sub: `${tag}-sub-3`, email: alice.email, emailVerified: true, name: 'Impostor' };
   assert.equal((await ok(google, { t: 'x' })).googleSignIn.success, false, 'email already tied to another Google account');
@@ -216,6 +235,21 @@ try {
   await fails(update, { i: { sportSkills: [{ sport: 'Golf', skillLevel: 2 }, { sport: 'golf', skillLevel: 3 }] } }, await fresh(), 'more than once');
   assert.equal((await fresh()).name, 'Alice Ace', 'a rejected update changes nothing');
 
+  // Upload validation is covered in detail by test-profile-setup.mjs.
+  const pictureUpdate = `mutation($i:UpdateProfileInput!){updateProfile(input:$i){ name profilePicture }}`;
+  const upload = 'mutation($p:String!){uploadProfilePhoto(image:$p){id}}';
+  const tinyJpeg = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2w==';
+  const photoId = (await ok(upload, { p: tinyJpeg }, await fresh())).uploadProfilePhoto.id;
+  const pictured = (await ok(pictureUpdate, { i: { profilePhotoId: photoId } }, await fresh())).updateProfile;
+  assert.equal(pictured.profilePicture, tinyJpeg);
+  assert.equal(pictured.name, 'Alice Ace', 'setting a picture leaves other fields alone');
+  await fails(upload, { p: 'https://example.com/me.jpg' }, await fresh(), 'JPEG, PNG or WebP');
+  await fails(upload, { p: 'data:image/svg+xml;base64,PHN2Zz4=' }, await fresh(), 'JPEG, PNG or WebP');
+  await fails(upload, { p: `data:image/jpeg;base64,${'A'.repeat(400001)}` }, await fresh(), 'too large');
+  assert.equal(String((await fresh()).profilePhoto), photoId, 'a rejected picture keeps the old one');
+  const cleared = (await ok(pictureUpdate, { i: { profilePhotoId: '' } }, await fresh())).updateProfile;
+  assert.equal(cleared.profilePicture, '', 'an empty id removes the picture');
+
   const legacy = await User.create({ name: 'Legacy', email: emailFor('legacy'), sports: ['Soccer'], skillLevel: 2 });
   createdEmails.push(emailFor('legacy'));
   const legacyView = await ok('query($id:ID!){getUser(id:$id){sportSkills{sport skillLevel}}}', { id: String(legacy._id) });
@@ -227,8 +261,11 @@ try {
     return User.create({ name, email: emailFor(name), totalRatings: 2, ratingSum: 8, socialRating: 4 });
   }));
   const makeSession = async (status) => {
+    // Sessions end on their own once their end time passes, so an "upcoming"
+    // one has to actually be in the future.
+    const startsAt = status === 'upcoming' ? new Date(Date.now() + 24 * 60 * 60 * 1000) : new Date('2026-01-01T10:00:00Z');
     const session = await Session.create({
-      sport: 'Pickleball', date: '2026-01-01', time: '10:00', startsAt: new Date('2026-01-01T10:00:00Z'),
+      sport: 'Pickleball', date: '2026-01-01', time: '10:00', startsAt,
       location: 'Test Court', locationPoint: { type: 'Point', coordinates: [-86.9, 40.4] },
       participants: [host._id, guest._id, third._id], host: host._id, status
     });
@@ -237,25 +274,82 @@ try {
   };
   const session = await makeSession('completed');
   const sid = String(session._id);
-  const submit = `mutation($s:ID!,$r:ID!,$x:[RatingInput!]!){submitRatings(sessionId:$s,raterId:$r,ratings:$x){
+  const submit = `mutation($s:ID!,$x:[RatingInput!]!){submitRatings(sessionId:$s,ratings:$x){
     success avgRatingGiven friendRequestsSent updatedUsers{id socialRating totalRatings} }}`;
   const ids = { host: String(host._id), guest: String(guest._id), third: String(third._id), outsider: String(outsider._id) };
-  const rate = (raterId, ratings) => ({ s: sid, r: raterId, x: ratings });
+  const rate = (ratings) => ({ s: sid, x: ratings });
+  const players = { host, guest, third, outsider };
 
-  await fails(submit, rate(ids.host, [{ userId: ids.guest, rating: 6 }]), null, 'whole numbers from 1 to 5');
-  await fails(submit, rate(ids.host, [{ userId: ids.guest, rating: 0 }]), null, 'whole numbers from 1 to 5');
-  await fails(submit, rate(ids.host, [{ userId: ids.host, rating: 5 }]), null, 'cannot rate yourself');
-  await fails(submit, rate(ids.host, [{ userId: ids.outsider, rating: 5 }]), null, 'only rate people who played');
-  await fails(submit, rate(ids.outsider, [{ userId: ids.host, rating: 5 }]), null, 'played in the session');
-  await fails(submit, rate(ids.host, [{ userId: ids.guest, rating: 5 }, { userId: ids.guest, rating: 4 }]), null, 'only be rated once');
+  // ---- rating-based participation limits -------------------------------
+  assert.equal(getParticipationTier(4.5).limit, null);
+  assert.deepEqual(getParticipationTier(4.0), { minimumRating: 4.0, limit: 5, windowDays: 7 });
+  assert.deepEqual(getParticipationTier(3.5), { minimumRating: 3.5, limit: 2, windowDays: 7 });
+  assert.deepEqual(getParticipationTier(3.0), { minimumRating: 3.0, limit: 1, windowDays: 7 });
+  assert.deepEqual(getParticipationTier(2.5), { minimumRating: 2.5, limit: 1, windowDays: 14 });
+  assert.deepEqual(getParticipationTier(1.9), { minimumRating: 0, limit: 1, windowDays: 30 });
+  assert.equal(getParticipationTierForUser({ socialRating: 0, totalRatings: 0 }), NEW_PLAYER_TIER, 'unrated is not rated badly');
+  assert.deepEqual(getParticipationTierForUser({ socialRating: 1.9, totalRatings: 3 }), getParticipationTier(1.9));
+
+  // A brand-new account can create more than one session.
+  const newcomer = await User.create({ name: 'Newcomer', email: emailFor('newcomer') });
+  createdEmails.push(emailFor('newcomer'));
+
+  const limitedCreate = await User.create({
+    name: 'Limited Creator', email: emailFor('limited-create'), socialRating: 3.0, ratingSum: 9, totalRatings: 3
+  });
+  createdEmails.push(emailFor('limited-create'));
+  // The host is the signed-in user; sessions must start in the future.
+  const createSessionMutation = 'mutation($input:CreateSessionInput!){createSession(input:$input){id}}';
+  const daysFromNow = (days) => new Date(Date.now() + days * 24 * 60 * 60 * 1000).toISOString();
+  const createInput = {
+    sport: 'Tennis',
+    startsAt: daysFromNow(3),
+    location: 'Test Court',
+    locationPoint: { longitude: -86.9, latitude: 40.4 },
+    skillLevel: 2,
+    maxParticipants: 4
+  };
+  const limitedCreated = await ok(createSessionMutation, { input: createInput }, limitedCreate);
+  sessionIds.push(limitedCreated.createSession.id);
+  await fails(createSessionMutation, {
+    input: { ...createInput, startsAt: daysFromNow(4) }
+  }, limitedCreate, 'allows 1 new session registration per rolling 7 days');
+
+  for (const days of [3, 4]) {
+    const created = await ok(createSessionMutation, { input: { ...createInput, startsAt: daysFromNow(days) } }, newcomer);
+    sessionIds.push(created.createSession.id);
+  }
+
+  const limitedJoin = await User.create({
+    name: 'Limited Joiner', email: emailFor('limited-join'), socialRating: 3.0, ratingSum: 9, totalRatings: 3
+  });
+  createdEmails.push(emailFor('limited-join'));
+  const joinStartsAt = new Date(daysFromNow(5));
+  const joinTarget = await Session.create({
+    sport: 'Tennis', date: joinStartsAt.toISOString().slice(0, 10), time: '22:00', startsAt: joinStartsAt,
+    location: 'Test Court', locationPoint: { type: 'Point', coordinates: [-86.9, 40.4] },
+    participants: [host._id], host: host._id, status: 'upcoming'
+  });
+  sessionIds.push(joinTarget._id);
+  await recordRegistration(joinTarget._id, limitedJoin._id);
+  // joinSession always joins the signed-in user, so there is no userId to misuse.
+  const joinMutation = 'mutation($sessionId:ID!){joinSession(sessionId:$sessionId){id}}';
+  await fails(joinMutation, { sessionId: String(joinTarget._id) }, limitedJoin, 'allows 1 new session registration per rolling 7 days');
+
+  await fails(submit, rate([{ userId: ids.guest, rating: 6 }]), players.host, 'whole numbers from 1 to 5');
+  await fails(submit, rate([{ userId: ids.guest, rating: 0 }]), players.host, 'whole numbers from 1 to 5');
+  await fails(submit, rate([{ userId: ids.host, rating: 5 }]), players.host, 'cannot rate yourself');
+  await fails(submit, rate([{ userId: ids.outsider, rating: 5 }]), players.host, 'only rate people who played');
+  await fails(submit, rate([{ userId: ids.host, rating: 5 }]), players.outsider, 'played in the session');
+  await fails(submit, rate([{ userId: ids.guest, rating: 5 }, { userId: ids.guest, rating: 4 }]), players.host, 'only be rated once');
   const upcoming = await makeSession('upcoming');
-  await fails(submit, { s: String(upcoming._id), r: ids.host, x: [{ userId: ids.guest, rating: 5 }] }, null, 'completed sessions');
+  await fails(submit, { s: String(upcoming._id), x: [{ userId: ids.guest, rating: 5 }] }, host, 'completed sessions');
   assert.equal(await Rating.countDocuments({ session: session._id }), 0, 'rejected submissions store nothing');
 
-  const first = (await ok(submit, rate(ids.host, [
+  const first = (await ok(submit, rate([
     { userId: ids.guest, rating: 5, addFriend: true },
     { userId: ids.third, rating: 3 }
-  ]))).submitRatings;
+  ]), host)).submitRatings;
   assert.equal(first.success, true);
   assert.equal(first.avgRatingGiven, 4);
   assert.equal(first.friendRequestsSent, 1);
@@ -263,48 +357,111 @@ try {
   assert.equal(guestAfter.totalRatings, 3);
   assert.equal(guestAfter.socialRating, 4.3, '(8 + 5) / 3 rounded to one decimal');
   assert.equal(await Rating.countDocuments({ session: session._id, rater: host._id }), 2, 'each rating is stored');
-  assert.deepEqual((await User.findById(guest._id)).friends.map(String), [ids.host], 'friendship is mutual');
+  assert.deepEqual((await User.findById(guest._id)).friends.map(String), [], 'rating opt-in waits for acceptance');
+  assert.deepEqual((await User.findById(host._id)).friends.map(String), []);
+  const request = await FriendRequest.findOne({ requester: host._id, recipient: guest._id });
+  assert.equal(request.status, 'pending');
+
+  const requestFields = 'id status requester { id name } recipient { id name }';
+  await fails(
+    `mutation($id:ID!){sendFriendRequest(recipientId:$id){${requestFields}}}`,
+    { id: ids.guest },
+    host,
+    'already pending'
+  );
+  await fails(
+    `mutation($id:ID!){acceptFriendRequest(requestId:$id){${requestFields}}}`,
+    { id: String(request._id) },
+    host,
+    'Only the recipient'
+  );
+  const accepted = await ok(
+    `mutation($id:ID!){acceptFriendRequest(requestId:$id){${requestFields}}}`,
+    { id: String(request._id) },
+    guest
+  );
+  assert.equal(accepted.acceptFriendRequest.status, 'accepted');
+  assert.deepEqual((await User.findById(guest._id)).friends.map(String), [ids.host], 'accepted friendship is mutual');
   assert.deepEqual((await User.findById(host._id)).friends.map(String), [ids.guest]);
 
-  await fails(submit, rate(ids.host, [{ userId: ids.guest, rating: 1 }]), null, 'already rated');
+  const declined = (await ok(
+    `mutation($id:ID!){sendFriendRequest(recipientId:$id){${requestFields}}}`,
+    { id: ids.outsider },
+    host
+  )).sendFriendRequest;
+  const decline = await ok(
+    `mutation($id:ID!){declineFriendRequest(requestId:$id){${requestFields}}}`,
+    { id: declined.id },
+    outsider
+  );
+  assert.equal(decline.declineFriendRequest.status, 'declined');
+  assert.deepEqual((await User.findById(outsider._id)).friends.map(String), []);
+  assert.deepEqual((await User.findById(host._id)).friends.map(String), [ids.guest]);
+
+  // Direct messages are only for friends: the accepted pair can open one, the
+  // declined pair cannot.
+  const directChat = 'mutation($id:ID!){getOrCreateDirectConversation(friendId:$id){id}}';
+  assert.ok((await ok(directChat, { id: ids.guest }, await User.findById(host._id))).getOrCreateDirectConversation.id);
+  await fails(directChat, { id: ids.host }, await User.findById(outsider._id), 'only message a friend');
+
+  const notified = await Notification.find({ recipient: { $in: [guest._id, host._id] }, type: 'friend_request' });
+  assert.ok(notified.some((n) => n.recipient.equals(guest._id) && n.title === 'New friend request'), 'the recipient is told about a request');
+  assert.ok(notified.some((n) => n.recipient.equals(host._id) && n.title === 'Friend request accepted'), 'the requester is told it was accepted');
+  assert.equal((await ok('query{findUserById(id:"not-an-id"){id}}', {}, host)).findUserById, null, 'a mistyped ID is not found');
+
+  // A session that ended by its end time keeps a stored status of "upcoming";
+  // its players still count as people you have played with.
+  const clockEnded = await Session.create({
+    sport: 'Pickleball', date: '2026-01-02', time: '10:00',
+    startsAt: new Date('2026-01-02T10:00:00Z'), endsAt: new Date('2026-01-02T12:00:00Z'),
+    location: 'Test Court', locationPoint: { type: 'Point', coordinates: [-86.9, 40.4] },
+    participants: [outsider._id, third._id], host: outsider._id, status: 'upcoming'
+  });
+  sessionIds.push(clockEnded._id);
+  const candidates = (await ok('query{getFriendCandidates{id}}', {}, outsider)).getFriendCandidates;
+  assert.deepEqual(candidates.map(({ id }) => id), [ids.third], 'suggestions include sessions that ended by the clock');
+
+  await fails(submit, rate([{ userId: ids.guest, rating: 1 }]), players.host, 'already rated');
   assert.equal((await User.findById(guest._id)).totalRatings, 3, 'a repeat submission changes no averages');
 
   const received = (await ok('query($id:ID!){getRatingsForUser(userId:$id){value session ratee createdAt}}', { id: ids.guest })).getRatingsForUser;
   assert.deepEqual(received.map(({ value, session: s, ratee }) => [value, s, ratee]), [[5, sid, ids.guest]]);
-  const given = (await ok('query($s:ID!,$r:ID!){getRatingsBySession(sessionId:$s,raterId:$r){value ratee}}', { s: sid, r: ids.host })).getRatingsBySession;
+  const given = (await ok('query($s:ID!){getRatingsBySession(sessionId:$s){value ratee}}', { s: sid }, host)).getRatingsBySession;
   assert.equal(given.length, 2);
 
-  const pending = async (userId) => (await ok('query($u:ID!){getCompletedSessions(userId:$u){id rated}}', { u: userId })).getCompletedSessions.map((entry) => entry.id);
-  assert.ok(!(await pending(ids.host)).includes(sid), 'rated session leaves the rater\'s to-do list');
-  assert.ok((await pending(ids.guest)).includes(sid), 'other players can still rate it');
+  const pending = async (user) => (await ok('query{getCompletedSessions{id rated}}', {}, user)).getCompletedSessions.map((entry) => entry.id);
+  assert.ok(!(await pending(host)).includes(sid), 'rated session leaves the rater\'s to-do list');
+  assert.ok((await pending(guest)).includes(sid), 'other players can still rate it');
   assert.equal((await Session.findById(sid)).rated, false);
 
-  await ok(submit, rate(ids.guest, [{ userId: ids.host, rating: 4 }]));
-  await ok(submit, rate(ids.third, [{ userId: ids.host, rating: 4 }, { userId: ids.guest, rating: 2 }]));
+  await ok(submit, rate([{ userId: ids.host, rating: 4 }]), players.guest);
+  await ok(submit, rate([{ userId: ids.host, rating: 4 }, { userId: ids.guest, rating: 2 }]), players.third);
   assert.equal((await Session.findById(sid)).rated, true, 'rated once everyone has rated');
   assert.equal((await User.findById(host._id)).totalRatings, 4);
   assert.equal((await User.findById(host._id)).socialRating, 4, '(8 + 4 + 4) / 4');
 
-  console.log('Accounts integration test passed: sessions, password reset, Google, profile, ratings');
+  logger.info('Accounts integration test passed: sessions, password reset, Google, profile, ratings');
 } finally {
   const users = await User.find({ email: { $in: createdEmails } }, '_id');
   const userIds = users.map((user) => user._id);
   await Promise.all([
+    SessionRegistration.deleteMany({ session: { $in: sessionIds } }),
     Rating.deleteMany({ session: { $in: sessionIds } }),
     Session.deleteMany({ _id: { $in: sessionIds } }),
     AuthSession.deleteMany({ user: { $in: userIds } }),
+    FriendRequest.deleteMany({ $or: [{ requester: { $in: userIds } }, { recipient: { $in: userIds } }] }),
+    Conversation.deleteMany({ kind: 'direct', participants: { $in: userIds } }),
+    Notification.deleteMany({ recipient: { $in: userIds } }),
+    NotificationPreference.deleteMany({ user: { $in: userIds } }),
     User.deleteMany({ _id: { $in: userIds } })
   ]);
   await mongoose.disconnect();
   await server.stop();
 }
 
-// Signs in through the normal login + 2FA path and returns the session token.
+// Signs in with email and password and returns the session token.
 async function loginToken(email, password) {
-  await ok('mutation($e:String!,$p:String!){login(email:$e,password:$p){success}}', { e: email, p: password });
-  const verified = await ok(
-    'mutation($e:String!,$c:String!){verifyTwoFactorCode(email:$e,code:$c){token}}',
-    { e: email, c: codes.twoFactor[email] }
-  );
-  return verified.verifyTwoFactorCode.token;
+  const result = await ok('mutation($e:String!,$p:String!){login(email:$e,password:$p){success token}}', { e: email, p: password });
+  assert.equal(result.login.success, true);
+  return result.login.token;
 }

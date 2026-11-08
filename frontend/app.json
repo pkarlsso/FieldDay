@@ -1,18 +1,25 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "FieldDay",
+    "slug": "fieldday",
+    "owner": "gogbalor",
+    "extra": {
+      "eas": {
+        "projectId": "dd004d66-cf1c-41a0-823f-64efc93b48f7"
+      }
+    },
     "scheme": "fieldday",
-    "version": "1.0.0",
+    "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "FieldDay uses your location to show nearby sport sessions on the map."
+        "NSLocationWhenInUseUsageDescription": "FieldDay uses your location to show nearby sport sessions on the map and to check you in when you arrive at a session.",
+        "ITSAppUsesNonExemptEncryption": false
       },
-      "bundleIdentifier": "com.anonymous.frontend"
+      "bundleIdentifier": "com.gogbalor.fieldday"
     },
     "android": {
       "adaptiveIcon": {
@@ -24,7 +31,14 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.487036458278-d4mb997n2e93p7a67rjnv7dsrak3ev92"
+        }
+      ],
       "expo-status-bar",
+      "expo-notifications",
       [
         "expo-splash-screen",
         {
@@ -36,15 +50,16 @@
       "@react-native-community/datetimepicker",
       "expo-secure-store",
       "expo-web-browser",
-      "./plugins/withQuotedReactNativeXcodeScript",
       [
-        "expo-build-properties",
+        "expo-image-picker",
         {
-          "ios": {
-            "enableSceneSupport": true
-          }
+          "photosPermission": "FieldDay uses your photo library so you can choose a profile picture.",
+          "cameraPermission": false,
+          "microphonePermission": false
         }
-      ]
+      ],
+      "./plugins/withQuotedReactNativeXcodeScript",
+      "expo-build-properties"
     ]
   }
 }

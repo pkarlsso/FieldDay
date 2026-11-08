@@ -5,6 +5,8 @@ This directory keeps the verification records that support the FieldDay software
 - [Verification test inventory](verification-test-inventory.md) lists each requirement, its test, owner, automation status, CI plan, and evidence.
 - [Manual test template](manual-test-template.md) is used whenever a person tests a critical workflow or records a defect.
 - [Manual iOS session-flow report](manual-ios-session-flow-2026-09-20.md) records the first completed Device Hub test.
+- `manual-*-YYYY-MM-DD.md` files are the other manual test reports. The [inventory](verification-test-inventory.md#evidence-available-now) lists them.
+- [`evidence/`](evidence) holds saved console output from test runs.
 - [Root cause analysis tracker](root-cause-analysis.md) links defects that require a documented RCA.
 
-The GitHub Actions build workflow is [`.github/workflows/build.yml`](../../.github/workflows/build.yml). It installs the locked dependencies and runs lint, backend validation, and Expo exports on a fresh GitHub-hosted Ubuntu runner.
+The GitHub Actions build workflow is [`.github/workflows/build.yml`](../../.github/workflows/build.yml). It installs the locked dependencies, then runs lint, backend validation, the unit tests (`npm run test:unit`) and the Expo exports on a fresh GitHub-hosted Ubuntu runner. Its Backend test job also runs the integration tests against a MongoDB service container.

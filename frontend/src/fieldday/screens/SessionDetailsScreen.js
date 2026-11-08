@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar, Card, IconButton, NotificationButton, PrimaryButton, ScreenHeader, SportIcon, Stat, StatusBadge } from '../components/ui';
@@ -47,8 +47,8 @@ export default function SessionDetailsScreen({ route, navigation }) {
             <Text style={{ color: colors.ink, fontSize: 24, fontWeight: '900' }}>You&apos;re in</Text>
             <Text style={{ color: colors.text, textAlign: 'center', lineHeight: 20 }}>Added to your schedule. The group chat is ready for coordination.</Text>
             <View style={{ width: '100%', gap: 10 }}>
-              <PrimaryButton label="Open Group Chat" icon="chatbubble-ellipses-outline" onPress={() => navigation.navigate('MainTabs', { screen: 'Friends' })} />
-              <PrimaryButton label="View My Sessions" icon="calendar-outline" variant="secondary" onPress={() => navigation.navigate('MainTabs', { screen: 'Sessions' })} />
+              <PrimaryButton label="Open Group Chat" icon="chatbubble-ellipses-outline" onPress={() => navigation.navigate('MainTabs', { screen: 'Chat' })} />
+              <PrimaryButton label="View My Sessions" icon="calendar-outline" variant="secondary" onPress={() => navigation.navigate('Sessions')} />
               <PrimaryButton label="Leave Session" icon="exit-outline" variant="destructive" onPress={() => setJoined(false)} />
             </View>
           </Card>

@@ -1,0 +1,67 @@
+import * as Location from 'expo-location';
+import { graphql } from '../api';
+
+export const DEFAULT_DISCOVERY_FILTER = {
+  maxDistanceMiles: 25,
+  sports: [],
+  minSkillLevel: undefined,
+  maxSkillLevel: undefined,
+  minOpenSpots: undefined,
+  tags: [],
+};
+
+const DISCOVERY_QUERY = `
+  query Discovery($status: String, $filter: SessionDiscoveryFilterInput) {
+    getSessions(status: $status, filter: $filter) {
+      id sport startsAt location skillLevel skillRange tags distanceMiles
+      locationPoint { coordinates }
+      maxParticipants participants { id }
+    }
+  }
+`;
+
+const RECOMMENDATIONS_QUERY = `
+  query Recommendations($origin: LocationPointInput, $maxDistanceMiles: Float, $limit: Int) {
+    recommendedSessions(origin: $origin, maxDistanceMiles: $maxDistanceMiles, limit: $limit) {
+      score reasons
+      session {
+        id sport startsAt endsAt location skillLevel skillRange distanceMiles
+        maxParticipants participants { id }
+      }
+    }
+  }
+`;
+
+export function cleanDiscoveryFilter(filter) {
+  // A radius needs a point to measure from; the server rejects one without it.
+  const usable = filter.origin ? filter : { ...filter, maxDistanceMiles: undefined };
+  return Object.fromEntries(Object.entries(usable).filter(([, value]) => {
+    if (value === undefined || value === null || value === '') return false;
+    if (Array.isArray(value) && value.length === 0) return false;
+    return true;
+  }));
+}
+
+export async function loadDiscoverySessions(filter) {
+  const data = await graphql(DISCOVERY_QUERY, {
+    status: 'upcoming',
+    filter: cleanDiscoveryFilter(filter),
+  });
+  return data.getSessions || [];
+}
+
+export async function loadRecommendedSessions({ origin, maxDistanceMiles = 50, limit = 5 } = {}) {
+  const data = await graphql(RECOMMENDATIONS_QUERY, {
+    origin: origin || undefined,
+    maxDistanceMiles,
+    limit,
+  });
+  return data.recommendedSessions || [];
+}
+
+export async function getDiscoveryOrigin() {
+  const permission = await Location.requestForegroundPermissionsAsync();
+  if (permission.status !== 'granted') return null;
+  const result = await Location.getCurrentPositionAsync({});
+  return { latitude: result.coords.latitude, longitude: result.coords.longitude };
+}

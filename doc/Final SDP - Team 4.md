@@ -198,13 +198,13 @@ ID: FR-8
 
 Title: Cool Down and Suspension System
 
-Statement: If a user's aggregate social rating falls below 2, then the system shall automatically impose a 2-day cooldown period during which the user cannot create or join new sessions
+Statement: The system shall limit how often a user can create or join new sessions based on their aggregate social rating, using rolling registration windows while preserving existing session registrations.
 
-Rationale: This will deter users from making other users uncomfortable and from unreliable behaviours such as skipping sessions they have signed up for. This keeps users accountable and builds trust and community among users.
+Rationale: This will deter users from making other users uncomfortable and from unreliable behaviours such as skipping sessions they have signed up for. Graduated limits keep users accountable while allowing them to continue participating and build trust within the community.
 
-Test Method: Set a test user's social rating to below 2 and verify they cannot join or create sessions for a cooldown period of 2 days. Verify that after two days the user can freely create and join sessions. 
+Test Method: Set test users at each rating threshold and verify their create/join registration limits over rolling 7-, 14-, and 30-day windows. Verify that registrations outside the applicable window no longer count and that existing session registrations remain intact after a rating change.
 
-Supporting Context: The cool down period is app level logic and will not be implemented in the Shaped recommendation engine.
+Supporting Context: The participation limits are app-level logic and will not be implemented in the Shaped recommendation engine. Ratings use the existing 1-5 scale: 4.5+ is unlimited, 4.0-<4.5 allows five per rolling week, 3.5-<4.0 allows two per rolling week, 3.0-<3.5 allows one per rolling week, 2.5-<3.0 allows one per rolling two weeks, and below 2.5 allows one per rolling month.
 
 Trace: SYS-4
 

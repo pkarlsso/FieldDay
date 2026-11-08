@@ -1,14 +1,14 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Card, HeaderActionRow, IconButton, NotificationButton, Pill, ScreenHeader, SportIcon, StatusBadge } from '../components/ui';
-import { colors, sports } from '../theme';
+import { colors, getSportConfig, sports } from '../theme';
 import { sessions } from '../data/mockData';
 
 const filters = ['All', 'Pickleball', 'Basketball', 'Soccer', 'Tennis', 'Volleyball'];
 
 function MapPin({ session, selected, onPress }) {
-  const config = sports[session.sport] || sports.Pickleball;
+  const config = getSportConfig(session.sport);
   return (
     <TouchableOpacity
       activeOpacity={0.8}
