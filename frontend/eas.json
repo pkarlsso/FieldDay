@@ -1,13 +1,15 @@
 {
-  "cli": { "version": ">= 16.0.0", "appVersionSource": "local" },
+  "cli": { "version": ">= 16.0.0", "appVersionSource": "remote" },
   "build": {
     "development": { "developmentClient": true, "distribution": "internal" },
     "preview": { "distribution": "internal" },
     "production": {
+      "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID": "487036458278-d4mb997n2e93p7a67rjnv7dsrak3ev92.apps.googleusercontent.com",
         "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID": "487036458278-vb4e8o0dfao942pmvfqqf0gp3e8t880n.apps.googleusercontent.com"
       }
     }
-  }
+  },
+  "submit": { "production": { "ios": { "ascAppId": "6829567623" } } }
 }
