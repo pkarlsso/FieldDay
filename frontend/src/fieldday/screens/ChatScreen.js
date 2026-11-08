@@ -5,7 +5,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { graphql } from '../../api';
 import { CURRENT_USER_ID } from '../../config';
 import { GET_CONVERSATIONS } from '../../graphql/queries';
-import { Avatar, Card, NotificationButton, ScreenHeader, SportIcon, StatusBadge } from '../components/ui';
+import { Avatar, Card, HeaderActionRow, IconButton, NotificationButton, ScreenHeader, SportIcon, StatusBadge } from '../components/ui';
 import { formatSessionRange, playersLabel, sessionTitle } from '../sessionInfo';
 import { colors } from '../theme';
 
@@ -122,7 +122,15 @@ export default function ChatScreen({ navigation }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <ScreenHeader title="Chat" right={<NotificationButton onPress={() => navigation.navigate('Notifications')} />} />
+      <ScreenHeader
+        title="Chat"
+        right={
+          <HeaderActionRow>
+            <NotificationButton onPress={() => navigation.navigate('Notifications')} />
+            <IconButton icon="people-outline" onPress={() => navigation.navigate('Friends')} />
+          </HeaderActionRow>
+        }
+      />
       <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 120, gap: 12 }}>
         {loading && conversations.length === 0 ? <ActivityIndicator color={colors.purple} /> : null}
         {error ? <Text style={{ color: colors.coral }}>{error}</Text> : null}
@@ -139,7 +147,7 @@ export default function ChatScreen({ navigation }) {
 
             <SectionHeader title="Direct messages" count={directChats.length} />
             {directChats.length === 0 && !loading ? (
-              <Card><Text style={{ color: colors.muted }}>Tap a friend on the Friends tab to start a conversation.</Text></Card>
+              <Card><Text style={{ color: colors.muted }}>Tap the people icon above to open Friends, then tap a friend to start a conversation.</Text></Card>
             ) : null}
             {directChats.map((conversation) => (
               <DirectChatRow key={conversation.id} conversation={conversation} onPress={() => open(conversation)} />

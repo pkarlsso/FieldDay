@@ -60,8 +60,8 @@ export default function NotificationsScreen({ navigation }) {
     if (['SessionDetails', 'RateSession', 'SessionComplete', 'ChatDetail', 'Notifications', 'Settings'].includes(item.target.screen)) {
       navigation.navigate(item.target.screen, params);
     } else if (item.target.screen === 'Friends') {
-      // Friends is a tab, not a stack screen.
-      navigation.navigate('MainTabs', { screen: 'Friends' });
+      // Friends is a stack screen opened from Profile and Chat (#363).
+      navigation.navigate('Friends');
     }
   }
 

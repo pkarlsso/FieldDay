@@ -273,7 +273,8 @@ export default function CreateSessionScreen({ navigation, route }) {
       });
       Alert.alert('Session created', `${data.createSession.sport} at ${data.createSession.location}`);
       resetForm();
-      navigation.navigate('Sessions');
+      // There is no Sessions tab since #363, so open the new session itself.
+      navigation.navigate('SessionDetails', { sessionId: data.createSession.id });
     } catch (error) {
       if (error.code === 'ACCOUNT_COOLDOWN') setBlockedUntil(error.extensions.cooldownUntil);
       else Alert.alert('Could not create session', error.message);

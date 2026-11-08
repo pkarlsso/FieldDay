@@ -4,7 +4,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { graphql } from '../../api';
-import { Avatar, Card, NotificationButton, PrimaryButton, ScreenHeader, StatusBadge } from '../components/ui';
+import { Avatar, Card, IconButton, NotificationButton, PrimaryButton, ScreenHeader, StatusBadge } from '../components/ui';
 import { colors } from '../theme';
 import { useCurrentUserWithReload } from '../useCurrentUser';
 import { GET_OR_CREATE_DIRECT_CONVERSATION } from '../../graphql/queries';
@@ -137,7 +137,11 @@ export default function FriendsScreen({ navigation }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <ScreenHeader title="Friends" right={<NotificationButton onPress={() => navigation.navigate('Notifications')} />} />
+      <ScreenHeader
+        title="Friends"
+        left={navigation.canGoBack() ? <IconButton icon="chevron-back" onPress={() => navigation.goBack()} /> : undefined}
+        right={<NotificationButton onPress={() => navigation.navigate('Notifications')} />}
+      />
       <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 120, gap: 16 }}>
         <Card>
           <Text style={{ color: colors.ink, fontSize: 18, fontWeight: '900' }}>Add someone you know</Text>

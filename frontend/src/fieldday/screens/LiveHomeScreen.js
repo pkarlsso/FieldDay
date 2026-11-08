@@ -5,6 +5,7 @@ import CooldownNotice from '../components/CooldownNotice';
 import { colors } from '../theme';
 import { buildActivity, formatSessionRange, formatSessionTime, groupMySessions, playersLabel, sessionTitle, skillLabel } from '../sessionInfo';
 import { useMySessions } from '../useMySessions';
+import { MySessionsSections } from './LiveSessionsScreen';
 import { firstName, useCurrentUser } from '../useCurrentUser';
 import { CURRENT_USER_ID } from '../../config';
 
@@ -139,6 +140,13 @@ export default function LiveHomeScreen({ navigation }) {
               />
             )) : <Text style={{ color: colors.muted, marginTop: 6 }}>You are all caught up.</Text>}
           </Card>
+        ) : null}
+
+        {/* My Sessions lives here now that it has no tab of its own (#363). */}
+        {data ? (
+          <View style={{ gap: 22, marginTop: 6 }}>
+            <MySessionsSections groups={groups} navigation={navigation} endedLimit={3} />
+          </View>
         ) : null}
 
         {data ? (

@@ -21,6 +21,7 @@ export default function ProfileScreen({ navigation }) {
       right={
         <HeaderActionRow>
           <NotificationButton onPress={() => navigation.navigate('Notifications')} />
+          <IconButton icon="people-outline" onPress={() => navigation.navigate('Friends')} />
           <IconButton icon="settings-outline" onPress={() => navigation.navigate('Settings')} />
         </HeaderActionRow>
       }
@@ -114,11 +115,17 @@ export default function ProfileScreen({ navigation }) {
         </Card>
 
         <Card>
-          <Text style={{ color: colors.ink, fontSize: 20, fontWeight: '900', marginBottom: 12 }}>
-            Friends{friends.length > 0 ? ` (${friends.length})` : ''}
-          </Text>
+          {/* Friends has no tab of its own since #363; requests and search open from here. */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, gap: 8 }}>
+            <Text style={{ color: colors.ink, fontSize: 20, fontWeight: '900' }}>
+              Friends{friends.length > 0 ? ` (${friends.length})` : ''}
+            </Text>
+            <TouchableOpacity accessibilityRole="button" onPress={() => navigation.navigate('Friends')}>
+              <Text style={{ color: colors.purple, fontWeight: '900' }}>Find & requests</Text>
+            </TouchableOpacity>
+          </View>
           {friends.length === 0 ? (
-            <Text style={{ color: colors.muted, lineHeight: 20 }}>No friends yet. Rate a session to add the people you played with.</Text>
+            <Text style={{ color: colors.muted, lineHeight: 20 }}>No friends yet. Rate a session to add the people you played with, or search for someone you know.</Text>
           ) : null}
           {friends.map((friend, index) => (
             <TouchableOpacity

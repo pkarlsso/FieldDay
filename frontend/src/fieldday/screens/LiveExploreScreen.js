@@ -5,10 +5,36 @@ import { colors, sports } from '../theme';
 import { DEFAULT_DISCOVERY_FILTER, getDiscoveryOrigin, loadDiscoverySessions, loadRecommendedSessions } from '../discovery';
 import { formatSessionTime, playersLabel, skillLabel } from '../sessionInfo';
 import { useSessionUpdates } from '../useSessionUpdates';
+import MapScreen from './MapScreen';
 import logger from '../../logger';
 
 const sportOptions = Object.keys(sports);
 const radiusOptions = [5, 10, 25, 50];
+const VIEW_MODES = [{ value: 'list', label: 'List' }, { value: 'map', label: 'Map' }];
+
+// Switches Explore between the session list and the map, which used to be its
+// own tab (#363).
+function ViewSwitch({ mode, onChange }) {
+  return (
+    <View style={{ flexDirection: 'row', marginHorizontal: 18, marginBottom: 8, padding: 4, borderRadius: 14, backgroundColor: colors.purpleSoft }}>
+      {VIEW_MODES.map((option) => {
+        const active = option.value === mode;
+        return (
+          <TouchableOpacity
+            key={option.value}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            onPress={() => onChange(option.value)}
+            style={{ flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center', backgroundColor: active ? colors.card : 'transparent' }}
+          >
+            <Text style={{ color: active ? colors.purple : colors.muted, fontWeight: '900' }}>{option.label}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
 const skillOptions = [
   { label: 'Any skill', min: undefined, max: undefined },
   { label: 'Beginner', min: 1, max: 2 },
@@ -21,6 +47,7 @@ export default function LiveExploreScreen({ navigation }) {
   const [recommendations, setRecommendations] = useState([]);
   const [error, setError] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [mode, setMode] = useState('list');
   const [locating, setLocating] = useState(true);
   const [origin, setOrigin] = useState(null);
   const [draft, setDraft] = useState(DEFAULT_DISCOVERY_FILTER);
@@ -83,9 +110,22 @@ export default function LiveExploreScreen({ navigation }) {
     load(next);
   };
 
+  const filtersButton = mode === 'list'
+    ? <TouchableOpacity onPress={() => setShowFilters((value) => !value)}><Text style={{ color: colors.purple, fontWeight: '900' }}>{showFilters ? 'Close' : 'Filters'}</Text></TouchableOpacity>
+    : undefined;
+
+  if (mode === 'map') {
+    return <View style={{ flex: 1, backgroundColor: colors.page }}>
+      <ScreenHeader title="Explore" />
+      <ViewSwitch mode={mode} onChange={setMode} />
+      <View style={{ flex: 1 }}><MapScreen navigation={navigation} /></View>
+    </View>;
+  }
+
   return <View style={{ flex: 1, backgroundColor: colors.page }}>
-    <ScreenHeader title="Explore" right={<TouchableOpacity onPress={() => setShowFilters((value) => !value)}><Text style={{ color: colors.purple, fontWeight: '900' }}>{showFilters ? 'Close' : 'Filters'}</Text></TouchableOpacity>} />
-    <ScrollView contentContainerStyle={{ padding: 18, gap: 12 }}>
+    <ScreenHeader title="Explore" right={filtersButton} />
+    <ViewSwitch mode={mode} onChange={setMode} />
+    <ScrollView contentContainerStyle={{ padding: 18, paddingTop: 10, gap: 12 }}>
       {locating ? <Text style={{ color: colors.muted }}>Finding sessions near you...</Text> : null}
       {!locating && !origin ? <Card><Text style={{ color: colors.text, fontWeight: '800' }}>Location unavailable</Text><Text style={{ color: colors.muted, marginTop: 4 }}>Enter a location below to enable distance filtering.</Text><View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}><TextInput keyboardType="numbers-and-punctuation" placeholder="Latitude" value={draft.origin?.latitude?.toString() || ''} onChangeText={(value) => setDraft((current) => ({ ...current, origin: { ...(current.origin || {}), latitude: Number(value) } }))} style={{ flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 10 }} /><TextInput keyboardType="numbers-and-punctuation" placeholder="Longitude" value={draft.origin?.longitude?.toString() || ''} onChangeText={(value) => setDraft((current) => ({ ...current, origin: { ...(current.origin || {}), longitude: Number(value) } }))} style={{ flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 10 }} /></View></Card> : null}
       {showFilters ? <Card style={{ gap: 12 }}>
