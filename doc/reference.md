@@ -20,27 +20,34 @@ The public application interface is GraphQL. The schema is defined in `backend/s
 
 | Item | Value |
 | --- | --- |
-| Default local URL | `http://localhost:4000/graphql` |
-| Production client default | `https://sgbtn5pq84.execute-api.us-east-2.amazonaws.com/graphql` |
+| Hosted GraphQL URL | `https://sgbtn5pq84.execute-api.us-east-2.amazonaws.com/graphql` |
+| Local development URL | `http://localhost:4000/graphql` |
 | Protocol | HTTP(S) GraphQL |
 | Authentication | `Authorization: Bearer <token>` for signed-in operations |
 | Payload limit | 300 KB (large enough for allowed profile-photo uploads) |
 
-### Session operations
+All session, friend, chat, profile, and notification operations use this same GraphQL endpoint. They are GraphQL queries and mutations, not separate REST endpoints.
 
-| Operation | Type | Purpose | Access / important behavior |
+### Session queries
+
+| Operation | Purpose | Access / behavior |
 | --- | --- | --- |
-| `getSessions(status, filter)` | Query | Finds sessions by time, sport, location, skill, tags, and capacity. | Returns only sessions visible to the caller. |
-| `getSession(id)` | Query | Retrieves one visible session. | Fails when the session does not exist or is not visible. |
-| `createSession(input)` | Mutation | Creates a session and adds the creator as host and first participant. | Requires sign-in; sessions can be public, friends-only, or invite-only. |
-| `joinSession(sessionId)` | Mutation | Adds the signed-in user to a session roster. | Rejects hosts, duplicate joins, full sessions, started sessions, invisible sessions, and users in cooldown. |
-| `leaveSession(sessionId)` | Mutation | Removes a participant before the session begins. | Hosts cannot leave their own sessions. |
-| `editSession(sessionId, input)` | Mutation | Edits start/end time, location, or capacity. | Host only; cannot reduce capacity below the existing roster size. |
-| `cancelSession(sessionId)` | Mutation | Cancels a session. | Host only; a cancelled session is removed from discovery and cannot be joined. |
-| `checkInToSession(sessionId, latitude, longitude)` | Mutation | Records attendance by location. | Participant only; accepted from session start through 10 minutes afterward and within 200 m of the session. |
-| `reportNoShows(sessionId, noShowUserIds)` | Mutation | Records a participant's no-show report. | Available after session end until the no-show deadline. |
+| `getSessions(status, filter)` | Finds sessions by time, sport, location, skill, tags, and capacity. | Returns only sessions visible to the caller. |
+| `getSession(id)` | Retrieves one visible session. | Fails when the session is missing or not visible. |
 
-`CreateSessionInput` requires `sport`, `startsAt`, `location`, `locationPoint`, `skillLevel`, `tags`, and `maxParticipants`. `locationPoint` uses `{ longitude, latitude }`, while MongoDB persists coordinates as `[longitude, latitude]`.
+### Session mutations
+
+| Operation | Purpose | Access / behavior |
+| --- | --- | --- |
+| `createSession(input)` | Creates a session; creator becomes host and first participant. | Requires sign-in. |
+| `joinSession(sessionId)` | Adds the signed-in user to a session roster. | Rejects hosts, duplicate joins, full or closed sessions, invisible sessions, and users in cooldown. |
+| `leaveSession(sessionId)` | Removes a participant. | Host cannot leave; unavailable after `changesFreezeAt`. |
+| `editSession(sessionId, input)` | Edits time, location, capacity, or full-only behavior. | Host only; unavailable after `changesFreezeAt`. |
+| `cancelSession(sessionId)` | Cancels a session. | Host only; unavailable after `changesFreezeAt`. |
+| `reportNoShows(sessionId, noShowUserIds)` | Records a participant's no-show report. | Available after the session ends until `noShowDeadline`. |
+| `checkInToSession(sessionId, latitude, longitude)` | Deprecated compatibility operation. | Always returns an error because location check-in was removed. |
+
+Server validation requires `sport`, `startsAt`, `location`, `locationPoint`, `skillLevel`, and `maxParticipants`. `tags` is optional. `locationPoint` uses `{ longitude, latitude }`, while MongoDB persists coordinates as `[longitude, latitude]`.
 
 ### Account and social operations
 
@@ -56,8 +63,8 @@ The public application interface is GraphQL. The schema is defined in `backend/s
 ### Socket.IO interface
 
 | Event | Direction | Payload | Meaning |
-| --- | --- | --- |
-| `session:updated` | Server to client | `{ sessionId, reason, at }` | A session was created, edited, cancelled, joined, left, checked in, started, or ended. The client must refetch through GraphQL. |
+| --- | --- | --- | --- |
+| `session:updated` | Server to client | `{ sessionId, reason, at }` | Reason: `created`, `edited`, `cancelled`, `joined`, `left`, `invalid`, `started`, or `ended`. The client must refetch through GraphQL. |
 | `joinConversation` | Client to server | `conversationId`, callback | Requests access to a conversation room; access is verified server-side. |
 | `message` | Server to client | Message object | Delivers a new message to authorized conversation members. |
 
@@ -104,7 +111,7 @@ All persistent data is stored in MongoDB through Mongoose models.
 | Collection | Key fields | Relationships and constraints |
 | --- | --- | --- |
 | `users` | name, email, sports, sportSkills, availability, socialRating, friends, authentication fields | Email is unique. `sportSkills` stores skill levels 1-5. `friends` contains User IDs. `cooldownUntil` blocks creating and joining sessions after a low rating. |
-| `sessions` | sport, startsAt, endsAt, location, locationPoint, participants, host, visibility, attendance/rating fields | Uses a 2dsphere index on `locationPoint` and indexes for sport/time, participants/time, end time, invitees, and no-show processing. |
+| `sessions` | sport, startsAt, endsAt, location, locationPoint, participants, host, visibility, `fullOnly`, `joinClosesAt`, `changesFreezeAt`, attendance/rating fields | Uses a 2dsphere index on `locationPoint` and indexes for sport/time, participants/time, end time, invitees, and no-show processing. |
 | `ratings` | session, rater, ratee, value, createdAt | Rating is an integer from 1-5. One rating per session/rater/ratee is enforced by a unique index. |
 | `friendrequests` | requester, recipient, status, timestamps | Only one pending request for a requester/recipient pair is permitted. |
 | `conversations` | kind, session, participants, participantKey, lastMessageAt | A session has at most one session conversation; direct conversations have a unique participant key. |
@@ -125,9 +132,11 @@ All persistent data is stored in MongoDB through Mongoose models.
 | Item | Values / rule |
 | --- | --- |
 | Visibility | `PUBLIC`, `FRIENDS`, or `INVITE_ONLY`. Older documents without a stored visibility are treated as public. |
-| Status | `upcoming`, `in_progress`, `completed`, or `cancelled`. Except for cancellation, status is derived from the clock using `startsAt` and `endsAt`. |
+| Status | `upcoming`, `in_progress`, `completed`, `invalid`, or `cancelled`. Except for cancellation or invalidation, status is derived from the clock using `startsAt` and `endsAt`. |
 | Default duration | Two hours when no `endsAt` is provided. An end time may be no more than 24 hours after start. |
-| Attendance | New sessions can require location check-in. Older sessions use peer no-show reports. |
+| Attendance | Participants are considered present unless other participants report them as no-shows after the session. Location check-in is removed. |
+| Changes freeze | `changesFreezeAt` is five minutes before `startsAt`; editing, cancelling, and leaving are unavailable at or after this time. |
+| Join deadline | `joinClosesAt` is calculated from session conditions: a regular session with at least two players can remain open until start; otherwise it closes five minutes before start. |
 | Capacity | `maxParticipants` includes the host. Joining uses an atomic MongoDB update, so two users cannot claim the final place simultaneously. |
 
 ## Project Specific Section 2: Real-Time Updates and Privacy
