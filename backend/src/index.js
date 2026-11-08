@@ -1,6 +1,6 @@
 import http from 'node:http';
 import { ApolloServer } from '@apollo/server';
-import { expressMiddleware } from '@as-integrations/express4';
+import { expressMiddleware } from '@as-integrations/express5';
 import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';

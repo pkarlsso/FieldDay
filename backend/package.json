@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@apollo/server": "^5.5.1",
-    "@as-integrations/express4": "^1.1.2",
+    "@as-integrations/express5": "^1.1.2",
     "@aws-sdk/client-sesv2": "^3.1161.0",
     "argon2": "^0.41.1",
     "cors": "^2.8.5",
