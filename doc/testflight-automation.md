@@ -7,16 +7,16 @@ iOS TestFlight > Run workflow. Builds use the checked-out commit; the run and
 EAS dashboard identify that revision. Runs share a concurrency group so two
 releases do not race. GitHub may replace a pending run with a newer pending run.
 
-Before enabling the workflow:
+Setup status and checks before relying on the workflow:
 
-1. Create an Expo access token with access to `@gogbalor/fieldday` and add it
-   as the repository Actions secret `EXPO_TOKEN`. Never commit the token.
-2. Ensure EAS has the existing distribution certificate, provisioning profile,
-   and App Store Connect API key for `com.gogbalor.fieldday` and app ID
-   `6829567623`. EAS must be able to submit noninteractively.
-3. Initialize the remote iOS build number to at least the highest build number
-   already uploaded for version 0.1.0 using `eas build:version:set` in
-   `frontend`. Remote auto-increment supplies unique build numbers thereafter.
+1. The repository Actions secret `EXPO_TOKEN` authenticated as `gogbalor` in a
+   PR-only Actions check. Never commit the token.
+2. EAS has a distribution certificate, active provisioning profile, and App
+   Store Connect API key for `com.gogbalor.fieldday` and app ID `6829567623`.
+   A fresh end-to-end submission is still needed to verify the key with Apple.
+3. As of November 8, 2026, the remote iOS build number is initialized to `1`,
+   matching the latest uploaded build in App Store Connect. Remote
+   auto-increment supplies unique build numbers thereafter.
 4. Confirm the production Google client IDs and API URL are correct, and that
    the latest `dev` configuration has been merged into `main`.
 
