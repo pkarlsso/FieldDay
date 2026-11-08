@@ -37,7 +37,8 @@ jobs:
             exit 1
           fi
           account="$(npx --yes eas-cli@27.2.0 whoami)"
-          if [ "$account" != 'gogbalor' ]; then
+          first_line="${account%%$'\n'*}"
+          if [ "$first_line" != 'gogbalor (authenticated using EXPO_TOKEN)' ]; then
             echo 'Expo token is not for the expected account.' >&2
             exit 1
           fi
