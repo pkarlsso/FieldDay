@@ -165,7 +165,7 @@ This guide covers common tasks in FieldDay and tasks for working on the project.
 
 **Expected result:** The script creates synthetic activity in the isolated environment and prints its results. It is a regression smoke test, not proof of real push delivery, sustained load capacity, or recommendation quality.
 
-### How to deploy the backend from main
+### How to deploy the team's backend from main
 
 **Purpose:** Release the backend revision in `main` to the team's Elastic Beanstalk environment.
 
@@ -178,6 +178,26 @@ This guide covers common tasks in FieldDay and tasks for working on the project.
 5. If the release causes problems, follow [Backend deployment](backend-deployment.md) for rollback guidance.
 
 **Expected result:** The workflow reports success and the environment serves the intended backend revision. The separately configured Gorse tunnel does not automatically recover from every AWS instance replacement; see issues [#384](https://github.com/pkarlsso/FieldDay/issues/384) and [#388](https://github.com/pkarlsso/FieldDay/issues/388).
+
+### How to host your own FieldDay backend on AWS
+
+**Purpose:** Deploy your own copy of the backend instead of using the team's AWS environment.
+
+**Before you start:** You need an AWS account, a copy of the repository, and a MongoDB database that your AWS environment can reach. Creating an Elastic Beanstalk environment and related AWS resources can incur charges. Choose a supported Node.js platform compatible with the project; the team's backend currently uses Node.js 22.
+
+1. Create your own MongoDB database and database user. Configure database network access so your AWS backend can connect, and keep the connection string private.
+2. In the AWS Elastic Beanstalk console, create a **web server environment** using the Node.js platform. Choose your own application and environment names, region, and required IAM service role and EC2 instance profile. For the environment creation screens, see the [AWS Node.js quickstart](https://docs.aws.amazon.com/elasticbeanstalk/latest/dg/nodejs-quickstart.html).
+3. Create a source bundle from the repository root. This packages the tracked contents of `backend/` at your current commit, with `package.json` at the root of the ZIP:
+
+   ```sh
+   git archive --format=zip --output=fieldday-backend.zip HEAD:backend
+   ```
+
+4. Upload and deploy that ZIP in your Elastic Beanstalk environment. In the environment's configuration, set `MONGODB_URI` to your database connection string. Use `backend/.env.example` as a guide for additional settings. Do not upload your `.env` file or commit credentials. Configure email and Google OAuth for your own accounts if you need those features; Gorse is optional and otherwise the backend uses its profile-based recommendation fallback.
+5. Check the environment health and logs, then visit your deployed backend's `/health` endpoint. Configure an HTTPS endpoint for your clients, and set `EXPO_PUBLIC_API_URL` in your frontend build to that endpoint's `/graphql` path. Verify signup, login, and the other flows you need against your own services.
+6. If you also want deployments from your own GitHub repository, configure a GitHub OIDC provider and a least-privilege AWS role for that repository and its `main` branch. Update `.github/workflows/deploy-backend.yml` to use your own role ARN, allowed AWS account ID, region, Elastic Beanstalk application and environment, S3 bucket, and health URL. The checked-in values refer to the FieldDay team's infrastructure and will not deploy to your account unchanged. See [GitHub's AWS OIDC setup](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-aws) for the trust setup.
+
+**Expected result:** Your own Elastic Beanstalk environment runs the backend and connects to your database. Automatic GitHub deployment works only after your own role, bucket, environment, and workflow are configured and tested. This is a setup guide; a separate full deployment has not been validated as part of this documentation.
 
 ### How to check an iOS TestFlight release
 
