@@ -59,7 +59,9 @@ const typeDefs = `#graphql
     hometown: String
     profilePicture: String
     sports: [String]
+    sportSkills: [SportSkill!]!
     socialRating: Float
+    totalRatings: Int
   }
 
   type FriendRequest {
