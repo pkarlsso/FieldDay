@@ -29,7 +29,7 @@ The public application interface is GraphQL. The schema is defined in `backend/s
 ### Session operations
 
 | Operation | Type | Purpose | Access / important behavior |
-| --- | --- | --- |
+| --- | --- | --- | --- |
 | `getSessions(status, filter)` | Query | Finds sessions by time, sport, location, skill, tags, and capacity. | Returns only sessions visible to the caller. |
 | `getSession(id)` | Query | Retrieves one visible session. | Fails when the session does not exist or is not visible. |
 | `createSession(input)` | Mutation | Creates a session and adds the creator as host and first participant. | Requires sign-in; sessions can be public, friends-only, or invite-only. |
