@@ -43,7 +43,9 @@ jobs:
         with:
           node-version: '22.13.x'
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
       - name: Install locked workspace dependencies
         run: npm ci
       - name: Verify the standalone deployment bundle starts
