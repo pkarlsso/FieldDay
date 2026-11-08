@@ -1,10 +1,12 @@
-Ethan Ottinger
-Tutorial Documentation: [doc/tutorial.md](doc/tutorial.md)
+# Team FieldDay
 
-Uma Srinivas
+- Ethan Ottinger
+- Uma Srinivas
+- Gabriel Ogbalor
+- Per William Gustav Karlsson
 
-Gabriel Ogbalor
-How-To Guide: [doc/how-to.md](doc/how-to.md)
+## Documentation links
 
-Per William Gustav Karlsson
-
+- [Tutorial](doc/tutorial.md)
+- [How-To Guide](doc/how-to.md)
+- [Reference](doc/reference.md)
