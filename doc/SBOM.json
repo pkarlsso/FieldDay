@@ -119,7 +119,7 @@
     "supplier": {
       "name": "FieldDay"
     },
-    "timestamp": "2026-11-08T21:50:54.348Z"
+    "timestamp": "2026-11-08T22:37:35.069Z"
   },
   "components": [
     {
@@ -19451,8 +19451,8 @@
     {
       "type": "library",
       "name": "body-parser",
-      "version": "1.20.8",
-      "bom-ref": "FieldDay|body-parser@1.20.8",
+      "version": "1.20.9",
+      "bom-ref": "FieldDay|body-parser@1.20.9",
       "description": "Node.js body parsing middleware",
       "licenses": [
         {
@@ -19462,15 +19462,15 @@
           }
         }
       ],
-      "purl": "pkg:npm/body-parser@1.20.8",
+      "purl": "pkg:npm/body-parser@1.20.9",
       "externalReferences": [
         {
-          "url": "https://registry.npmjs.org/body-parser/-/body-parser-1.20.8.tgz",
+          "url": "https://registry.npmjs.org/body-parser/-/body-parser-1.20.9.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "24d732150eb83a28a31243f35014c27be8723d7503ff72c495d190ea21792d1d70d349b1f68ef1b435875c1636888b63742146a2294e2cd41b1fde37badee91c"
+              "content": "148488431579bbdd58f60bee16adeafed03fa93a8b267dc0851704bf2a33ca1253879381145b6ff36ec074753b45bc9cb78afe05ad7ff7da056b5637cae16c77"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -19510,7 +19510,7 @@
           "type": "library",
           "name": "debug",
           "version": "2.6.9",
-          "bom-ref": "FieldDay|body-parser@1.20.8|debug@2.6.9",
+          "bom-ref": "FieldDay|body-parser@1.20.9|debug@2.6.9",
           "author": "TJ Holowaychuk",
           "description": "small debugging utility",
           "licenses": [
@@ -19575,7 +19575,7 @@
           "type": "library",
           "name": "ms",
           "version": "2.0.0",
-          "bom-ref": "FieldDay|body-parser@1.20.8|ms@2.0.0",
+          "bom-ref": "FieldDay|body-parser@1.20.9|ms@2.0.0",
           "description": "Tiny milisecond conversion utility",
           "licenses": [
             {
@@ -29479,8 +29479,8 @@
         {
           "type": "library",
           "name": "brace-expansion",
-          "version": "5.0.9",
-          "bom-ref": "FieldDay|glob@13.0.6|brace-expansion@5.0.9",
+          "version": "5.0.12",
+          "bom-ref": "FieldDay|glob@13.0.6|brace-expansion@5.0.12",
           "description": "Brace expansion as known from sh/bash",
           "licenses": [
             {
@@ -29490,8 +29490,19 @@
               }
             }
           ],
-          "purl": "pkg:npm/brace-expansion@5.0.9",
+          "purl": "pkg:npm/brace-expansion@5.0.12",
           "externalReferences": [
+            {
+              "url": "https://registry.npmjs.org/brace-expansion/-/brace-expansion-5.0.12.tgz",
+              "type": "distribution",
+              "hashes": [
+                {
+                  "alg": "SHA-512",
+                  "content": "628bd0debce168b308ac38cd0cc90d4b4d6d79af77aa11211b9c72f1febe47497e770dca8bee6c0a822823de368ae2d94c75a881692d830543854d3d88d12299"
+                }
+              ],
+              "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
+            },
             {
               "url": "https://github.com/juliangruber/brace-expansion/issues",
               "type": "issue-tracker",
@@ -40552,8 +40563,8 @@
     {
       "type": "library",
       "name": "qs",
-      "version": "6.16.0",
-      "bom-ref": "FieldDay|qs@6.16.0",
+      "version": "6.16.2",
+      "bom-ref": "FieldDay|qs@6.16.2",
       "description": "A querystring parser that supports nesting and arrays, with a depth limit",
       "licenses": [
         {
@@ -40563,15 +40574,15 @@
           }
         }
       ],
-      "purl": "pkg:npm/qs@6.16.0",
+      "purl": "pkg:npm/qs@6.16.2",
       "externalReferences": [
         {
-          "url": "https://registry.npmjs.org/qs/-/qs-6.16.0.tgz",
+          "url": "https://registry.npmjs.org/qs/-/qs-6.16.2.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "87a7e1388691ac80f609b118d9faacfbbb7e517668f8c2c09d4e60448abce6e16d76250f09db00a4c947857a202953381ccd8355b22318d4d3607d8e7263f5bc"
+              "content": "5587670794bbff421e5f305a714b7034068ce9ded8fcf8189cd0bb6c9088ea67aa03f3a09ec41b64cb555bc0edd83d4f1e06c71ad626852a04220bedef167664"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -52066,9 +52077,9 @@
       "ref": "FieldDay|bignumber.js@9.3.1"
     },
     {
-      "ref": "FieldDay|body-parser@1.20.8",
+      "ref": "FieldDay|body-parser@1.20.9",
       "dependsOn": [
-        "FieldDay|body-parser@1.20.8|debug@2.6.9",
+        "FieldDay|body-parser@1.20.9|debug@2.6.9",
         "FieldDay|bytes@3.1.2",
         "FieldDay|content-type@1.0.5",
         "FieldDay|depd@2.0.0",
@@ -52076,20 +52087,20 @@
         "FieldDay|http-errors@2.0.1",
         "FieldDay|iconv-lite@0.4.24",
         "FieldDay|on-finished@2.4.1",
-        "FieldDay|qs@6.16.0",
+        "FieldDay|qs@6.16.2",
         "FieldDay|raw-body@2.5.3",
         "FieldDay|type-is@1.6.18",
         "FieldDay|unpipe@1.0.0"
       ]
     },
     {
-      "ref": "FieldDay|body-parser@1.20.8|debug@2.6.9",
+      "ref": "FieldDay|body-parser@1.20.9|debug@2.6.9",
       "dependsOn": [
-        "FieldDay|body-parser@1.20.8|ms@2.0.0"
+        "FieldDay|body-parser@1.20.9|ms@2.0.0"
       ]
     },
     {
-      "ref": "FieldDay|body-parser@1.20.8|ms@2.0.0"
+      "ref": "FieldDay|body-parser@1.20.9|ms@2.0.0"
     },
     {
       "ref": "FieldDay|bowser@2.15.0"
@@ -52816,7 +52827,7 @@
       "dependsOn": [
         "FieldDay|accepts@1.3.8",
         "FieldDay|array-flatten@1.1.1",
-        "FieldDay|body-parser@1.20.8",
+        "FieldDay|body-parser@1.20.9",
         "FieldDay|content-disposition@0.5.4",
         "FieldDay|content-type@1.0.5",
         "FieldDay|cookie-signature@1.0.7",
@@ -52835,7 +52846,7 @@
         "FieldDay|parseurl@1.3.3",
         "FieldDay|path-to-regexp@0.1.13",
         "FieldDay|proxy-addr@2.0.8",
-        "FieldDay|qs@6.16.0",
+        "FieldDay|qs@6.16.2",
         "FieldDay|range-parser@1.2.1",
         "FieldDay|safe-buffer@5.2.1",
         "FieldDay|send@0.19.2",
@@ -53117,7 +53128,7 @@
       "ref": "FieldDay|glob@13.0.6|balanced-match@4.0.4"
     },
     {
-      "ref": "FieldDay|glob@13.0.6|brace-expansion@5.0.9",
+      "ref": "FieldDay|glob@13.0.6|brace-expansion@5.0.12",
       "dependsOn": [
         "FieldDay|glob@13.0.6|balanced-match@4.0.4"
       ]
@@ -53125,7 +53136,7 @@
     {
       "ref": "FieldDay|glob@13.0.6|minimatch@10.2.6",
       "dependsOn": [
-        "FieldDay|glob@13.0.6|brace-expansion@5.0.9"
+        "FieldDay|glob@13.0.6|brace-expansion@5.0.12"
       ]
     },
     {
@@ -54074,7 +54085,7 @@
       "ref": "FieldDay|punycode@2.3.1"
     },
     {
-      "ref": "FieldDay|qs@6.16.0",
+      "ref": "FieldDay|qs@6.16.2",
       "dependsOn": [
         "FieldDay|es-define-property@1.0.1",
         "FieldDay|side-channel@1.1.1"
