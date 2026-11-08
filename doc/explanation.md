@@ -77,6 +77,45 @@ client refetches the session through GraphQL after receiving the event. This
 keeps the event channel small while ensuring that the response still passes
 through the same authorization and visibility checks as any other request.
 
+## Hosted Services and Deployment
+
+The team hosts the Node.js API on AWS Elastic Beanstalk, with MongoDB Atlas
+storing application data. The deployed API is accessed through the team's
+API Gateway and routing configuration. Socket.IO runs in the backend process;
+its production connectivity depends on the configured transport and routing,
+so a healthy GraphQL endpoint alone does not prove realtime delivery works.
+
+For the current recommendation setup, Gorse runs separately on a Google Cloud
+VM. The backend sends Gorse requests through a locally configured SSH tunnel
+from the AWS instance to that VM. Gorse returns ranked session identifiers;
+the backend still checks which sessions the user may see, supplies the
+explanations, and falls back to profile-based ranking if Gorse cannot provide
+usable results. Keeping Gorse separate allows recommendation work to evolve
+without making it the authoritative database.
+
+The tunnel is an operational dependency outside the backend deployment
+workflow. The existing tunnel process can restart, but automatic recovery after
+an AWS instance replacement has not yet been configured and verified. An
+instance replacement can change the source IP allowed by the VM. The profile
+fallback keeps discovery useful if this connection is unavailable; it does not
+mean collaborative ranking is still working. See [backend deployment](backend-deployment.md)
+and [issue #384](https://github.com/pkarlsso/FieldDay/issues/384).
+
+Amazon SES is the team's email service for transactional messages such as
+verification and password recovery; the application also supports SMTP
+configuration. Email availability depends on the configured sender, permissions,
+and SES account status. An SES sandbox restricts recipients, so a successful
+test to a verified address does not prove that all users can receive mail.
+Google OAuth is a separate identity service, not the email sender.
+
+Changes merged to `main` trigger the backend deployment workflow, which
+packages the backend, uploads a versioned bundle, deploys it to Elastic
+Beanstalk, and checks the API health endpoint. This workflow does not configure
+the Gorse VM or recreate the tunnel. The health check verifies basic API
+availability; it does not verify email delivery, recommendations, or every
+client feature. Expo EAS and TestFlight distribute iOS builds separately from
+the hosted backend.
+
 ## Core Domain Model
 
 The domain is organized around a session and the people who participate in it.
