@@ -46,9 +46,16 @@ const sessionSchema = new mongoose.Schema({
   // by the host and is final.
   status: { type: String, enum: ['upcoming', 'in_progress', 'completed', 'cancelled'], default: 'completed' },
   cancelledAt: { type: Date },
-  // Sessions created once location check-in existed take attendance from
-  // check-ins: anyone who hasn't checked in by 10 minutes after the start is a
-  // no-show. Older sessions (false) still use the peer no-show reports below.
+  // "Only show up if the session is full" (#375): unless every spot is taken
+  // when joining closes (1 hour before the start for every session, #376),
+  // the session doesn't happen and nobody is counted as a no-show.
+  fullOnly: { type: Boolean, default: false },
+  // Set once the players of a session that didn't go ahead (too few players,
+  // or a full-only session that didn't fill) have been told.
+  invalidNotifiedAt: { type: Date, default: null },
+  // Location check-in was removed (#358): attendance always comes from the
+  // peer no-show reports below. These fields are kept so stored data stays
+  // readable, but nothing reads them any more.
   checkInRequired: { type: Boolean, default: false },
   checkIns: [{
     _id: false,

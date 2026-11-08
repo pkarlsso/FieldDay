@@ -19,6 +19,64 @@ export const VISIBILITY_OPTIONS = [
 // Mirrors the backend: sessions default to 2 hours and last at most 24.
 export const DEFAULT_SESSION_LENGTH_MS = 2 * 60 * 60 * 1000;
 export const MAX_SESSION_LENGTH_MS = 24 * 60 * 60 * 1000;
+// Mirrors the backend: sessions freeze (no edits, cancels or leaving) 2 hours
+// before they start, and full-only sessions stop taking players 1 hour before.
+export const CHANGE_FREEZE_MS = 2 * 60 * 60 * 1000;
+export const FULL_ONLY_JOIN_CUTOFF_MS = 60 * 60 * 1000;
+
+// True once the 2-hour freeze before the start has begun.
+export function changesFrozen(session, now = new Date()) {
+  const freezeAt = session.changesFreezeAt
+    ? new Date(session.changesFreezeAt)
+    : new Date(new Date(session.startsAt).getTime() - CHANGE_FREEZE_MS);
+  return freezeAt <= now;
+}
+
+// What a player signs up for by joining or hosting (#377): a normal session
+// expects them unless they leave before the freeze; a full-only one expects
+// them only if it fills. `startsAt` is a Date or ISO string.
+export function commitmentWarning({ startsAt, fullOnly, maxParticipants, hosting = false }) {
+  const start = new Date(startsAt).getTime();
+  const freezeAt = formatSessionTime(new Date(start - CHANGE_FREEZE_MS));
+  const noShow = 'Players who don\'t come can be reported as no-shows, which gives them a rating of 1.';
+  const exit = hosting
+    ? `You can edit or cancel it until ${freezeAt}, 2 hours before it starts.`
+    : `You can leave until ${freezeAt}, 2 hours before it starts.`;
+  if (fullOnly) {
+    const closesAt = formatSessionTime(new Date(start - FULL_ONLY_JOIN_CUTOFF_MS));
+    return {
+      title: hosting ? 'Only if full' : 'You\'re expected if it fills up',
+      message: `This session only happens if all ${maxParticipants} spots are taken by ${closesAt}, when joining closes. `
+        + 'If it doesn\'t fill, it\'s called off and nobody needs to go. '
+        + `If it does fill, ${hosting ? 'everyone, including you, is' : 'you\'re'} expected to show up. ${noShow} ${exit}`,
+    };
+  }
+  // A session with only the host doesn't go ahead (#360), so the host is only
+  // on the hook once someone else joins.
+  if (hosting) {
+    return {
+      title: 'You\'re expected if someone joins',
+      message: 'As the host, you only need to show up if at least one other player joins. '
+        + 'If nobody has joined by 1 hour before it starts, the session is called off and nobody is marked as a no-show. '
+        + `Once someone joins, you're expected to be there unless you cancel in time. ${exit} After that it's locked. ${noShow}`,
+    };
+  }
+  return {
+    title: 'You\'re expected to show up',
+    message: `Once you join, you're expected to show up unless you leave in time. ${exit} After that it's locked. ${noShow}`,
+  };
+}
+
+// True when the host still has nobody else in an upcoming session, so they
+// aren't expected to go yet.
+export function hostIsAlone(session) {
+  return session.status === 'upcoming' && (session.participants?.length ?? 0) < 2;
+}
+
+// True once the session no longer takes new players.
+export function joinClosed(session, now = new Date()) {
+  return Boolean(session.joinClosesAt) && new Date(session.joinClosesAt) <= now;
+}
 
 export function skillLabel(session) {
   const level = SKILL_LEVELS.find((item) => item.value === session?.skillLevel);
@@ -58,11 +116,14 @@ export function formatSessionRange(startsAt, endsAt) {
 // exact field to fix before anything is sent.
 // When editing, `joinedCount` is how many players have already joined, since
 // capacity can't drop below that.
-export function validateSessionForm({ sport, startsAt, endsAt, location, locationConfirmed, maxParticipants, skillLevel, joinedCount = 0, visibility = 'PUBLIC', inviteeIds = [] }) {
+// `editing` adds the edit-only rule that a moved session must still start at
+// least 2 hours from now.
+export function validateSessionForm({ sport, startsAt, endsAt, location, locationConfirmed, maxParticipants, skillLevel, joinedCount = 0, visibility = 'PUBLIC', inviteeIds = [], editing = false }) {
   const errors = {};
   if (!sport) errors.sport = 'Choose a sport.';
   if (!(startsAt instanceof Date) || Number.isNaN(startsAt.getTime())) errors.startsAt = 'Choose a date and time.';
   else if (startsAt <= new Date()) errors.startsAt = 'Choose a date and time in the future.';
+  else if (editing && startsAt.getTime() - Date.now() <= CHANGE_FREEZE_MS) errors.startsAt = 'Choose a start at least 2 hours from now.';
   else if (!(endsAt instanceof Date) || endsAt <= startsAt) errors.endsAt = 'Choose an end time after the start.';
   else if (endsAt - startsAt > MAX_SESSION_LENGTH_MS) errors.endsAt = 'Sessions can last at most 24 hours.';
   if (!location.trim()) errors.location = 'Enter where the session is.';
@@ -79,7 +140,7 @@ export function validateSessionForm({ sport, startsAt, endsAt, location, locatio
 
 const SESSION_FIELDS = `
   id sport startsAt endsAt location skillLevel skillRange maxParticipants status createdAt completedAt
-  noShowDeadline cancelledAt checkInRequired checkInClosesAt myCheckIn
+  noShowDeadline cancelledAt fullOnly joinClosesAt changesFreezeAt invalidReason
   host { id name }
   participants { id name profilePicture }
   attendance { user { id } status noShowReports checkedInAt }
@@ -114,31 +175,32 @@ export function needsNoShowCheck(session, now = new Date()) {
     && new Date(session.noShowDeadline) > now;
 }
 
-// True while the session's check-in window is open (its first 10 minutes).
-export function checkInOpen(session, now = new Date()) {
-  return Boolean(session.checkInRequired)
-    && session.status !== 'cancelled'
-    && new Date(session.startsAt) <= now
-    && now <= new Date(session.checkInClosesAt);
-}
-
 export function isCancelled(session) {
   return session.status === 'cancelled';
+}
+
+// Not going ahead (too few players, or a full-only session that didn't fill)
+// and not yet past its planned end. Afterwards the server reports it as
+// cancelled.
+export function isNotHappening(session) {
+  return session.status === 'invalid';
 }
 
 // Groups the signed-in user's sessions for Home and My Sessions. The server
 // already moves sessions to `completed` once their end time passes. Cancelled
 // sessions stay in the Hosting/Joined lists (marked) until they would have
-// started, but never count as upcoming or happening now.
+// started; sessions that aren't happening stay there (marked) until their
+// planned end. Neither counts as upcoming or happening now.
 export function groupMySessions(mySessions, now = new Date()) {
   const { hosted = [], joined = [], completed = [] } = mySessions || {};
   const started = (session) => new Date(session.startsAt) <= now;
   const byStart = (a, b) => new Date(a.startsAt) - new Date(b.startsAt);
-  const active = [...hosted, ...joined].filter((session) => !isCancelled(session));
+  const listed = (session) => !started(session) || isNotHappening(session);
+  const active = [...hosted, ...joined].filter((session) => !isCancelled(session) && !isNotHappening(session));
   return {
     upcoming: active.filter((session) => !started(session)).sort(byStart),
-    hostedUpcoming: hosted.filter((session) => !started(session)),
-    joinedUpcoming: joined.filter((session) => !started(session)),
+    hostedUpcoming: hosted.filter(listed),
+    joinedUpcoming: joined.filter(listed),
     happeningNow: active.filter(started).sort(byStart),
     completed,
     needsNoShowCheck: completed.filter((session) => needsNoShowCheck(session, now)),

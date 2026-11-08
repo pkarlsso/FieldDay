@@ -1,12 +1,14 @@
-// Location check-in (#279), automatic no-show ratings (#280) and host edit /
-// cancel (#281).
+// Check-in removal (#358), sessions that don't go ahead (#360, #375, #376),
+// the 2-hour change freeze (#361), automatic no-show ratings (#280) and host
+// edit / cancel (#281).
 import assert from 'node:assert/strict';
 import mongoose from 'mongoose';
 import { ApolloServer } from '../backend/test/support/apollo.js';
 import { getConfig } from '../backend/src/config.js';
 import typeDefs from '../backend/src/graphql/typeDefs.js';
-import resolvers, { settleNoShowRatings } from '../backend/src/graphql/resolvers.js';
+import resolvers, { notifyInvalidSessions, settleNoShowRatings } from '../backend/src/graphql/resolvers.js';
 import User from '../backend/src/models/User.js';
+import Notification from '../backend/src/models/Notification.js';
 import Session from '../backend/src/models/Session.js';
 import Rating from '../backend/src/models/Rating.js';
 
@@ -40,6 +42,7 @@ async function fails(query, variables, currentUser, expected) {
 
 const CREATE = 'mutation($input:CreateSessionInput!){createSession(input:$input){id}}';
 const JOIN = 'mutation($s:ID!){joinSession(sessionId:$s){id}}';
+const LEAVE = 'mutation($s:ID!){leaveSession(sessionId:$s){id}}';
 const CHECK_IN = `mutation($s:ID!,$lat:Float!,$lng:Float!){checkInToSession(sessionId:$s,latitude:$lat,longitude:$lng){
   id myCheckIn }}`;
 const REPORT = 'mutation($s:ID!,$n:[ID!]!){reportNoShows(sessionId:$s,noShowUserIds:$n){id}}';
@@ -47,6 +50,7 @@ const SUBMIT = 'mutation($s:ID!,$x:[RatingInput!]!){submitRatings(sessionId:$s,r
 const GET = `query($id:ID!){getSession(id:$id){
   id status date time startsAt endsAt location locationPoint{coordinates} maxParticipants cancelledAt completedAt
   checkInRequired checkInClosesAt checkInRadiusMeters noShowDeadline myCheckIn
+  fullOnly joinClosesAt changesFreezeAt invalidReason
   attendance{user{id} status checkedInAt} ratingEligibility{eligible reason} }}`;
 const EDIT = `mutation($s:ID!,$input:EditSessionInput!){editSession(sessionId:$s,input:$input){
   id date time startsAt endsAt location locationPoint{coordinates} maxParticipants status }}`;
@@ -88,103 +92,161 @@ try {
   const [host, a, b, c, outsider] = await Promise.all(
     ['host', 'a', 'b', 'c', 'outsider'].map((name) => {
       createdEmails.push(emailFor(name));
-      // A top rating has no participation limit, so the many creates and joins
-      // here aren't capped. The resolvers read it from these signed-in objects,
-      // so ratings applied in the database below don't change it.
-      return User.create({ name, email: emailFor(name), socialRating: 5 });
+      // A top rating (from at least one rating, so they aren't new players)
+      // has no participation limit, so the many creates and joins here aren't
+      // capped. The resolvers read it from these signed-in objects, so ratings
+      // applied in the database below don't change it.
+      return User.create({ name, email: emailFor(name), socialRating: 5, totalRatings: 1, ratingSum: 5 });
     })
   );
   const newSession = async (overrides) => (await ok(CREATE, { input: validInput(overrides) }, host)).createSession.id;
 
-  // ---- #279 location-verified check-in -----------------------------------
+  // ---- #358 check-in removed ---------------------------------------------
   const sid = await newSession();
   for (const user of [a, b, c]) await ok(JOIN, { s: sid }, user);
-
   const before = (await ok(GET, { id: sid }, a)).getSession;
-  assert.equal(before.checkInRequired, true, 'new sessions use check-in');
-  assert.equal(before.checkInRadiusMeters, 200);
-  assert.equal(new Date(before.checkInClosesAt) - new Date(before.startsAt), 10 * MINUTE);
-  await fails(CHECK_IN, { s: sid, ...north(0) }, a, 'opens when the session starts');
-
-  await startSession(sid, -5 * SECOND);
-  await fails(CHECK_IN, { s: sid, ...north(0) }, a, 'opens when the session starts');
-
+  assert.equal(before.checkInRequired, false, 'new sessions do not use check-in');
+  assert.equal(before.checkInClosesAt, null);
+  assert.equal(before.myCheckIn, null);
+  assert.equal((await Session.findById(sid)).checkInRequired, false, 'stored without check-in');
   await startSession(sid, 5 * SECOND);
-  await fails(CHECK_IN, { s: sid, ...north(0) }, null, 'signed in');
-  await fails(CHECK_IN, { s: sid, ...north(0) }, outsider, 'Only players in this session');
-  await fails(CHECK_IN, { s: sid, ...north(205) }, a, 'within 200 m');
-  await fails(CHECK_IN, { s: sid, ...north(1500) }, a, 'about 1500 m away');
-  await fails(CHECK_IN, { s: sid, lat: 91, lng: 0 }, a, 'out of range');
-  assert.equal((await Session.findById(sid)).checkIns.length, 0, 'rejected check-ins store nothing');
+  await fails(CHECK_IN, { s: sid, ...north(0) }, a, 'no longer needed');
+  assert.equal((await Session.findById(sid)).checkIns.length, 0, 'nothing is stored');
 
-  const checkedIn = (await ok(CHECK_IN, { s: sid, ...north(195) }, a)).checkInToSession;
-  assert.ok(checkedIn.myCheckIn, 'a valid check-in is returned');
-  await ok(CHECK_IN, { s: sid, ...north(0) }, a);
-  await ok(CHECK_IN, { s: sid, ...north(10) }, host);
-  const stored = await Session.findById(sid);
-  assert.equal(stored.checkIns.length, 2, 'checking in twice keeps one check-in');
-  assert.equal(String(stored.checkIns[0].user), idOf(a));
-
+  await startSession(sid, 15 * MINUTE);
   const during = (await ok(GET, { id: sid }, b)).getSession;
-  assert.equal(statusOf(during, a).status, 'SHOWED_UP');
-  assert.ok(statusOf(during, a).checkedInAt);
-  assert.equal(statusOf(during, b).status, 'PENDING', 'not checked in yet, but the window is open');
-  assert.equal(during.myCheckIn, null);
-
-  await startSession(sid, 10 * MINUTE - 5 * SECOND);
-  await ok(CHECK_IN, { s: sid, ...north(0) }, b);
-  await startSession(sid, 10 * MINUTE + 5 * SECOND);
-  await fails(CHECK_IN, { s: sid, ...north(0) }, c, 'Check-in closed');
-  console.log('✓ Check-in only works during the first 10 minutes and within 200 m');
-
-  const closed = (await ok(GET, { id: sid }, a)).getSession;
   assert.deepEqual(
-    [host, a, b, c].map((user) => statusOf(closed, user).status),
-    ['SHOWED_UP', 'SHOWED_UP', 'SHOWED_UP', 'NO_SHOW'],
-    'whoever did not check in is absent once the window closes'
+    [host, a, b, c].map((user) => statusOf(during, user).status),
+    ['SHOWED_UP', 'SHOWED_UP', 'SHOWED_UP', 'SHOWED_UP'],
+    'nobody is a no-show for not checking in'
   );
-  await fails(REPORT, { s: sid, n: [] }, a, 'comes from check-ins');
-  console.log('✓ Players who did not check in are marked absent');
-
-  // ---- #280 automatic no-show rating -------------------------------------
-  const [hostBefore, aBefore, bBefore] = await Promise.all([host, a, b].map(ratingsOf));
+  const ratingsBefore = await Promise.all([host, a, b, c].map(ratingsOf));
   await settleNoShowRatings();
-  assert.deepEqual(await ratingsOf(c), { ratingSum: 1, totalRatings: 1, socialRating: 1 }, 'the no-show gets one rating of 1');
-  assert.deepEqual(await Promise.all([host, a, b].map(ratingsOf)), [hostBefore, aBefore, bBefore], 'players who checked in are unaffected');
-  assert.equal((await Session.findById(sid)).noShowRatingsSettled, true);
-
-  await settleNoShowRatings();
-  await Session.updateOne({ _id: sid }, { noShowRatingsSettled: false });
-  await Promise.all([settleNoShowRatings(), settleNoShowRatings()]);
-  assert.deepEqual(await ratingsOf(c), { ratingSum: 1, totalRatings: 1, socialRating: 1 }, 'never applied twice');
-
-  await User.updateOne({ _id: c._id }, { ratingSum: 9, totalRatings: 2, socialRating: 4.5 });
-  await Session.updateOne({ _id: sid }, { noShowRatingsSettled: false, noShowRated: [] });
-  await settleNoShowRatings();
-  assert.deepEqual(await ratingsOf(c), { ratingSum: 10, totalRatings: 3, socialRating: 3.3 }, 'the 1 is averaged in');
-  console.log('✓ A check-in no-show gets one automatic rating of 1, exactly once');
+  assert.deepEqual(await Promise.all([host, a, b, c].map(ratingsOf)), ratingsBefore, 'no automatic rating for skipping check-in');
 
   await startSession(sid, 3 * HOUR);
-  const ended = (await ok(GET, { id: sid }, c)).getSession;
-  assert.equal(ended.noShowDeadline, null, 'check-in sessions skip the no-show question');
-  assert.match(ended.ratingEligibility.reason, /didn't check in/);
-  assert.equal((await ok(GET, { id: sid }, a)).getSession.ratingEligibility.eligible, true, 'checked in, so a can rate straight away');
-  await fails(SUBMIT, { s: sid, x: [{ userId: idOf(c), rating: 3 }] }, a, 'didn\'t check in');
-  await fails(SUBMIT, { s: sid, x: [{ userId: idOf(a), rating: 3 }] }, c, 'didn\'t check in');
-  for (const [rater, others] of [[host, [a, b]], [a, [host, b]], [b, [host, a]]]) {
-    await ok(SUBMIT, { s: sid, x: others.map((user) => ({ userId: idOf(user), rating: 5 })) }, rater);
-  }
-  assert.equal((await Session.findById(sid)).rated, true, 'no-shows do not hold up "everyone rated"');
-  console.log('✓ Only players who checked in rate, and only each other');
+  const ended = (await ok(GET, { id: sid }, a)).getSession;
+  assert.ok(ended.noShowDeadline, 'attendance comes from the no-show question');
+  assert.match(ended.ratingEligibility.reason, /who didn't show up/);
+  console.log('✓ Check-in is gone: attendance comes from no-show reports');
 
-  const open = await newSession();
-  await ok(JOIN, { s: open }, a);
-  await startSession(open, 5 * MINUTE);
-  const hostBeforeOpen = await ratingsOf(host);
+  // ---- #360 a session with only the host doesn't go ahead -----------------
+  const solo = await newSession();
+  await startSession(solo, -(HOUR + MINUTE));
+  const soloEarly = (await ok(GET, { id: solo }, host)).getSession;
+  assert.equal(soloEarly.status, 'upcoming', 'open to players until the roster check 1 hour before');
+  assert.equal(new Date(soloEarly.startsAt) - new Date(soloEarly.joinClosesAt), HOUR, 'a host on their own has until 1 hour before');
+  await startSession(solo, -(HOUR - MINUTE));
+  const soloChecked = (await ok(GET, { id: solo }, host)).getSession;
+  assert.equal(soloChecked.status, 'invalid', 'still only the host 1 hour before, so it is not happening');
+  await fails(JOIN, { s: solo }, c, 'Nobody else joined');
+  await startSession(solo, MINUTE);
+  const soloStarted = (await ok(GET, { id: solo }, host)).getSession;
+  assert.equal(soloStarted.status, 'invalid');
+  assert.match(soloStarted.invalidReason, /Nobody else joined/);
+  const hostMine = (await ok(MINE, {}, host)).getMySessions;
+  assert.deepEqual(
+    hostMine.hosted.find((s) => s.id === solo),
+    { id: solo, status: 'invalid' },
+    'still listed, marked as not happening, until its planned end'
+  );
+  assert.ok(!hostMine.completed.some((s) => s.id === solo));
+
+  await notifyInvalidSessions(new Date(), { sessionIds: [solo] });
+  await notifyInvalidSessions(new Date(), { sessionIds: [solo] });
+  const soloNotices = await Notification.find({ recipient: host._id, type: 'session_invalid' });
+  assert.equal(soloNotices.length, 1, 'the host is told once');
+  assert.equal(soloNotices[0].target.params.sessionId, solo);
+
+  await startSession(solo, 3 * HOUR);
+  const soloEnded = (await ok(GET, { id: solo }, host)).getSession;
+  assert.equal(soloEnded.status, 'cancelled', 'once its end passes it reads as cancelled, never completed');
+  assert.match(soloEnded.invalidReason, /Nobody else joined/, 'and still says why');
+  assert.equal(soloEnded.cancelledAt, null, 'nobody cancelled it by hand');
+  assert.equal(soloEnded.completedAt, null);
+  assert.equal(soloEnded.noShowDeadline, null);
+  assert.equal(soloEnded.ratingEligibility.eligible, false);
+  assert.match(soloEnded.ratingEligibility.reason, /nothing to rate/);
+  await fails(REPORT, { s: solo, n: [] }, host, 'nothing to report');
+  await fails(SUBMIT, { s: solo, x: [] }, host, 'nothing to rate');
+  const hostMineLater = (await ok(MINE, {}, host)).getMySessions;
+  assert.ok(
+    ![...hostMineLater.hosted, ...hostMineLater.joined, ...hostMineLater.completed].some((s) => s.id === solo),
+    'after its planned end it leaves My Sessions, like a cancelled one'
+  );
+  const hostBeforeSolo = await ratingsOf(host);
+  await startSession(solo, 51 * HOUR);
   await settleNoShowRatings();
-  assert.deepEqual(await ratingsOf(host), hostBeforeOpen, 'the host has not checked in yet, but check-in is still open');
-  assert.equal((await Session.findById(open)).noShowRatingsSettled, false, 'nothing is final while check-in is open');
-  assert.deepEqual((await Session.findById(open)).noShowRated, []);
+  assert.deepEqual(await ratingsOf(host), hostBeforeSolo, 'no ratings from a session that did not go ahead');
+  assert.equal((await Session.findById(solo)).noShowRatingsSettled, true, 'and it is settled as it is');
+  console.log('✓ A session with only the host is not happening, then cancelled: announced, never rated');
+
+  // ---- #375 / #376 only show up if full -----------------------------------
+  const fullOnly = await newSession({ maxParticipants: 4, fullOnly: true });
+  const fo = (await ok(GET, { id: fullOnly }, a)).getSession;
+  assert.equal(fo.fullOnly, true);
+  assert.equal(new Date(fo.startsAt) - new Date(fo.joinClosesAt), HOUR, 'joining closes 1 hour before');
+  await ok(JOIN, { s: fullOnly }, a);
+  await startSession(fullOnly, -(HOUR + MINUTE));
+  await ok(JOIN, { s: fullOnly }, b);
+  assert.equal((await ok(GET, { id: fullOnly }, a)).getSession.status, 'upcoming', 'still upcoming while joining is open');
+  await startSession(fullOnly, -(HOUR - MINUTE));
+  await fails(JOIN, { s: fullOnly }, c, 'didn\'t fill up');
+  const off = (await ok(GET, { id: fullOnly }, a)).getSession;
+  assert.equal(off.status, 'invalid', 'not full when joining closed, so it is off before it starts');
+  assert.match(off.invalidReason, /didn't fill up/);
+  await notifyInvalidSessions(new Date(), { sessionIds: [fullOnly] });
+  for (const user of [host, a, b]) {
+    const notices = await Notification.countDocuments({ recipient: user._id, type: 'session_invalid', 'target.params.sessionId': fullOnly });
+    assert.equal(notices, 1, 'every player is told');
+  }
+  await startSession(fullOnly, 3 * HOUR);
+  const foEnded = (await ok(GET, { id: fullOnly }, a)).getSession;
+  assert.equal(foEnded.noShowDeadline, null, 'nobody is asked about no-shows');
+  assert.equal(foEnded.status, 'cancelled', 'past full-only sessions that never filled read as cancelled');
+
+  const filled = await newSession({ maxParticipants: 3, fullOnly: true });
+  await ok(JOIN, { s: filled }, a);
+  await ok(JOIN, { s: filled }, b);
+  await startSession(filled, -30 * MINUTE);
+  assert.equal((await ok(GET, { id: filled }, a)).getSession.status, 'upcoming', 'a full full-only session goes ahead');
+  await startSession(filled, 3 * HOUR);
+  const filledEnded = (await ok(GET, { id: filled }, a)).getSession;
+  assert.equal(filledEnded.status, 'completed');
+  assert.ok(filledEnded.noShowDeadline);
+
+  console.log('✓ Full-only sessions close to joins 1 hour early and are off unless full');
+
+  // A regular session with 2+ players keeps taking players until it starts.
+  const regular = await newSession();
+  await ok(JOIN, { s: regular }, a);
+  await startSession(regular, -30 * MINUTE);
+  const regularLate = (await ok(GET, { id: regular }, b)).getSession;
+  assert.equal(regularLate.status, 'upcoming');
+  assert.equal(regularLate.joinClosesAt, regularLate.startsAt, 'with 2 players, joining stays open until the start');
+  assert.ok((await ok(DISCOVER, { status: 'upcoming' }, outsider)).getSessions.some((s) => s.id === regular), 'and it stays in Explore');
+  await ok(JOIN, { s: regular }, b);
+  await startSession(regular, MINUTE);
+  await fails(JOIN, { s: regular }, c, 'Only upcoming sessions');
+  console.log('✓ Regular sessions with 2+ players take joins until they start');
+
+  // ---- #361 sessions freeze 2 hours before they start ---------------------
+  const soon = await newSession();
+  await ok(JOIN, { s: soon }, a);
+  await startSession(soon, -(2 * HOUR + MINUTE));
+  const notYet = (await ok(GET, { id: soon }, a)).getSession;
+  assert.equal(new Date(notYet.startsAt) - new Date(notYet.changesFreezeAt), 2 * HOUR);
+  await ok(EDIT, { s: soon, input: { maxParticipants: 7 } }, host);
+  await fails(EDIT, { s: soon, input: { startsAt: new Date(Date.now() + 90 * MINUTE).toISOString() } }, host, 'at least 2 hours from now');
+  await startSession(soon, -(2 * HOUR - MINUTE));
+  await fails(EDIT, { s: soon, input: { maxParticipants: 8 } }, host, 'in the 2 hours before');
+  await fails(CANCEL, { s: soon }, host, 'in the 2 hours before');
+  await fails(LEAVE, { s: soon }, a, 'in the 2 hours before');
+  const frozenSession = await Session.findById(soon);
+  assert.equal(frozenSession.status, 'upcoming', 'rejected changes store nothing');
+  assert.ok(frozenSession.participants.some((id) => id.equals(a._id)), 'a is still in');
+  await ok(JOIN, { s: soon }, b);
+  console.log('✓ Sessions can\'t be edited, cancelled or left in the 2 hours before they start');
 
   // Sessions from before check-in keep the peer vote; its result becomes final
   // when the no-show check closes.
@@ -269,8 +331,6 @@ try {
   const aMine = (await ok(MINE, {}, a)).getMySessions;
   assert.deepEqual(aMine.joined.find((s) => s.id === editable), { id: editable, status: 'cancelled' }, 'players still see it, marked cancelled');
 
-  await startSession(editable, 5 * MINUTE);
-  await fails(CHECK_IN, { s: editable, ...north(0) }, a, 'was cancelled');
   await startSession(editable, 60 * HOUR);
   const cancelledView = (await ok(GET, { id: editable }, a)).getSession;
   assert.equal(cancelledView.status, 'cancelled');
@@ -302,6 +362,7 @@ try {
   await Promise.all([
     Rating.deleteMany({ session: { $in: sessions.map((session) => session._id) } }),
     Session.deleteMany({ _id: { $in: sessions.map((session) => session._id) } }),
+    Notification.deleteMany({ recipient: { $in: userIds } }),
     User.deleteMany({ _id: { $in: userIds } })
   ]);
   await server.stop();

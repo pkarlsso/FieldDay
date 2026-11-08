@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import * as Location from 'expo-location';
 import { Card, IconButton, PrimaryButton, ScreenHeader, StatusBadge } from '../components/ui';
 import CooldownNotice, { isCoolingDown } from '../components/CooldownNotice';
 import { colors } from '../theme';
-import { attendanceFor, checkInOpen, formatSessionRange, formatSessionTime, needsNoShowCheck, playersLabel, sessionTitle, skillLabel } from '../sessionInfo';
+import { attendanceFor, changesFrozen, commitmentWarning, formatSessionRange, hostIsAlone, formatSessionTime, joinClosed, needsNoShowCheck, playersLabel, sessionTitle, skillLabel } from '../sessionInfo';
 import { useCurrentUser } from '../useCurrentUser';
 import { affectsSessions, useSessionUpdates } from '../useSessionUpdates';
 import { graphql } from '../../api';
@@ -14,15 +14,12 @@ import { CURRENT_USER_ID } from '../../config';
 const QUERY = `query($id:ID!){ getSession(id:$id){
   id sport startsAt endsAt location locationPoint{coordinates} skillLevel skillRange maxParticipants status visibility
   completedAt cancelledAt noShowDeadline participants{id name} host{id name}
-  checkInRequired checkInClosesAt checkInRadiusMeters myCheckIn
-  attendance{ user{id} status noShowReports checkedInAt } myNoShowReport{ noShows reportedAt }
+  fullOnly joinClosesAt changesFreezeAt invalidReason
+  attendance{ user{id} status noShowReports } myNoShowReport{ noShows reportedAt }
   ratingEligibility{ eligible reason }
 } }`;
 const JOIN = `mutation($sessionId:ID!){joinSession(sessionId:$sessionId){id participants{id name}}}`;
 const LEAVE = `mutation($sessionId:ID!){leaveSession(sessionId:$sessionId){id participants{id name}}}`;
-const CHECK_IN = `mutation($sessionId:ID!,$latitude:Float!,$longitude:Float!){
-  checkInToSession(sessionId:$sessionId,latitude:$latitude,longitude:$longitude){id myCheckIn}
-}`;
 const CANCEL = `mutation($sessionId:ID!){cancelSession(sessionId:$sessionId){id status}}`;
 
 const statusBadges = {
@@ -30,6 +27,7 @@ const statusBadges = {
   in_progress: { label: 'Happening now', icon: 'play-circle-outline', color: colors.gold },
   completed: { label: 'Ended', icon: 'checkmark-done', color: colors.green },
   cancelled: { label: 'Cancelled', icon: 'close-circle-outline', color: colors.coral },
+  invalid: { label: 'Not happening', icon: 'remove-circle-outline', color: colors.coral },
 };
 
 const visibilityBadges = {
@@ -42,7 +40,7 @@ export default function LiveSessionDetailsScreen({ route, navigation }) {
   const [session, setSession] = useState(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  // Ticks so the check-in button appears and disappears on time.
+  // Ticks so the join, leave and edit buttons lock on time.
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -86,20 +84,13 @@ export default function LiveSessionDetailsScreen({ route, navigation }) {
     setBusy(false);
   }
 
-  // The server checks the time window and the distance to the session.
-  async function checkIn() {
-    setBusy(true);
-    try {
-      const permission = await Location.requestForegroundPermissionsAsync();
-      if (permission.status !== 'granted') throw new Error('Allow location access so FieldDay can confirm you are at the session.');
-      const { coords } = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      await graphql(CHECK_IN, { sessionId: session.id, latitude: coords.latitude, longitude: coords.longitude });
-      await load();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
+  // #377: say what joining commits the player to before they join.
+  function confirmJoin() {
+    const { title, message } = commitmentWarning(session);
+    Alert.alert(title, message, [
+      { text: 'Not now', style: 'cancel' },
+      { text: 'Join session', onPress: () => run(JOIN) },
+    ]);
   }
 
   function confirmCancel() {
@@ -121,23 +112,48 @@ export default function LiveSessionDetailsScreen({ route, navigation }) {
   const joined = session.participants.some((user) => user.id === CURRENT_USER_ID);
   const ended = session.status === 'completed';
   const cancelled = session.status === 'cancelled';
-  const canCheckIn = joined && !session.myCheckIn && checkInOpen(session, now);
-  const missedCheckIn = joined && session.checkInRequired && !session.myCheckIn && !cancelled
-    && new Date(session.checkInClosesAt) < now;
+  const invalid = session.status === 'invalid';
+  // Sessions that didn't go ahead read "cancelled" once their end has passed,
+  // but weren't cancelled by the host; invalidReason says why.
+  const didntHappen = Boolean(session.invalidReason) && (invalid || cancelled);
+  const hostCancelled = cancelled && !session.invalidReason;
+  const upcoming = session.status === 'upcoming';
+  const frozen = changesFrozen(session, now);
+  const joinIsClosed = joinClosed(session, now);
   const full = session.participants.length >= session.maxParticipants;
+  const spotsLeft = Math.max(0, session.maxParticipants - session.participants.length);
   const coolingDown = !joined && isCoolingDown(cooldownUntil);
   const owesNoShowCheck = joined && needsNoShowCheck(session);
   const canChangeNoShows = joined && ended && session.myNoShowReport
     && new Date(session.noShowDeadline) > new Date() && session.ratingEligibility.eligible;
+
+  let joinLabel = 'Join Session';
+  if (joined) joinLabel = frozen ? 'Leaving is locked' : 'Leave Session';
+  else if (joinIsClosed) joinLabel = 'Joining closed';
+  else if (full) joinLabel = 'Session is full';
+
+  let leaveNote = '';
+  if (isHost && !session.fullOnly) {
+    // The host only has to go once someone else joins (#360).
+    leaveNote = hostIsAlone(session)
+      ? `Nobody else has joined yet, so you only need to go if someone does. If nobody joins by ${formatSessionTime(session.joinClosesAt)}, 1 hour before the start, the session is called off. `
+      : 'Other players have joined, so you\'re expected to show up. ';
+  }
+  if (!isHost) {
+    leaveNote = frozen
+      ? 'This session starts within 2 hours, so you can no longer leave it. '
+      : `You can leave until ${formatSessionTime(session.changesFreezeAt)}, 2 hours before it starts. `;
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
       <ScreenHeader title="Session Details" left={<IconButton icon="chevron-back" onPress={() => navigation.goBack()} />} />
       <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 120, gap: 14 }}>
         <Card style={{ gap: 8 }}>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             <StatusBadge {...(statusBadges[session.status] || statusBadges.upcoming)} />
             {visibilityBadges[session.visibility] ? <StatusBadge {...visibilityBadges[session.visibility]} /> : null}
+            {session.fullOnly ? <StatusBadge label="Only if full" icon="people-circle-outline" color={colors.gold} /> : null}
           </View>
           <Text style={{ color: colors.ink, fontSize: 22, fontWeight: '900' }}>{sessionTitle(session)}</Text>
           <Text style={{ color: colors.text }}>{formatSessionRange(session.startsAt, session.endsAt)}</Text>
@@ -147,7 +163,7 @@ export default function LiveSessionDetailsScreen({ route, navigation }) {
 
         {error ? <Text style={{ color: colors.coral }}>{error}</Text> : null}
 
-        {cancelled ? (
+        {hostCancelled ? (
           <Card>
             <Text style={{ color: colors.text, lineHeight: 20 }}>
               {isHost ? 'You' : 'The host'} cancelled this session{session.cancelledAt ? ` on ${formatSessionTime(session.cancelledAt)}` : ''}. It won&apos;t take place.
@@ -155,54 +171,63 @@ export default function LiveSessionDetailsScreen({ route, navigation }) {
           </Card>
         ) : null}
 
-        {isHost && session.status === 'upcoming' ? (
+        {didntHappen ? (
+          <Card style={{ gap: 6 }}>
+            <Text style={{ color: colors.ink, fontWeight: '900', fontSize: 18 }}>
+              {invalid ? 'This session is not happening' : 'This session was cancelled'}
+            </Text>
+            <Text style={{ color: colors.text, lineHeight: 20 }}>
+              {session.invalidReason}{invalid ? ' Nobody needs to go.' : ''} Nobody is marked as a no-show or rated.
+            </Text>
+          </Card>
+        ) : null}
+
+        {session.fullOnly && upcoming ? (
+          <Card style={{ gap: 6, backgroundColor: colors.goldSoft }}>
+            <Text style={{ color: colors.ink, fontWeight: '900' }}>Only happens if it&apos;s full</Text>
+            <Text style={{ color: colors.text, lineHeight: 20 }}>
+              {full
+                ? 'Every spot is taken, so this session is on.'
+                : `${spotsLeft} more player${spotsLeft === 1 ? '' : 's'} needed by ${formatSessionTime(session.joinClosesAt)}, when joining closes. If it isn't full by then, the session is called off and nobody needs to show up.`}
+            </Text>
+          </Card>
+        ) : null}
+
+        {isHost && upcoming && !frozen ? (
           <View style={{ gap: 10 }}>
             <PrimaryButton label="Edit session" icon="create-outline" variant="secondary" disabled={busy} onPress={() => navigation.navigate('EditSession', { session })} />
             <PrimaryButton label="Cancel session" variant="destructive" disabled={busy} onPress={confirmCancel} />
+            <Text style={{ color: colors.muted, lineHeight: 20 }}>
+              You can edit or cancel until {formatSessionTime(session.changesFreezeAt)}, 2 hours before it starts.
+            </Text>
           </View>
         ) : null}
 
-        {canCheckIn ? (
-          <Card style={{ gap: 10 }}>
-            <Text style={{ color: colors.ink, fontWeight: '900', fontSize: 18 }}>Check in</Text>
-            <Text style={{ color: colors.muted, lineHeight: 20 }}>
-              Check in by {formatSessionTime(session.checkInClosesAt)} from within {session.checkInRadiusMeters} m of the session, or you&apos;ll be marked as a no-show.
+        {isHost && upcoming && frozen ? (
+          <Card style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+            <Ionicons name="lock-closed-outline" size={18} color={colors.muted} />
+            <Text style={{ color: colors.text, flex: 1, lineHeight: 20 }}>
+              This session starts within 2 hours, so it can no longer be edited or cancelled.
             </Text>
-            <PrimaryButton label={busy ? 'Checking in...' : 'Check in'} icon="location-outline" disabled={busy} onPress={checkIn} />
           </Card>
         ) : null}
 
-        {joined && session.myCheckIn ? (
-          <Card style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-            <StatusBadge label="Checked in" icon="checkmark-circle" color={colors.green} />
-            <Text style={{ color: colors.text, flex: 1 }}>at {formatSessionTime(session.myCheckIn)}</Text>
-          </Card>
-        ) : null}
+        {upcoming && !isHost && coolingDown ? <CooldownNotice until={cooldownUntil} /> : null}
 
-        {missedCheckIn ? (
-          <Card style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-            <StatusBadge label="No-show" icon="close-circle" color={colors.coral} />
-            <Text style={{ color: colors.text, flex: 1, lineHeight: 20 }}>Check-in closed before you checked in.</Text>
-          </Card>
-        ) : null}
-
-        {!ended && !cancelled && !isHost && coolingDown ? <CooldownNotice until={cooldownUntil} /> : null}
-
-        {!ended && !cancelled && !isHost && !coolingDown ? (
+        {upcoming && !isHost && !coolingDown ? (
           <PrimaryButton
-            label={joined ? 'Leave Session' : full ? 'Session is full' : 'Join Session'}
+            label={joinLabel}
             variant={joined ? 'destructive' : undefined}
-            disabled={busy || (!joined && full)}
-            onPress={() => run(joined ? LEAVE : JOIN)}
+            disabled={busy || (joined ? frozen : (full || joinIsClosed))}
+            onPress={() => (joined ? run(LEAVE) : confirmJoin())}
           />
         ) : null}
 
-        {session.status === 'upcoming' && joined ? (
+        {upcoming && joined ? (
           <Card>
             <Text style={{ color: colors.muted, lineHeight: 20 }}>
-              {session.checkInRequired
-                ? `Check in here during the first 10 minutes, from within ${session.checkInRadiusMeters} m of the session. Anyone who doesn't is marked as a no-show and gets an automatic rating of 1. The session ends on its own at ${formatSessionTime(session.endsAt)}, then everyone who checked in can rate the others.`
-                : `This session ends on its own at ${formatSessionTime(session.endsAt)}. After that, everyone who joined is asked who didn't show up, then can rate the other players.`}
+              {leaveNote}
+              {`This session ends on its own at ${formatSessionTime(session.endsAt)}. After that, everyone who joined is asked who didn't show up, then can rate the other players.`}
             </Text>
           </Card>
         ) : null}
@@ -243,9 +268,6 @@ export default function LiveSessionDetailsScreen({ route, navigation }) {
                 </Text>
                 {attendance?.status === 'NO_SHOW' ? (
                   <StatusBadge label="No-show" icon="close-circle" color={colors.coral} />
-                ) : null}
-                {attendance?.checkedInAt ? (
-                  <StatusBadge label="Checked in" icon="checkmark-circle" color={colors.green} />
                 ) : null}
               </View>
             );

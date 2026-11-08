@@ -127,9 +127,13 @@ const typeDefs = `#graphql
     visibility: SessionVisibility!
     # Who the host invited. Only the host sees this list; everyone else gets [].
     invitees: [User!]!
-    # "upcoming", "in_progress" (started, not ended), "completed" (ended) or
-    # "cancelled" (by the host). Apart from cancelled it is derived from the
-    # clock, so sessions end without anyone marking them.
+    # "upcoming", "in_progress" (started, not ended), "completed" (ended),
+    # "invalid" or "cancelled". "invalid" means not going ahead (fewer than 2
+    # players, or a fullOnly session that isn't full, 1 hour before the start)
+    # and lasts until the planned end, after which the session
+    # reads "cancelled" with invalidReason set. "cancelled" with no
+    # invalidReason was cancelled by the host. Apart from a host cancel it is
+    # derived from the clock, so sessions end without anyone marking them.
     status: String
     cancelledAt: String
     rated: Boolean
@@ -137,16 +141,25 @@ const typeDefs = `#graphql
     # When the session ended. Null until then.
     completedAt: String
     # Last moment to answer "who didn't show up?". Null until the session ends,
-    # and always null for check-in sessions, which skip that step.
+    # and for sessions that didn't go ahead.
     noShowDeadline: String
-    # True when attendance comes from location check-in instead of no-show
-    # reports. Players check in from startsAt until checkInClosesAt, within
-    # checkInRadiusMeters of the session; anyone who doesn't is a no-show.
-    checkInRequired: Boolean!
-    checkInClosesAt: String
-    checkInRadiusMeters: Int
-    # When the signed-in user checked in, or null.
-    myCheckIn: String
+    # "Only show up if the session is full": unless every spot is taken by
+    # joinClosesAt, the session doesn't go ahead.
+    fullOnly: Boolean!
+    # Last moment to join: startsAt for a regular session with 2+ players,
+    # otherwise 1 hour before startsAt (when a session with only the host, or
+    # a fullOnly session that isn't full, is called off).
+    joinClosesAt: String!
+    # 2 hours before startsAt. After this the host can't edit or cancel the
+    # session and players can't leave it.
+    changesFreezeAt: String!
+    # Why the session didn't go ahead (status "invalid", or "cancelled" once
+    # its end has passed), else null.
+    invalidReason: String
+    checkInRequired: Boolean! @deprecated(reason: "Check-in was removed. Always false.")
+    checkInClosesAt: String @deprecated(reason: "Check-in was removed. Always null.")
+    checkInRadiusMeters: Int @deprecated(reason: "Check-in was removed. Always null.")
+    myCheckIn: String @deprecated(reason: "Check-in was removed. Always null.")
     attendance: [Attendance!]!
     # The signed-in user's own no-show answer, or null if they haven't given one.
     myNoShowReport: NoShowReport
@@ -157,19 +170,18 @@ const typeDefs = `#graphql
   enum AttendanceStatus {
     SHOWED_UP
     NO_SHOW
-    # Check-in sessions only: check-in is still open and this player hasn't yet.
+    # No longer returned: check-in was removed.
     PENDING
   }
 
-  # One row per participant. In check-in sessions, NO_SHOW once check-in closes
-  # without this player checking in. Otherwise NO_SHOW once most of the other
-  # players who answered the no-show check said this player didn't come.
+  # One row per participant. NO_SHOW once most of the other players who
+  # answered the no-show check said this player didn't come.
   type Attendance {
     user: User!
     status: AttendanceStatus!
     # How many other players reported this player as a no-show.
     noShowReports: Int!
-    checkedInAt: String
+    checkedInAt: String @deprecated(reason: "Check-in was removed. Always null.")
   }
 
   type NoShowReport {
@@ -236,6 +248,8 @@ const typeDefs = `#graphql
     tags: [String!]
     # Required: total players including the host.
     maxParticipants: Int
+    # "Only show up if the session is full". Defaults to false.
+    fullOnly: Boolean
     # Defaults to PUBLIC.
     visibility: SessionVisibility
     # People to invite. Only allowed for INVITE_ONLY sessions.
@@ -251,6 +265,7 @@ const typeDefs = `#graphql
     locationPoint: LocationPointInput
     # Never below the number of players who have already joined.
     maxParticipants: Int
+    fullOnly: Boolean
   }
 
   type RatingResult {
@@ -396,8 +411,8 @@ const typeDefs = `#graphql
   type Mutation {
     # The signed-in user becomes the host and first participant.
     createSession(input: CreateSessionInput!): Session
-    # Fails if you host the session, already joined, it is full, it has
-    # started, or you are not allowed to see it.
+    # Fails if you host the session, already joined, it is full, joining has
+    # closed (see Session.joinClosesAt), or you are not allowed to see it.
     joinSession(sessionId: ID!): Session
     # Only before the session starts. The host can't leave.
     leaveSession(sessionId: ID!): Session
@@ -406,12 +421,13 @@ const typeDefs = `#graphql
     # Host only. Stops the person finding or joining the session; if they
     # already joined, they keep their spot.
     uninviteFromSession(sessionId: ID!, userId: ID!): Session!
-    # Host only, before the session starts.
+    # Host only, until changesFreezeAt (2 hours before the start). A new start
+    # must also be at least 2 hours away.
     editSession(sessionId: ID!, input: EditSessionInput!): Session!
-    # Host only, before the session starts. Cancelled sessions leave discovery
-    # and can't be joined.
+    # Host only, until changesFreezeAt. Cancelled sessions leave discovery and
+    # can't be joined.
     cancelSession(sessionId: ID!): Session!
-    # Participants only, from startsAt until 10 minutes after, within 200 m.
+    # Always fails: check-in was removed. Kept for older app builds.
     checkInToSession(sessionId: ID!, latitude: Float!, longitude: Float!): Session!
     # Participants only, after the session ends and before noShowDeadline.
     # Pass an empty list if everyone showed up. Can be changed until you rate.

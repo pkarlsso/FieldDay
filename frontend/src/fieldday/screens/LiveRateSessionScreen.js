@@ -10,7 +10,7 @@ import { graphql } from '../../api';
 import { CURRENT_USER_ID } from '../../config';
 
 const QUERY = `query($id:ID!){ getSession(id:$id){
-  id sport startsAt endsAt location status noShowDeadline checkInRequired participants{id name profilePicture}
+  id sport startsAt endsAt location status noShowDeadline participants{id name profilePicture}
   attendance{ user{id} status } myNoShowReport{ noShows } ratingEligibility{ eligible reason }
 } }`;
 const SUBMIT_RATINGS = `
@@ -25,18 +25,12 @@ const attendanceText = {
   SHOWED_UP: { label: 'Showed up', color: colors.green },
   NO_SHOW: { label: 'Reported as a no-show by others', color: colors.coral },
 };
-const checkInAttendanceText = {
-  SHOWED_UP: { label: 'Checked in', color: colors.green },
-};
 const DEFAULT_RATING = 4;
 
-// Everyone else in the session except the players you reported as no-shows,
-// or in check-in sessions, the players who didn't check in.
+// Everyone else in the session except the players you reported as no-shows.
 function playersToRate(session) {
   const reported = new Set(session.myNoShowReport?.noShows || []);
-  return session.participants.filter((player) => player.id !== CURRENT_USER_ID
-    && !reported.has(player.id)
-    && !(session.checkInRequired && attendanceFor(session, player.id)?.status === 'NO_SHOW'));
+  return session.participants.filter((player) => player.id !== CURRENT_USER_ID && !reported.has(player.id));
 }
 
 export default function LiveRateSessionScreen({ route, navigation }) {
@@ -133,7 +127,7 @@ export default function LiveRateSessionScreen({ route, navigation }) {
         </Card>
 
         {players.map((player) => {
-          const status = (session.checkInRequired ? checkInAttendanceText : attendanceText)[attendanceFor(session, player.id)?.status ?? 'SHOWED_UP'];
+          const status = attendanceText[attendanceFor(session, player.id)?.status ?? 'SHOWED_UP'];
           return (
             <Card key={player.id}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>

@@ -7,19 +7,19 @@ import { addResultsListener, isAvailable as hasAppleSearch, resolve, search } fr
 import { Card, IconButton, Pill, PrimaryButton, ScreenHeader } from '../components/ui';
 import CooldownNotice, { isCoolingDown } from '../components/CooldownNotice';
 import { colors, sports } from '../theme';
-import { CAPACITY_LIMITS, DEFAULT_SESSION_LENGTH_MS, SKILL_LEVELS, VISIBILITY_OPTIONS, validateSessionForm } from '../sessionInfo';
+import { CAPACITY_LIMITS, DEFAULT_SESSION_LENGTH_MS, SKILL_LEVELS, VISIBILITY_OPTIONS, commitmentWarning, validateSessionForm } from '../sessionInfo';
 import { useCurrentUser } from '../useCurrentUser';
 import { graphql } from '../../api';
 import logger from '../../logger';
 
 const MUTATION = `
   mutation CreateSession($input: CreateSessionInput!) {
-    createSession(input: $input) { id sport startsAt location visibility }
+    createSession(input: $input) { id sport startsAt location visibility fullOnly }
   }
 `;
 const EDIT_MUTATION = `
   mutation EditSession($sessionId: ID!, $input: EditSessionInput!) {
-    editSession(sessionId: $sessionId, input: $input) { id sport startsAt location }
+    editSession(sessionId: $sessionId, input: $input) { id sport startsAt location fullOnly }
   }
 `;
 
@@ -78,6 +78,8 @@ export default function CreateSessionScreen({ navigation, route }) {
   const [maxParticipants, setMaxParticipants] = useState(editing?.maxParticipants ?? DEFAULT_CAPACITY);
   const [skillLevel, setSkillLevel] = useState(editing?.skillLevel ?? null);
   const [visibility, setVisibility] = useState('PUBLIC');
+  // "Only show up if the session is full" (#375).
+  const [fullOnly, setFullOnly] = useState(Boolean(editing?.fullOnly));
   const [inviteeIds, setInviteeIds] = useState([]);
   const [errors, setErrors] = useState({});
   // Friends are who an invite-only session can be offered to.
@@ -203,12 +205,14 @@ export default function CreateSessionScreen({ navigation, route }) {
     setMaxParticipants(DEFAULT_CAPACITY);
     setSkillLevel(null);
     setVisibility('PUBLIC');
+    setFullOnly(false);
     setInviteeIds([]);
     setErrors({});
   }
 
-  async function create() {
-    const formErrors = validateSessionForm({ sport, startsAt, endsAt, location, locationConfirmed, maxParticipants, skillLevel, joinedCount, visibility, inviteeIds });
+  // `confirmed` is set once the host has accepted the show-up warning (#377).
+  async function create({ confirmed = false } = {}) {
+    const formErrors = validateSessionForm({ sport, startsAt, endsAt, location, locationConfirmed, maxParticipants, skillLevel, joinedCount, visibility, inviteeIds, editing: Boolean(editing) });
     // Sport, skill level and visibility can't be edited (older sessions may have
     // no level).
     if (editing) {
@@ -219,6 +223,14 @@ export default function CreateSessionScreen({ navigation, route }) {
     setErrors(formErrors);
     if (Object.keys(formErrors).length) {
       Alert.alert('Check the session details', Object.values(formErrors).join('\n'));
+      return;
+    }
+    if (!editing && !confirmed) {
+      const { title, message } = commitmentWarning({ startsAt, fullOnly, maxParticipants, hosting: true });
+      Alert.alert(title, message, [
+        { text: 'Go back', style: 'cancel' },
+        { text: 'Create session', onPress: () => create({ confirmed: true }) },
+      ]);
       return;
     }
     setLoading(true);
@@ -232,6 +244,7 @@ export default function CreateSessionScreen({ navigation, route }) {
             location: location.trim(),
             locationPoint,
             maxParticipants,
+            fullOnly,
           },
         });
         Alert.alert('Session updated', 'Players who joined will see the new details.');
@@ -254,6 +267,7 @@ export default function CreateSessionScreen({ navigation, route }) {
           maxParticipants,
           skillLevel,
           visibility,
+          fullOnly,
           ...(visibility === 'INVITE_ONLY' ? { inviteeIds } : {}),
         },
       });
@@ -276,6 +290,11 @@ export default function CreateSessionScreen({ navigation, route }) {
       />
       <ScrollView contentContainerStyle={{ padding: 18, gap: 14 }}>
         {editing ? null : <CooldownNotice until={cooldownUntil} />}
+        {editing ? (
+          <Text style={{ color: colors.muted, lineHeight: 19 }}>
+            Sessions lock 2 hours before they start: after that they can&apos;t be edited or cancelled, and players can&apos;t leave.
+          </Text>
+        ) : null}
         <Card style={{ gap: 10 }}>
           {editing ? (
             <Text style={{ color: colors.ink, fontSize: 18, fontWeight: '900' }}>{editing.sport}</Text>
@@ -334,6 +353,16 @@ export default function CreateSessionScreen({ navigation, route }) {
             </Text>
           </View>
           <FieldError message={errors.maxParticipants} />
+          <Text style={styles.label}>When does it happen?</Text>
+          <View style={styles.pillRow}>
+            <Pill label="With whoever joins" active={!fullOnly} onPress={() => setFullOnly(false)} />
+            <Pill label="Only if full" active={fullOnly} onPress={() => setFullOnly(true)} />
+          </View>
+          <Text style={{ color: colors.muted, lineHeight: 19 }}>
+            {fullOnly
+              ? `Joining closes 1 hour before the start. If all ${maxParticipants} spots aren't taken by then, the session is called off and nobody needs to show up.`
+              : 'The session goes ahead as long as at least one other player joins by 1 hour before it starts. Once 2 people are in, others can keep joining until the start.'}
+          </Text>
           {editing ? null : (
             <>
               <Text style={styles.label}>Skill level</Text>
@@ -376,7 +405,7 @@ export default function CreateSessionScreen({ navigation, route }) {
           <FieldError message={errors.location} />
           <PrimaryButton
             label={editing ? (loading ? 'Saving...' : 'Save Changes') : (loading ? 'Creating...' : 'Create Session')}
-            onPress={create}
+            onPress={() => create()}
             disabled={loading || (!editing && isCoolingDown(cooldownUntil))}
           />
         </Card>

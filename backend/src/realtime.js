@@ -81,7 +81,7 @@ function closeRealtime() {
   return closing ? closing.close() : undefined;
 }
 
-// reason: "created", "edited", "cancelled", "joined", "left", "checked_in",
+// reason: "created", "edited", "cancelled", "joined", "left", "invalid",
 // "started" or "ended". `alsoNotify` lists users to tell even though they can
 // no longer see a private session, such as a player who just left it.
 // Callers don't wait for it; a failed lookup is logged and the event dropped.

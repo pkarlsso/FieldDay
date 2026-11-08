@@ -2,7 +2,7 @@ import { ActivityIndicator, RefreshControl, ScrollView, Text, View } from 'react
 import { Card, NotificationButton, PrimaryButton, ScreenHeader } from '../components/ui';
 import SessionRow from '../components/SessionRow';
 import { colors } from '../theme';
-import { groupMySessions, isCancelled, needsNoShowCheck } from '../sessionInfo';
+import { groupMySessions, isCancelled, isNotHappening, needsNoShowCheck } from '../sessionInfo';
 import { useMySessions } from '../useMySessions';
 
 function completedBadge(session) {
@@ -12,6 +12,15 @@ function completedBadge(session) {
 }
 
 const cancelledBadge = { label: 'Cancelled', icon: 'close-circle-outline', color: colors.coral };
+const notHappeningBadge = { label: 'Not happening', icon: 'remove-circle-outline', color: colors.coral };
+
+// Marks cancelled and not-happening sessions in Hosting and Joined, or falls
+// back to `otherwise`.
+function listBadge(session, otherwise) {
+  if (isCancelled(session)) return cancelledBadge;
+  if (isNotHappening(session)) return notHappeningBadge;
+  return otherwise;
+}
 
 function Section({ title, empty, children }) {
   const hasItems = Array.isArray(children) ? children.length > 0 : Boolean(children);
@@ -72,13 +81,13 @@ export default function LiveSessionsScreen({ navigation }) {
 
             <Section title="Hosting" empty="You are not hosting any upcoming sessions.">
               {groups.hostedUpcoming.map((session) => (
-                <SessionRow key={session.id} session={session} onPress={() => open(session)} badge={isCancelled(session) ? cancelledBadge : { label: 'Host', icon: 'star-outline', color: colors.purple }} />
+                <SessionRow key={session.id} session={session} onPress={() => open(session)} badge={listBadge(session, { label: 'Host', icon: 'star-outline', color: colors.purple })} />
               ))}
             </Section>
 
             <Section title="Joined" empty="You have not joined any upcoming sessions. Find one in Explore.">
               {groups.joinedUpcoming.map((session) => (
-                <SessionRow key={session.id} session={session} onPress={() => open(session)} badge={isCancelled(session) ? cancelledBadge : undefined} />
+                <SessionRow key={session.id} session={session} onPress={() => open(session)} badge={listBadge(session, undefined)} />
               ))}
             </Section>
 
