@@ -13,12 +13,14 @@ const statusBadges = {
   upcoming: { label: 'Upcoming', icon: 'calendar-outline', color: colors.purple },
   in_progress: { label: 'Happening now', icon: 'play-circle-outline', color: colors.gold },
   completed: { label: 'Ended', icon: 'checkmark-done', color: colors.green },
+  cancelled: { label: 'Cancelled', icon: 'close-circle-outline', color: colors.coral },
+  invalid: { label: 'Not happening', icon: 'remove-circle-outline', color: colors.coral },
 };
 
 // Sessions still to come (or under way) come first, soonest at the top; ended
 // ones follow in the server's most-recent-activity order.
 function sortSessionChats(conversations) {
-  const active = conversations.filter(({ session }) => session && session.status !== 'completed')
+  const active = conversations.filter(({ session }) => session && ['upcoming', 'in_progress'].includes(session.status))
     .sort((a, b) => new Date(a.session.startsAt) - new Date(b.session.startsAt));
   const ended = conversations.filter((conversation) => !active.includes(conversation));
   return [...active, ...ended];
