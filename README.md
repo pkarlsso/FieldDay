@@ -7,6 +7,7 @@
 
 ## Documentation links
 
+- [Quick Deployment Setup Guide](doc/quick-deployment-setup.md)
 - [Tutorial](doc/tutorial.md)
 - [How-To Guide](doc/how-to.md)
 - [Explanation](doc/explanation.md)
