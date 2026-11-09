@@ -47,7 +47,7 @@ jobs:
 
       - name: Upload and deploy the backend
         env:
-          VERSION_LABEL: main-${{ github.sha }}-${{ github.run_id }}
+          VERSION_LABEL: main-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           BUNDLE_KEY="fieldday/deployments/${VERSION_LABEL}.zip"
           aws s3 cp fieldday-backend.zip "s3://${EB_BUCKET}/${BUNDLE_KEY}"
@@ -61,6 +61,13 @@ jobs:
             --version-label "$VERSION_LABEL"
           aws elasticbeanstalk wait environment-updated \
             --environment-names "$EB_ENVIRONMENT"
+          DEPLOYED_VERSION=$(aws elasticbeanstalk describe-environments \
+            --environment-names "$EB_ENVIRONMENT" \
+            --query 'Environments[0].VersionLabel' --output text)
+          if [ "$DEPLOYED_VERSION" != "$VERSION_LABEL" ]; then
+            echo "Deployment did not install the requested version. Expected $VERSION_LABEL, got $DEPLOYED_VERSION."
+            exit 1
+          fi
 
       - name: Verify deployed API health
         run: curl --fail --retry 20 --retry-all-errors --retry-delay 15 "$API_HEALTH_URL"

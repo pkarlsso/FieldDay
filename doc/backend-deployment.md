@@ -10,7 +10,11 @@ a newer pending run. Even frontend-only or documentation commits start a
 backend deployment, so each run uses AWS resources and may incur charges.
 
 For a failed release, inspect the GitHub Actions run and Elastic Beanstalk
-events and logs. Roll back by reverting the bad commit and merging the revert
+events and logs. Check the running version in Elastic Beanstalk against the
+commit and run ID in the intended version label: an older backend can still
+respond to the health check after an unsuccessful rollout. The workflow
+version check in PR #411 must reach `main` before it can detect this mismatch
+automatically. Roll back by reverting the bad commit and merging the revert
 to main, or by selecting an earlier known-good application version in Elastic
 Beanstalk. Preserve environment configuration and secrets when rolling back.
 The health endpoint is a basic availability check; it does not prove that
@@ -18,4 +22,6 @@ email, Gorse, or every feature is working.
 
 The existing Gorse SSH tunnel is configured on the AWS host outside this
 workflow. This workflow does not recreate it if the instance is replaced;
-automatic recovery is tracked in #384 and needs a separate verified solution.
+automatic recovery is tracked in [#388](https://github.com/pkarlsso/FieldDay/issues/388)
+and [#384](https://github.com/pkarlsso/FieldDay/issues/384) and needs a
+separate verified solution.
