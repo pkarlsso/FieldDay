@@ -10,4 +10,3 @@
 - [Tutorial](doc/tutorial.md)
 - [How-To Guide](doc/how-to.md)
 - [Reference](doc/reference.md)
-- [Release and deployment status](doc/release-deployment-status.md)
