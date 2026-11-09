@@ -43,6 +43,8 @@
     "eslint-plugin-react-native": "^5.0.0",
     "eslint-plugin-react-refresh": "^0.5.7",
     "globals": "^15.15.0",
+    "glob": "14.0.4",
+    "minimatch": "11.0.5",
     "patch-package": "^8.0.1",
     "typescript-eslint": "^8.72.1"
   },
@@ -52,6 +54,25 @@
     "winston": "^3.19.0"
   },
   "overrides": {
+    "@expo/cli": {
+      "glob": "$glob"
+    },
+    "@expo/config": {
+      "glob": "$glob"
+    },
+    "@expo/config-plugins": {
+      "glob": "$glob"
+    },
+    "@expo/fingerprint@0.21.8": {
+      "glob": "$glob"
+    },
+    "@expo/metro-config": {
+      "glob": "$glob"
+    },
+    "minimatch@^10.2.2": "$minimatch",
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "10.2.6"
+    },
     "minimatch@3.1.5": {
       "brace-expansion": "1.1.21"
     }
