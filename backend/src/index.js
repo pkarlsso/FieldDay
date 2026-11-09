@@ -1,11 +1,11 @@
 import http from 'node:http';
 import { ApolloServer } from '@apollo/server';
-import { expressMiddleware } from '@as-integrations/express4';
+import { expressMiddleware } from '@as-integrations/express5';
 import express from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
 import typeDefs from './graphql/typeDefs.js';
-import resolvers, { settleNoShowRatings } from './graphql/resolvers.js';
+import resolvers, { notifyInvalidSessions, settleNoShowRatings } from './graphql/resolvers.js';
 import { getConfig } from './config.js';
 import { authenticateRequest, demoAuthBypassEnabled } from './utils/authSession.js';
 import logger from './utils/logger.js';
@@ -78,6 +78,7 @@ async function startServer() {
   if (process.env.DISABLE_NO_SHOW_RATINGS_JOB !== 'true') {
     setInterval(() => {
       settleNoShowRatings().catch((err) => logger.error('Failed to apply no-show ratings', { error: err.message }));
+      notifyInvalidSessions().catch((err) => logger.error('Failed to announce sessions that are off', { error: err.message }));
     }, 60 * 1000);
   }
 

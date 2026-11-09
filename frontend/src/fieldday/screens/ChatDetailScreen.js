@@ -1,7 +1,8 @@
-import { useCallback, useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar, Card, IconButton, NotificationButton, ScreenHeader, SportIcon, StatusBadge } from '../components/ui';
 import { formatSessionRange, playersLabel, sessionTitle, skillLabel } from '../sessionInfo';
 import { colors } from '../theme';
@@ -23,6 +24,8 @@ const statusBadges = {
   upcoming: { label: 'Upcoming', icon: 'calendar-outline', color: colors.purple },
   in_progress: { label: 'Happening now', icon: 'play-circle-outline', color: colors.gold },
   completed: { label: 'Ended', icon: 'checkmark-done', color: colors.green },
+  cancelled: { label: 'Cancelled', icon: 'close-circle-outline', color: colors.coral },
+  invalid: { label: 'Not happening', icon: 'remove-circle-outline', color: colors.coral },
 };
 
 // Session chats show which session they belong to (tap to open it); direct
@@ -69,6 +72,21 @@ export default function ChatDetailScreen({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  const insets = useSafeAreaInsets();
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  // Keep the newest message in view when the keyboard opens and the list
+  // shrinks. The home-indicator inset is only needed while it is closed.
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const shown = Keyboard.addListener(showEvent, () => {
+      setKeyboardOpen(true);
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
+    });
+    const hidden = Keyboard.addListener(hideEvent, () => setKeyboardOpen(false));
+    return () => { shown.remove(); hidden.remove(); };
+  }, []);
 
   const loadMessages = useCallback(() => {
     if (!conversationId) return undefined;
@@ -124,7 +142,11 @@ export default function ChatDetailScreen({ route, navigation }) {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.page }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    // The composer is a normal child below the message list (not absolutely
+    // positioned), so the padding KeyboardAvoidingView adds lifts it above the
+    // keyboard on both platforms (#362). Android is edge-to-edge, where the
+    // window no longer resizes for the keyboard, so it needs padding too.
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.page }} behavior="padding">
       <ScreenHeader
         title={conversation?.session ? `${conversation.session.sport} chat` : (conversation?.name || 'Chat')}
         left={<IconButton icon="chevron-back" onPress={() => navigation.goBack()} />}
@@ -132,9 +154,11 @@ export default function ChatDetailScreen({ route, navigation }) {
       />
       <ScrollView
         ref={scrollRef}
+        style={{ flex: 1 }}
         onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ padding: 18, paddingBottom: 130, gap: 12 }}
+        keyboardDismissMode="interactive"
+        contentContainerStyle={{ padding: 18, paddingBottom: 12, gap: 12 }}
       >
         {loading ? <ActivityIndicator color={colors.purple} /> : null}
         {error ? <Text style={{ color: colors.coral }}>{error}</Text> : null}
@@ -155,20 +179,46 @@ export default function ChatDetailScreen({ route, navigation }) {
               paddingVertical: 11,
             }}
           >
-            <Text style={{ color: message.mine ? colors.card : colors.purpleDark, fontWeight: '900', marginBottom: 4 }}>{message.mine ? 'You' : message.sender.name}</Text>
+            {message.mine ? (
+              <Text style={{ color: colors.card, fontWeight: '900', marginBottom: 4 }}>You</Text>
+            ) : (
+              <Text
+                accessibilityRole="button"
+                accessibilityLabel={`View ${message.sender.name}'s profile`}
+                onPress={() => navigation.navigate('UserProfile', { userId: message.sender.id })}
+                style={{ color: colors.purpleDark, fontWeight: '900', marginBottom: 4 }}
+              >
+                {message.sender.name}
+              </Text>
+            )}
             <Text style={{ color: message.mine ? colors.card : colors.text, lineHeight: 20 }}>{message.body}</Text>
           </View>
         ))}
       </ScrollView>
 
-      <View style={{ position: 'absolute', left: 18, right: 18, bottom: 28, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 10,
+          paddingHorizontal: 18,
+          paddingTop: 10,
+          paddingBottom: keyboardOpen ? 10 : Math.max(insets.bottom, 12),
+          borderTopWidth: 1,
+          borderTopColor: colors.line,
+          backgroundColor: colors.page,
+        }}
+      >
         <TextInput
           value={draft}
           onChangeText={setDraft}
           placeholder={conversation?.kind === 'direct' ? `Message ${conversation.name.split(' ')[0]}...` : 'Message the group...'}
           placeholderTextColor={colors.muted}
+          multiline
+          maxLength={2000}
           style={{
             flex: 1,
+            maxHeight: 120,
             borderWidth: 1,
             borderColor: colors.line,
             borderRadius: 18,

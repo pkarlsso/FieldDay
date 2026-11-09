@@ -1,4 +1,4 @@
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar, Card, HeaderActionRow, IconButton, NotificationButton, PrimaryButton, ScreenHeader, SportIcon, Stat } from '../components/ui';
 import { colors } from '../theme';
@@ -21,6 +21,7 @@ export default function ProfileScreen({ navigation }) {
       right={
         <HeaderActionRow>
           <NotificationButton onPress={() => navigation.navigate('Notifications')} />
+          <IconButton icon="people-outline" onPress={() => navigation.navigate('Friends')} />
           <IconButton icon="settings-outline" onPress={() => navigation.navigate('Settings')} />
         </HeaderActionRow>
       }
@@ -114,14 +115,26 @@ export default function ProfileScreen({ navigation }) {
         </Card>
 
         <Card>
-          <Text style={{ color: colors.ink, fontSize: 20, fontWeight: '900', marginBottom: 12 }}>
-            Friends{friends.length > 0 ? ` (${friends.length})` : ''}
-          </Text>
+          {/* Friends has no tab of its own since #363; requests and search open from here. */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, gap: 8 }}>
+            <Text style={{ color: colors.ink, fontSize: 20, fontWeight: '900' }}>
+              Friends{friends.length > 0 ? ` (${friends.length})` : ''}
+            </Text>
+            <TouchableOpacity accessibilityRole="button" onPress={() => navigation.navigate('Friends')}>
+              <Text style={{ color: colors.purple, fontWeight: '900' }}>Find & requests</Text>
+            </TouchableOpacity>
+          </View>
           {friends.length === 0 ? (
-            <Text style={{ color: colors.muted, lineHeight: 20 }}>No friends yet. Rate a session to add the people you played with.</Text>
+            <Text style={{ color: colors.muted, lineHeight: 20 }}>No friends yet. Rate a session to add the people you played with, or search for someone you know.</Text>
           ) : null}
           {friends.map((friend, index) => (
-            <View key={friend.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: colors.line }}>
+            <TouchableOpacity
+              key={friend.id}
+              accessibilityRole="button"
+              accessibilityLabel={`View ${friend.name}'s profile`}
+              onPress={() => navigation.navigate('UserProfile', { userId: friend.id })}
+              style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderTopWidth: index === 0 ? 0 : 1, borderTopColor: colors.line }}
+            >
               <Avatar name={friend.name} uri={friend.profilePicture} color={colors.green} size={42} />
               <View style={{ flex: 1, marginLeft: 12 }}>
                 <Text style={{ color: colors.ink, fontWeight: '900' }}>{friend.name}</Text>
@@ -133,7 +146,7 @@ export default function ProfileScreen({ navigation }) {
                   <Text style={{ color: colors.gold, fontWeight: '900' }}>{friend.socialRating.toFixed(1)}</Text>
                 </View>
               ) : null}
-            </View>
+            </TouchableOpacity>
           ))}
         </Card>
 

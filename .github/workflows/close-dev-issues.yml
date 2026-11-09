@@ -1,0 +1,60 @@
+name: Repository / Close Issues From Dev Release
+
+on:
+  pull_request:
+    branches: [main]
+    types: [closed]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  close-referenced-issues:
+    name: Close Issues From Merged Dev PRs
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.ref == 'dev' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close issues referenced by PRs merged into dev
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          compare_commits="$RUNNER_TEMP/compare-commits"
+          referenced_issues="$RUNNER_TEMP/referenced-issues"
+
+          gh api --paginate \
+            "repos/${REPOSITORY}/compare/${BASE_SHA}...${HEAD_SHA}" \
+            --jq '.commits[].sha' > "$compare_commits"
+
+          : > "$referenced_issues"
+          while IFS= read -r commit_sha; do
+            gh api --paginate \
+              "repos/${REPOSITORY}/commits/${commit_sha}/pulls" \
+              --jq '.[].number'
+          done < "$compare_commits" | sort -nu | while IFS= read -r pr_number; do
+            gh api "repos/${REPOSITORY}/pulls/${pr_number}" --jq '.body // ""' |
+              grep -Eio '(^|[[:space:]])refs[[:space:]]+#[0-9]+' |
+              grep -Eo '[0-9]+' >> "$referenced_issues" || true
+          done
+
+          while IFS= read -r issue_number; do
+            [[ -z "$issue_number" ]] && continue
+            issue_kind=$(gh api \
+              "repos/${REPOSITORY}/issues/${issue_number}" \
+              --jq 'if .pull_request then "pull-request" else .state end')
+            if [[ "$issue_kind" == "open" ]]; then
+              gh api --method PATCH \
+                "repos/${REPOSITORY}/issues/${issue_number}" \
+                -f state=closed >/dev/null
+              echo "Closed issue #${issue_number}"
+            fi
+          done < <(sort -nu "$referenced_issues")

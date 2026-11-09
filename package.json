@@ -9,7 +9,7 @@
   "scripts": {
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "sbom": "cyclonedx-npm --ignore-npm-errors --omit dev --workspace backend --workspace frontend --include-workspace-root --gather-license-texts --output-reproducible --spec-version 1.6 --output-format JSON --output-file doc/SBOM.json --validate",
+    "sbom": "cyclonedx-npm --ignore-npm-errors --omit dev --workspace backend --workspace frontend --include-workspace-root --gather-license-texts --output-reproducible --spec-version 1.6 --output-format JSON --output-file doc/SBOM.json --validate && node scripts/complete-sbom-metadata.mjs",
     "test:logger": "node test-logger.js",
     "test:unit": "node --test \"backend/test/unit/*.test.js\"",
     "build": "npm run build --workspace frontend",
@@ -44,11 +44,16 @@
     "eslint-plugin-react-refresh": "^0.5.7",
     "globals": "^15.15.0",
     "patch-package": "^8.0.1",
-    "typescript-eslint": "^8.72.0"
+    "typescript-eslint": "^8.72.1"
   },
   "dependencies": {
     "proxy-addr": "^2.0.8",
     "shell-quote": "^1.12.0",
     "winston": "^3.19.0"
+  },
+  "overrides": {
+    "minimatch@3.1.5": {
+      "brace-expansion": "1.1.21"
+    }
   }
 }

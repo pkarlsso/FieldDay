@@ -43,7 +43,9 @@ jobs:
         with:
           node-version: '22.13.x'
           cache: npm
-          cache-dependency-path: package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
       - name: Install locked workspace dependencies
         run: npm ci
       - name: Verify the standalone deployment bundle starts
@@ -137,6 +139,7 @@ jobs:
 
   sbom:
     name: Generate SBOM
+    if: github.event_name != 'pull_request' || github.event.pull_request.base.ref != 'dev' || github.event.pull_request.head.ref != 'SBOM'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

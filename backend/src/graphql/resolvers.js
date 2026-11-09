@@ -59,9 +59,17 @@ const DEFAULT_SESSION_LENGTH_MS = 2 * HOUR_MS;
 const MAX_SESSION_LENGTH_MS = 24 * HOUR_MS;
 // How long after a session ends players can answer "who didn't show up?".
 const NO_SHOW_WINDOW_MS = 48 * HOUR_MS;
-// Players check in from the court during the session's first 10 minutes.
-const CHECK_IN_WINDOW_MS = 10 * 60 * 1000;
-const CHECK_IN_RADIUS_METERS = 200;
+// Sessions are frozen this long before they start (#361): the host can't edit
+// or cancel them and players can't leave, so plans don't change at the last
+// second. Kept short so spontaneous sessions (started on the spot) still work.
+const CHANGE_FREEZE_MS = 5 * 60 * 1000;
+// The roster check happens this long before the start (#376). A full-only
+// session stops taking players then. A regular session with only the host is
+// called off then; one with 2+ players keeps taking players until it starts.
+const JOIN_CUTOFF_MS = 5 * 60 * 1000;
+// One person is not a group (#360): a session needs at least this many players
+// to go ahead.
+const MIN_PLAYERS = 2;
 // The rating a confirmed no-show is given automatically (feeds FR-8).
 const NO_SHOW_RATING = 1;
 const COMPLETED_SESSIONS_LIMIT = 20;
@@ -110,7 +118,7 @@ function assertNotInCooldown(user) {
 }
 
 // profilePhoto is needed to resolve uploaded photos; sportSkills for `sports`.
-const PUBLIC_USER_FIELDS = 'name bio hometown profilePicture profilePhoto sports sportSkills skillLevel socialRating';
+const PUBLIC_USER_FIELDS = 'name bio hometown profilePicture profilePhoto sports sportSkills skillLevel socialRating totalRatings';
 
 function publicUserQuery(id) {
   return User.findById(id).select(PUBLIC_USER_FIELDS);
@@ -373,23 +381,77 @@ function isCancelled(session) {
   return session.status === 'cancelled';
 }
 
+// Last moment the host can edit or cancel, and players can leave (#361).
+function changesFreezeAt(session) {
+  return new Date(new Date(session.startsAt).getTime() - CHANGE_FREEZE_MS);
+}
+
+// When it's decided whether the session goes ahead: 5 minutes before the start.
+function rosterCheckAt(session) {
+  return new Date(new Date(session.startsAt).getTime() - JOIN_CUTOFF_MS);
+}
+
+// A regular session with at least 2 players keeps taking players until it
+// starts. Full-only sessions, and regular ones still down to the host, stop at
+// the roster check (#376).
+function joinsOpenUntilStart(session) {
+  return !session.fullOnly && (session.participants || []).length >= MIN_PLAYERS;
+}
+
+// Last moment to join.
+function joinClosesAt(session) {
+  return joinsOpenUntilStart(session) ? new Date(session.startsAt) : rosterCheckAt(session);
+}
+
+// Why a session isn't going ahead, or null if it is. Decided at the roster
+// check: a full-only session that isn't full, or any session with fewer than 2
+// players. Leaving locks at the same moment and these sessions stop taking
+// new players, so the answer can't change afterwards. Cancelled sessions have their
+// own status.
+function invalidReason(session, now = new Date()) {
+  if (isCancelled(session) || isLegacyCompleted(session)) return null;
+  if (rosterCheckAt(session) > now) return null;
+  const players = (session.participants || []).length;
+  if (session.fullOnly && players < session.maxParticipants) {
+    return 'This session only happens if it\'s full, and it didn\'t fill up in time.';
+  }
+  if (players < MIN_PLAYERS) {
+    return 'Nobody else joined this session, so it didn\'t go ahead.';
+  }
+  return null;
+}
+
+function isInvalid(session, now = new Date()) {
+  return invalidReason(session, now) !== null;
+}
+
+// Matches sessions that went (or will go) ahead, as a MongoDB filter: the
+// stored-data side of isInvalid. Use with a filter that already limits the
+// match to sessions whose roster is final.
+function validSessionsFilter() {
+  return {
+    $expr: {
+      $and: [
+        { $gte: [{ $size: { $ifNull: ['$participants', []] } }, MIN_PLAYERS] },
+        {
+          $or: [
+            { $ne: [{ $ifNull: ['$fullOnly', false] }, true] },
+            { $gte: [{ $size: { $ifNull: ['$participants', []] } }, '$maxParticipants'] }
+          ]
+        }
+      ]
+    }
+  };
+}
+
+// A session that didn't go ahead (#360, #375) reads "invalid" (shown as "Not
+// happening") until its planned end, then "cancelled", like one the host
+// called off. invalidReason still says why.
 function sessionStatus(session, now = new Date()) {
   if (isCancelled(session)) return 'cancelled';
+  if (isInvalid(session, now)) return hasEnded(session, now) ? 'cancelled' : 'invalid';
   if (hasEnded(session, now)) return 'completed';
   return new Date(session.startsAt) <= now ? 'in_progress' : 'upcoming';
-}
-
-function usesCheckIn(session) {
-  return Boolean(session.checkInRequired);
-}
-
-// Check-in is open from the start until 10 minutes after it, inclusive.
-function checkInClosesAt(session) {
-  return new Date(new Date(session.startsAt).getTime() + CHECK_IN_WINDOW_MS);
-}
-
-function checkInBy(session, userId) {
-  return (session.checkIns || []).find((checkIn) => idOf(checkIn.user) === String(userId));
 }
 
 // Stored as completed before end times and no-show reports existed. These
@@ -414,26 +476,28 @@ function noShowTally(session, userId) {
   return { flagged, answered: others.length };
 }
 
-// In check-in sessions, anyone who hadn't checked in when the window closed is
-// a no-show. Otherwise a no-show needs more than half of the other answers, so
-// one player can't mark someone absent on their own in a larger group.
+// A no-show needs more than half of the other answers, so one player can't
+// mark someone absent on their own in a larger group. Nobody is a no-show in a
+// session that didn't go ahead.
 function isNoShow(session, userId, now = new Date()) {
-  if (usesCheckIn(session)) return checkInClosesAt(session) < now && !checkInBy(session, userId);
+  if (isInvalid(session, now)) return false;
   const { flagged, answered } = noShowTally(session, userId);
   return flagged > 0 && flagged * 2 > answered;
 }
 
-// When attendance can no longer change: check-in sessions when check-in
-// closes, others when the no-show check closes. Null if no-shows are never
-// decided (cancelled, or completed before no-show reports existed).
-function noShowsFinalAt(session) {
-  if (isCancelled(session) || isLegacyCompleted(session)) return null;
-  return usesCheckIn(session) ? checkInClosesAt(session) : noShowDeadline(session);
+// When attendance can no longer change: when the no-show check closes. Null if
+// no-shows are never decided (cancelled, didn't go ahead, or completed before
+// no-show reports existed).
+function noShowsFinalAt(session, now = new Date()) {
+  if (isCancelled(session) || isLegacyCompleted(session) || isInvalid(session, now)) return null;
+  return noShowDeadline(session);
 }
 
 function ratingEligibility(session, userId, now = new Date()) {
   if (!userId) return { eligible: false, reason: 'Sign in to rate this session.' };
   if (isCancelled(session)) return { eligible: false, reason: 'This session was cancelled, so there is nothing to rate.' };
+  const invalid = invalidReason(session, now);
+  if (invalid) return { eligible: false, reason: `${invalid} There is nothing to rate.` };
   if (!isParticipant(session, userId)) {
     return { eligible: false, reason: 'Only people who played in the session can rate it.' };
   }
@@ -444,11 +508,6 @@ function ratingEligibility(session, userId, now = new Date()) {
     return { eligible: false, reason: 'You have already rated this session.' };
   }
   if (isLegacyCompleted(session)) return { eligible: true, reason: null };
-  if (usesCheckIn(session)) {
-    return isNoShow(session, userId, now)
-      ? { eligible: false, reason: 'You didn\'t check in at the session, so you can\'t rate it.' }
-      : { eligible: true, reason: null };
-  }
   if (isNoShow(session, userId, now)) {
     return { eligible: false, reason: 'Other players reported that you didn\'t show up, so you can\'t rate this session.' };
   }
@@ -474,9 +533,6 @@ function validateRatingSubmission(session, raterId, ratings) {
     if (!isParticipant(session, userId)) throw new Error('You can only rate people who played in the session');
     if (reportedNoShows.some((id) => idOf(id) === String(userId))) {
       throw new Error('You can\'t rate a player you reported as a no-show');
-    }
-    if (usesCheckIn(session) && isNoShow(session, userId)) {
-      throw new Error('You can\'t rate a player who didn\'t check in');
     }
     if (seen.has(String(userId))) throw new Error('Each player can only be rated once per submission');
     seen.add(String(userId));
@@ -522,7 +578,12 @@ function applyRatingToUser(userId, value) {
 // $ne guard claims a player atomically, so running this again (or twice at
 // once) can never apply the rating a second time.
 async function applyNoShowRatings(session, now = new Date()) {
-  const finalAt = noShowsFinalAt(session);
+  const finalAt = noShowsFinalAt(session, now);
+  // Sessions that didn't go ahead owe nothing, so they are settled as they are.
+  if (!finalAt && isInvalid(session, now)) {
+    await Session.updateOne({ _id: session._id }, { $set: { noShowRatingsSettled: true } });
+    return;
+  }
   if (!finalAt || now <= finalAt) return;
   for (const participant of session.participants) {
     const userId = participant._id ?? participant;
@@ -542,13 +603,54 @@ async function settleNoShowRatings(now = new Date()) {
   const sessions = await Session.find({
     noShowRatingsSettled: { $ne: true },
     status: { $ne: 'cancelled' },
-    $or: [
-      { checkInRequired: true, startsAt: { $lt: new Date(now.getTime() - CHECK_IN_WINDOW_MS) } },
-      { checkInRequired: { $ne: true }, endsAt: { $lt: new Date(now.getTime() - NO_SHOW_WINDOW_MS) } }
-    ]
+    endsAt: { $lt: new Date(now.getTime() - NO_SHOW_WINDOW_MS) }
   });
   for (const session of sessions) await applyNoShowRatings(session, now);
   return sessions.length;
+}
+
+// Tells the players of sessions that won't go ahead (#360, #375) once that is
+// decided, so nobody turns up for nothing. The server runs this every minute;
+// invalidNotifiedAt is claimed atomically, so each session is announced once.
+// Only sessions that became invalid in the last hour are considered, so the
+// first run after a deploy doesn't announce long-past sessions. `sessionIds`
+// limits the run to those sessions (tests use it on a shared database).
+async function notifyInvalidSessions(now = new Date(), { sessionIds } = {}) {
+  const recent = new Date(now.getTime() - HOUR_MS);
+  const candidates = await Session.find({
+    ...(sessionIds ? { _id: { $in: sessionIds } } : {}),
+    invalidNotifiedAt: null,
+    status: { $nin: ['cancelled', 'completed'] },
+    // Joining (and so the roster) closed within the last hour.
+    startsAt: { $lte: new Date(now.getTime() + JOIN_CUTOFF_MS), $gt: recent }
+  });
+  let notified = 0;
+  for (const session of candidates) {
+    const reason = invalidReason(session, now);
+    if (!reason) continue;
+    const claimed = await Session.updateOne(
+      { _id: session._id, invalidNotifiedAt: null },
+      { $set: { invalidNotifiedAt: now } }
+    );
+    if (claimed.modifiedCount !== 1) continue;
+    notified++;
+    publishSessionUpdate(session._id, 'invalid');
+    for (const recipient of session.participants) {
+      try {
+        await createNotification({
+          recipient,
+          type: 'session_invalid',
+          category: 'session',
+          title: `${session.sport} session is off`,
+          body: `${reason} You don't need to go to ${session.location}.`,
+          target: { version: 1, screen: 'SessionDetails', params: { sessionId: String(session._id) } }
+        });
+      } catch (err) {
+        logger.error(err, { context: 'Invalid session notification failed', sessionId: String(session._id) });
+      }
+    }
+  }
+  return notified;
 }
 
 function authSuccess(user, message, extra = {}) {
@@ -598,8 +700,8 @@ function checkMaxParticipants(value) {
   }
 }
 
-// Loads a session for editSession/cancelSession: only its host, and only
-// before it starts.
+// Loads a session for editSession/cancelSession: only its host, and only until
+// 5 minutes before it starts (#361).
 async function sessionForHostChange(sessionId, user) {
   const session = await Session.findById(sessionId);
   if (!session) throw new Error('Session not found');
@@ -609,6 +711,9 @@ async function sessionForHostChange(sessionId, user) {
   if (isCancelled(session)) throw new Error('This session was cancelled');
   if (new Date(session.startsAt) <= new Date()) {
     throw new Error('Sessions can only be changed before they start');
+  }
+  if (changesFreezeAt(session) <= new Date()) {
+    throw new Error('Sessions can\'t be changed or cancelled in the 5 minutes before they start');
   }
   return session;
 }
@@ -644,7 +749,8 @@ function formatSessionInput(input) {
     skillRange: `${skillBand.min.toFixed(1)}-${skillBand.max.toFixed(1)}`,
     tags: input.tags || [],
     maxParticipants: input.maxParticipants,
-    visibility
+    visibility,
+    fullOnly: Boolean(input.fullOnly)
   };
 }
 
@@ -659,9 +765,28 @@ async function cleanInvitees(userIds, host) {
   return ids;
 }
 
-// A session is open to join or leave until it starts.
-function openSessionFilter(now = new Date()) {
-  return { status: 'upcoming', startsAt: { $gt: now } };
+// The joinClosesAt rule as a MongoDB filter: before the roster check, or
+// before the start for a regular session that already has 2+ players.
+function joinOpenFilter(now = new Date()) {
+  return {
+    $or: [
+      { startsAt: { $gt: new Date(now.getTime() + JOIN_CUTOFF_MS) } },
+      {
+        fullOnly: { $ne: true },
+        startsAt: { $gt: now },
+        $expr: { $gte: [{ $size: { $ifNull: ['$participants', []] } }, MIN_PLAYERS] }
+      }
+    ]
+  };
+}
+
+function joinableSessionFilter(now = new Date()) {
+  return { status: 'upcoming', ...joinOpenFilter(now) };
+}
+
+// Players can leave until 5 minutes before the start (#361).
+function leavableSessionFilter(now = new Date()) {
+  return { status: 'upcoming', startsAt: { $gt: new Date(now.getTime() + CHANGE_FREEZE_MS) } };
 }
 
 function isOpen(session, now = new Date()) {
@@ -675,6 +800,11 @@ function joinRejection(session, user) {
   if (isParticipant(session, user._id)) return new Error('You have already joined this session');
   if (isCancelled(session)) return new Error('This session was cancelled');
   if (!isOpen(session)) return new Error('Only upcoming sessions can be joined');
+  const invalid = invalidReason(session);
+  if (invalid) return new Error(`${invalid} It can't be joined.`);
+  if (joinClosesAt(session) <= new Date()) {
+    return new Error('This session only happens if it\'s full, so joining closed 5 minutes before it starts');
+  }
   if (session.participants.length >= session.maxParticipants) return new Error('Session is full');
   return new Error('Could not join this session. Please try again.');
 }
@@ -686,6 +816,9 @@ function leaveRejection(session, user) {
   if (isCancelled(session)) return new Error('This session was cancelled');
   if (hasEnded(session)) return new Error('You cannot leave a session that has ended');
   if (!isOpen(session)) return new Error('You cannot leave a session that has already started');
+  if (changesFreezeAt(session) <= new Date()) {
+    return new Error('You can\'t leave a session in the 5 minutes before it starts');
+  }
   return new Error('Could not leave this session. Please try again.');
 }
 
@@ -767,7 +900,11 @@ function discoveryQuery(status, input, user) {
     status: status === 'cancelled' ? { $in: [] } : status || 'upcoming',
     ...visibleSessionsFilter(user)
   };
-  if (query.status === 'upcoming') query.startsAt = { $gte: new Date() };
+  // Sessions that can no longer be joined leave discovery (#376).
+  if (query.status === 'upcoming') {
+    query.startsAt = { $gt: new Date() };
+    query.$and = [joinOpenFilter()];
+  }
   if (filter.sports?.length) query.sport = { $in: filter.sports };
   if (filter.startsAfter || filter.startsBefore) {
     query.startsAt = {
@@ -831,39 +968,35 @@ const resolvers = {
     status: (session) => sessionStatus(session),
     createdAt: (session) => (session.createdAt ? new Date(session.createdAt).toISOString() : null),
     completedAt: (session) => (
-      hasEnded(session) && !isCancelled(session) ? sessionEnd(session).toISOString() : null
+      hasEnded(session) && !isCancelled(session) && !isInvalid(session) ? sessionEnd(session).toISOString() : null
     ),
     cancelledAt: (session) => (session.cancelledAt ? new Date(session.cancelledAt).toISOString() : null),
-    // Check-in sessions skip the "who didn't show up?" step entirely.
     noShowDeadline: (session) => (
-      hasEnded(session) && !isLegacyCompleted(session) && !isCancelled(session) && !usesCheckIn(session)
+      hasEnded(session) && !isLegacyCompleted(session) && !isCancelled(session) && !isInvalid(session)
         ? noShowDeadline(session).toISOString()
         : null
     ),
-    checkInRequired: (session) => usesCheckIn(session),
-    checkInClosesAt: (session) => (usesCheckIn(session) ? checkInClosesAt(session).toISOString() : null),
-    checkInRadiusMeters: (session) => (usesCheckIn(session) ? CHECK_IN_RADIUS_METERS : null),
+    fullOnly: (session) => Boolean(session.fullOnly),
+    joinClosesAt: (session) => joinClosesAt(session).toISOString(),
+    changesFreezeAt: (session) => changesFreezeAt(session).toISOString(),
+    invalidReason: (session) => invalidReason(session),
+    // Check-in was removed (#358). Kept for older app builds that still ask.
+    checkInRequired: () => false,
+    checkInClosesAt: () => null,
+    checkInRadiusMeters: () => null,
     attendance: async (session) => {
       const participants = session.populated('participants')
         ? session.participants
         : await User.find({ _id: { $in: session.participants } });
       const now = new Date();
-      return participants.filter(Boolean).map((user) => {
-        const checkIn = checkInBy(session, user._id);
-        let status = isNoShow(session, user._id, now) ? 'NO_SHOW' : 'SHOWED_UP';
-        if (usesCheckIn(session) && !checkIn && now <= checkInClosesAt(session)) status = 'PENDING';
-        return {
-          user,
-          status,
-          noShowReports: noShowTally(session, user._id).flagged,
-          checkedInAt: checkIn ? new Date(checkIn.checkedInAt).toISOString() : null
-        };
-      });
+      return participants.filter(Boolean).map((user) => ({
+        user,
+        status: isNoShow(session, user._id, now) ? 'NO_SHOW' : 'SHOWED_UP',
+        noShowReports: noShowTally(session, user._id).flagged,
+        checkedInAt: null
+      }));
     },
-    myCheckIn: (session, _, context) => {
-      const checkIn = context.currentUser && checkInBy(session, context.currentUser._id);
-      return checkIn ? new Date(checkIn.checkedInAt).toISOString() : null;
-    },
+    myCheckIn: () => null,
     myNoShowReport: (session, _, context) => {
       const report = context.currentUser && noShowReportBy(session, context.currentUser._id);
       return report
@@ -902,7 +1035,9 @@ const resolvers = {
   PublicUser: {
     id: (user) => String(user._id || user.id),
     profilePicture: (user, _, context) => profilePictureOf(user, context),
-    sports: (user) => sportSkillsOf(user).map(({ sport }) => sport)
+    sports: (user) => sportSkillsOf(user).map(({ sport }) => sport),
+    sportSkills: (user) => sportSkillsOf(user),
+    totalRatings: (user) => user.totalRatings || 0
   },
 
   FriendRequest: {
@@ -958,8 +1093,14 @@ const resolvers = {
       const user = requireUser(context);
       const sessions = await Session.find({ participants: user._id }).select('_id participants');
       await Promise.all(sessions.map(ensureSessionConversation));
+      // Session chats are listed only while the user is still in the session
+      // (#359). Someone who left stays in the conversation's participants, so
+      // matching on those would keep showing chats they left.
       const conversations = await Conversation.find({
-        $or: [{ participants: user._id }, { session: { $in: sessions.map(({ _id }) => _id) } }]
+        $or: [
+          { kind: 'direct', participants: user._id },
+          { kind: 'session', session: { $in: sessions.map(({ _id }) => _id) } }
+        ]
       }).sort({ lastMessageAt: -1, createdAt: -1 });
       return Promise.all(conversations.map((conversation) => conversationView(conversation, user)));
     },
@@ -1063,6 +1204,7 @@ const resolvers = {
       const userId = requireUser(context)._id;
       return Session.find({
         ...endedSessionsFilter(),
+        ...validSessionsFilter(),
         participants: userId,
         rated: { $ne: true },
         ratedBy: { $ne: userId }
@@ -1080,14 +1222,15 @@ const resolvers = {
         .sort({ startsAt: 1 });
       const now = new Date();
       const isHost = (session) => session.host && idOf(session.host) === String(user._id);
-      // Cancelled sessions stay listed (with status "cancelled") until their
-      // planned end, so players see what happened, but never count as ended.
+      // Cancelled sessions, and sessions that didn't go ahead (#360, #375,
+      // status "invalid"), stay listed until their planned end so players see
+      // what happened, but never count as ended or completed.
       const open = sessions.filter((session) => !hasEnded(session, now));
       return {
         hosted: open.filter(isHost),
         joined: open.filter((session) => !isHost(session)),
         completed: sessions
-          .filter((session) => hasEnded(session, now) && !isCancelled(session))
+          .filter((session) => hasEnded(session, now) && !isCancelled(session) && !isInvalid(session, now))
           .sort((a, b) => sessionEnd(b) - sessionEnd(a))
           .slice(0, COMPLETED_SESSIONS_LIMIT)
       };
@@ -1179,8 +1322,7 @@ const resolvers = {
         invitees,
         host: host._id,
         participants: [host._id],
-        status: 'upcoming',
-        checkInRequired: true
+        status: 'upcoming'
       });
       try {
         await recordRegistration(session._id, host._id);
@@ -1204,7 +1346,13 @@ const resolvers = {
           input.endsAt,
           sessionEnd(session) - new Date(session.startsAt)
         ));
+        // A moved session must still be outside the 5-minute freeze (#361),
+        // or the host could dodge it by pulling the start closer.
+        if (changesFreezeAt(session) <= new Date()) {
+          throw new Error('Choose a start at least 5 minutes from now');
+        }
       }
+      if (isGiven(input.fullOnly)) session.fullOnly = input.fullOnly;
       if (isGiven(input.location) || isGiven(input.locationPoint)) {
         if (!isGiven(input.location) || !isGiven(input.locationPoint)) {
           throw new Error('Send the location name and its map point together');
@@ -1251,7 +1399,7 @@ const resolvers = {
         {
           $and: [
             { _id: sessionId, host: { $ne: user._id }, participants: { $ne: user._id } },
-            openSessionFilter(),
+            joinableSessionFilter(),
             { $expr: { $lt: [{ $size: '$participants' }, '$maxParticipants'] } },
             visibleSessionsFilter(user)
           ]
@@ -1277,7 +1425,7 @@ const resolvers = {
       // $pull rather than saving a filtered copy, so a join landing at the same
       // moment isn't overwritten.
       const left = await Session.findOneAndUpdate(
-        { _id: sessionId, participants: user._id, host: { $ne: user._id }, ...openSessionFilter() },
+        { _id: sessionId, participants: user._id, host: { $ne: user._id }, ...leavableSessionFilter() },
         { $pull: { participants: user._id } },
         { returnDocument: 'after' }
       );
@@ -1319,7 +1467,8 @@ const resolvers = {
       if (!session) throw new Error('Session not found');
       if (!isParticipant(session, user._id)) throw new Error('Only players in this session can report no-shows');
       if (isCancelled(session)) throw new Error('This session was cancelled');
-      if (usesCheckIn(session)) throw new Error('Attendance for this session comes from check-ins, so there is nothing to report');
+      const invalid = invalidReason(session);
+      if (invalid) throw new Error(`${invalid} There is nothing to report.`);
       if (!hasEnded(session)) throw new Error('You can report no-shows once the session has ended');
       if (isLegacyCompleted(session)) throw new Error('No-show reports were not collected for this session');
       if (new Date() > noShowDeadline(session)) throw new Error('The no-show check for this session has closed');
@@ -1344,32 +1493,11 @@ const resolvers = {
       return populatedSessionQuery(session._id);
     },
 
-    checkInToSession: async (_, { sessionId, latitude, longitude }, context) => {
-      const user = requireUser(context);
-      const session = await Session.findById(sessionId);
-      if (!session) throw new Error('Session not found');
-      if (!isParticipant(session, user._id)) throw new Error('Only players in this session can check in');
-      if (isCancelled(session)) throw new Error('This session was cancelled');
-      if (!usesCheckIn(session)) throw new Error('This session doesn\'t use check-in');
-      if (longitude < -180 || longitude > 180 || latitude < -90 || latitude > 90) {
-        throw new Error('Your location coordinates are out of range');
-      }
-
-      const now = new Date();
-      if (now < new Date(session.startsAt)) throw new Error('Check-in opens when the session starts');
-      if (now > checkInClosesAt(session)) throw new Error('Check-in closed 10 minutes after the session started');
-      const meters = distanceMiles(session, { latitude, longitude }) * MILES_TO_METERS;
-      if (meters > CHECK_IN_RADIUS_METERS) {
-        throw new Error(`You need to be within ${CHECK_IN_RADIUS_METERS} m of the session to check in. You're about ${Math.round(meters)} m away.`);
-      }
-
-      // The filter keeps a double tap from storing two check-ins.
-      await Session.updateOne(
-        { _id: session._id, 'checkIns.user': { $ne: user._id } },
-        { $push: { checkIns: { user: user._id, checkedInAt: now } } }
-      );
-      publishSessionUpdate(session._id, 'checked_in');
-      return populatedSessionQuery(session._id);
+    // Check-in was removed (#358); kept in the schema so older app builds get
+    // a clear answer instead of a schema error.
+    checkInToSession: async (_, __, context) => {
+      requireUser(context);
+      throw new Error('Check-in is no longer needed. You are counted as present unless other players report you as a no-show.');
     },
 
     submitRatings: async (_, { sessionId, ratings }, context) => {
@@ -1826,5 +1954,5 @@ const resolvers = {
   }
 };
 
-export { settleNoShowRatings };
+export { settleNoShowRatings, notifyInvalidSessions };
 export default resolvers;

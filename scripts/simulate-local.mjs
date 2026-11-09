@@ -84,10 +84,11 @@ try {
   const search = await call('query($f:SessionDiscoveryFilterInput){getSessions(filter:$f){id sport locationPoint{coordinates}}}', { f: { origin: center, maxDistanceMiles: 10, sports: [sports[0]] } }, users[0]);
   assert.ok(search.getSessions.some(s => s.id === created[0].id), 'map discovery should find nearby basketball');
   assert.ok(search.getSessions.every(s => s.sport === sports[0]));
-  // Move one test-only session into the past and record check-ins to exercise the real rating mutation.
+  // Move one test-only session into the past to exercise the real rating mutation. Check-in was removed
+  // (#358), so attendance comes from the no-show question, which a player answers before rating.
   const old = created[1].id;
-  const participants = [users[1]._id, users[0]._id];
-  await Session.updateOne({ _id: old }, { $set: { startsAt: new Date(Date.now() - 3 * 3600000), endsAt: new Date(Date.now() - 3600000), checkIns: participants.map(user => ({ user, checkedInAt: new Date(Date.now() - 3 * 3600000) })) } });
+  await Session.updateOne({ _id: old }, { $set: { startsAt: new Date(Date.now() - 3 * 3600000), endsAt: new Date(Date.now() - 3600000) } });
+  await call('mutation($s:ID!){reportNoShows(sessionId:$s,noShowUserIds:[]){id}}', { s: old }, users[0]);
   const rating = await call('mutation($s:ID!,$r:[RatingInput!]!){submitRatings(sessionId:$s,ratings:$r){success message}}', { s: old, r: [{ userId: String(users[1]._id), rating: 5 }] }, users[0]);
   assert.equal(rating.submitRatings.success, true, rating.submitRatings.message);
   const after = await call('query($o:LocationPointInput){recommendedSessions(origin:$o,limit:5){session{id sport} reasons}}', { o: center }, users[0]);

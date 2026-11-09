@@ -5,7 +5,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { graphql } from '../../api';
 import { CURRENT_USER_ID } from '../../config';
 import { GET_CONVERSATIONS } from '../../graphql/queries';
-import { Avatar, Card, NotificationButton, ScreenHeader, SportIcon, StatusBadge } from '../components/ui';
+import { Avatar, Card, HeaderActionRow, IconButton, NotificationButton, ScreenHeader, SportIcon, StatusBadge } from '../components/ui';
 import { formatSessionRange, playersLabel, sessionTitle } from '../sessionInfo';
 import { colors } from '../theme';
 
@@ -13,12 +13,14 @@ const statusBadges = {
   upcoming: { label: 'Upcoming', icon: 'calendar-outline', color: colors.purple },
   in_progress: { label: 'Happening now', icon: 'play-circle-outline', color: colors.gold },
   completed: { label: 'Ended', icon: 'checkmark-done', color: colors.green },
+  cancelled: { label: 'Cancelled', icon: 'close-circle-outline', color: colors.coral },
+  invalid: { label: 'Not happening', icon: 'remove-circle-outline', color: colors.coral },
 };
 
 // Sessions still to come (or under way) come first, soonest at the top; ended
 // ones follow in the server's most-recent-activity order.
 function sortSessionChats(conversations) {
-  const active = conversations.filter(({ session }) => session && session.status !== 'completed')
+  const active = conversations.filter(({ session }) => session && ['upcoming', 'in_progress'].includes(session.status))
     .sort((a, b) => new Date(a.session.startsAt) - new Date(b.session.startsAt));
   const ended = conversations.filter((conversation) => !active.includes(conversation));
   return [...active, ...ended];
@@ -120,7 +122,15 @@ export default function ChatScreen({ navigation }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <ScreenHeader title="Chat" right={<NotificationButton onPress={() => navigation.navigate('Notifications')} />} />
+      <ScreenHeader
+        title="Chat"
+        right={
+          <HeaderActionRow>
+            <NotificationButton onPress={() => navigation.navigate('Notifications')} />
+            <IconButton icon="people-outline" onPress={() => navigation.navigate('Friends')} />
+          </HeaderActionRow>
+        }
+      />
       <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 120, gap: 12 }}>
         {loading && conversations.length === 0 ? <ActivityIndicator color={colors.purple} /> : null}
         {error ? <Text style={{ color: colors.coral }}>{error}</Text> : null}
@@ -137,7 +147,7 @@ export default function ChatScreen({ navigation }) {
 
             <SectionHeader title="Direct messages" count={directChats.length} />
             {directChats.length === 0 && !loading ? (
-              <Card><Text style={{ color: colors.muted }}>Tap a friend on the Friends tab to start a conversation.</Text></Card>
+              <Card><Text style={{ color: colors.muted }}>Tap the people icon above to open Friends, then tap a friend to start a conversation.</Text></Card>
             ) : null}
             {directChats.map((conversation) => (
               <DirectChatRow key={conversation.id} conversation={conversation} onPress={() => open(conversation)} />

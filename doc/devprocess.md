@@ -119,11 +119,11 @@ GitHub uses templates from the default branch, so automatic prefilling becomes a
 
 Use `.github/PULL_REQUEST_TEMPLATE/release.md` when opening a PR from `dev` into `main`. Copy its contents into the PR description, or use `?template=release.md` on the new-PR URL once the template is available on the default branch. Replace the example issue numbers with actual completed issues and record integration test results before review.
 
-For example, after issues #24 and #26 are fully implemented and tested in `dev`, the release PR into `main` includes:
+For example, after issues #24 and #26 are fully implemented and tested in `dev`, the feature PRs include:
 
 ```markdown
-Closes #24
-Closes #26
+Refs #24
+Refs #26
 ```
 
-Both issues remain open while the changes are only in `dev`. Merging this release PR into `main` closes them automatically through GitHub's built-in behavior; no issue-closing Actions workflow is required. GitHub still allows authorized users to close issues manually, so this policy is not a technical prohibition on manual closure.
+Both issues remain open while the changes are only in `dev`. The `Repository / Close Issues From Dev Release` workflow finds the PRs included in the merged `dev` to `main` release and closes their `Refs #NUMBER` issues. GitHub still allows authorized users to close issues manually, so this policy is not a technical prohibition on manual closure.
