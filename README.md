@@ -9,4 +9,5 @@
 
 - [Tutorial](doc/tutorial.md)
 - [How-To Guide](doc/how-to.md)
+- [Explanation](doc/explanation.md)
 - [Reference](doc/reference.md)
