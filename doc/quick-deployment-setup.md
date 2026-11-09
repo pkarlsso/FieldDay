@@ -8,4 +8,4 @@ To quickly install and use FieldDay on your iPhone:
 4. Once the team adds you, you will receive an email inviting you to test FieldDay through TestFlight. Open the invitation and accept it.
 5. Download **FieldDay Sports** from TestFlight and enjoy the FieldDay experience. You can create an account with FieldDay or sign in with Google.
 
-Google sign-in is currently in testing mode, so your Google account may need to be added to the test-user list first. If you want to use Google sign-in, include its email address in your request. If you have trouble receiving the invitation or signing in, reply to the same email for help.
+If you want to use Google sign-in, please include the Gmail address you would like to use in your request.
