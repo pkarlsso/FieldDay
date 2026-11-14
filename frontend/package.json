@@ -13,7 +13,7 @@
     "@apollo/client": "^4.3.5",
     "@expo/vector-icons": "^15.0.2",
     "@fieldday/apple-search-completer": "file:modules/apple-search-completer",
-    "@react-native-community/datetimepicker": "9.2.2",
+    "@react-native-community/datetimepicker": "9.3.0",
     "@react-native-community/slider": "5.2.2",
     "@react-native-google-signin/google-signin": "^17.0.0",
     "@react-navigation/bottom-tabs": "^7.21.0",
