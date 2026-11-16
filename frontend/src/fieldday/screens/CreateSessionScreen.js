@@ -6,7 +6,7 @@ import MapView, { Marker } from 'react-native-maps';
 import { addResultsListener, isAvailable as hasAppleSearch, resolve, search } from '../../../modules/apple-search-completer/src';
 import { Card, IconButton, Pill, PrimaryButton, ScreenHeader } from '../components/ui';
 import { colors, sports } from '../theme';
-import { CAPACITY_LIMITS, DEFAULT_SESSION_LENGTH_MS, SKILL_LEVELS, VISIBILITY_OPTIONS, validateSessionForm } from '../sessionInfo';
+import { CAPACITY_LIMITS, DEFAULT_SESSION_LENGTH_MS, SESSION_LOCATION_MAX_LENGTH, SKILL_LEVELS, VISIBILITY_OPTIONS, validateSessionForm } from '../sessionInfo';
 import { useCurrentUser } from '../useCurrentUser';
 import { graphql } from '../../api';
 import logger from '../../logger';
@@ -301,7 +301,7 @@ export default function CreateSessionScreen({ navigation }) {
           ) : null}
           <FieldError message={errors.visibility} />
           <Text style={styles.label}>Location</Text>
-          <TextInput value={location} onChangeText={editLocation} style={styles.input} placeholder="Search for an address" />
+          <TextInput value={location} onChangeText={editLocation} style={styles.input} placeholder="Search for an address" maxLength={SESSION_LOCATION_MAX_LENGTH} />
           {suggestions.map((result, index) => <Text key={`${result.title || result.name}-${index}`} onPress={() => chooseSuggestion(result)} style={styles.suggestion}>
             {[result.title || result.name, result.subtitle || result.street, result.city, result.region].filter(Boolean).join(', ')}
           </Text>)}

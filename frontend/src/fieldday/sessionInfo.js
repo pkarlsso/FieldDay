@@ -8,6 +8,9 @@ export const SKILL_LEVELS = [
 ];
 
 export const CAPACITY_LIMITS = { min: 2, max: 50 };
+// Mirrors the server-side CreateSessionInput validation. A full venue name
+// can include a building, organization, campus, city, and state.
+export const SESSION_LOCATION_MAX_LENGTH = 255;
 
 // Mirrors the backend's SessionVisibility.
 export const VISIBILITY_OPTIONS = [
@@ -64,6 +67,9 @@ export function validateSessionForm({ sport, startsAt, endsAt, location, locatio
   else if (!(endsAt instanceof Date) || endsAt <= startsAt) errors.endsAt = 'Choose an end time after the start.';
   else if (endsAt - startsAt > MAX_SESSION_LENGTH_MS) errors.endsAt = 'Sessions can last at most 24 hours.';
   if (!location.trim()) errors.location = 'Enter where the session is.';
+  else if (location.trim().length > SESSION_LOCATION_MAX_LENGTH) {
+    errors.location = `Location must be ${SESSION_LOCATION_MAX_LENGTH} characters or fewer.`;
+  }
   else if (!locationConfirmed) errors.location = 'Pick a suggestion, tap Find address, or tap the map so players can find it.';
   if (!Number.isInteger(maxParticipants) || maxParticipants < CAPACITY_LIMITS.min || maxParticipants > CAPACITY_LIMITS.max) {
     errors.maxParticipants = `Choose ${CAPACITY_LIMITS.min} to ${CAPACITY_LIMITS.max} players.`;

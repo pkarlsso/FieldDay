@@ -13,6 +13,8 @@ const tag = `integration-${Date.now()}`;
 const startsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 startsAt.setUTCMinutes(0, 0, 0);
 const startsAtIso = startsAt.toISOString();
+const longPurdueVenue = 'France A. Cordova Recreational Sports Center, Purdue University, 355 North Martin Jischke Drive, West Lafayette, Indiana 47907, United States';
+const tooLongVenue = `${longPurdueVenue}${'x'.repeat(256 - longPurdueVenue.length)}`;
 const tokens = new Map();
 let host;
 let guest;
@@ -62,12 +64,14 @@ try {
   await expectGraphqlError(CREATE, { input: input() }, null, 'must be signed in');
   await expectGraphqlError(CREATE, { input: input({ startsAt: 'not-a-date' }) }, host, 'startsAt must be a valid ISO date');
   await expectGraphqlError(CREATE, { input: input({ locationPoint: { longitude: -200, latitude: 40.4259 } }) }, host, 'locationPoint coordinates are out of range');
+  await expectGraphqlError(CREATE, { input: input({ location: tooLongVenue }) }, host, 'Location must be 255 characters or fewer');
 
-  const created = await graphql(CREATE, { input: input() }, host);
+  const created = await graphql(CREATE, { input: input({ location: longPurdueVenue }) }, host);
   sessionId = created.createSession.id;
   if (created.createSession.host.id !== String(host._id)) throw new Error('host was not taken from the token');
   if (created.createSession.participants.length !== 1) throw new Error('host was not added');
   if (created.createSession.startsAt !== startsAtIso) throw new Error('timestamp was not returned as ISO');
+  if (created.createSession.location !== longPurdueVenue) throw new Error('long location name was not stored and returned');
   if (created.createSession.locationPoint.coordinates.join(',') !== '-86.9147,40.4259') throw new Error('GeoJSON coordinates were not stored');
   if (created.createSession.skillLevel !== 2 || created.createSession.maxParticipants !== 2) throw new Error('capacity and skill level were not stored');
 

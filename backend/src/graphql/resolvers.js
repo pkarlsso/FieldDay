@@ -35,7 +35,10 @@ const DAY_PERIODS = ['MORNING', 'AFTERNOON', 'EVENING'];
 const MAX_INVITEES = 49;
 const DEFAULT_DISCOVERY_RADIUS_MILES = 25;
 const MILES_TO_METERS = 1609.344;
-const SESSION_LIMITS = { sport: 30, location: 120, minParticipants: 2, maxParticipants: 50 };
+// Venue names from geocoding providers can include a building, organization,
+// campus, city, and state. Keep a practical limit while allowing those full
+// names to be stored and returned to the app.
+const SESSION_LIMITS = { sport: 30, location: 255, minParticipants: 2, maxParticipants: 50 };
 // Maps the host's 1-3 skill level onto the 1-5 scale that discovery filters
 // use, matching Explore's Beginner / Intermediate / Advanced options.
 const SKILL_LEVEL_RANGES = { 1: { min: 1, max: 2 }, 2: { min: 2, max: 4 }, 3: { min: 4, max: 5 } };
@@ -429,7 +432,7 @@ function authSuccess(user, message, extra = {}) {
 // Validates everything FR-1 needs before a session is stored. The skill band
 // stored for discovery (skillMin/skillMax/skillRange) is derived from
 // skillLevel, so any band an older client sends is ignored.
-function formatSessionInput(input) {
+export function formatSessionInput(input) {
   const sport = cleanProfileText(input.sport, 'Sport', SESSION_LIMITS.sport, { required: true });
   const location = cleanProfileText(input.location, 'Location', SESSION_LIMITS.location, { required: true });
 
