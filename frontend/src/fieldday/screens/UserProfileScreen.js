@@ -107,7 +107,7 @@ export default function UserProfileScreen({ route, navigation }) {
             <Text style={{ color: colors.muted, marginTop: 6, textAlign: 'center', lineHeight: 20 }}>{profile.bio}</Text>
           ) : null}
           <View style={{ flexDirection: 'row', alignSelf: 'stretch', borderTopWidth: 1, borderTopColor: colors.line, marginTop: 18, paddingTop: 16 }}>
-            <Stat value={profile.socialRating > 0 ? profile.socialRating.toFixed(1) : '—'} label="social rating" color={colors.purple} />
+            <Stat value={profile.socialRating > 0 ? profile.socialRating.toFixed(1) : '—'} label="weighted rating" color={colors.purple} />
             <Stat value={profile.totalRatings || 0} label="ratings" color={colors.green} />
             <Stat value={sportSkills.length} label="sports" color={colors.blue} />
           </View>

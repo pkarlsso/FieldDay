@@ -88,7 +88,7 @@ export default function LiveNoShowScreen({ route, navigation }) {
         </Card>
 
         <Text style={{ color: colors.text, lineHeight: 21 }}>
-          Tap anyone who didn&apos;t come. A player is marked as a no-show when most of the people who answer say so, and no-shows can&apos;t rate the session.
+          Tap anyone who didn&apos;t come. A player is marked as a no-show when most of the people who answer say so. A confirmed no-show receives a 1/5 rating, which can reduce future session access, and can&apos;t rate this session.
           {session.noShowDeadline ? ` Answer by ${formatSessionTime(session.noShowDeadline)}.` : ''}
         </Text>
 

@@ -1,4 +1,5 @@
 import SessionRegistration from '../models/SessionRegistration.mjs';
+import { SOCIAL_RATING_POLICY } from './socialRating.mjs';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -21,7 +22,9 @@ export function getParticipationTier(rating = 0) {
 }
 
 export function getParticipationTierForUser(user) {
-  return user.totalRatings > 0 ? getParticipationTier(user.socialRating) : NEW_PLAYER_TIER;
+  return user.totalRatings >= SOCIAL_RATING_POLICY.warmupRatings
+    ? getParticipationTier(user.socialRating)
+    : NEW_PLAYER_TIER;
 }
 
 export async function assertCanRegister(user, now = new Date()) {
@@ -35,7 +38,9 @@ export async function assertCanRegister(user, now = new Date()) {
   });
 
   if (count >= tier.limit) {
-    const who = tier === NEW_PLAYER_TIER ? 'Until you have been rated, you can make' : 'Your rating allows';
+    const who = tier === NEW_PLAYER_TIER
+      ? `Until you have received ${SOCIAL_RATING_POLICY.warmupRatings} ratings, you can make`
+      : 'Your rating allows';
     throw new Error(
       `${who} ${tier.limit} new session registration${tier.limit === 1 ? '' : 's'} `
       + `per rolling ${tier.windowDays} days.`
