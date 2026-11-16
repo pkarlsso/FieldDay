@@ -288,14 +288,14 @@ try {
   assert.deepEqual(getParticipationTier(2.5), { minimumRating: 2.5, limit: 1, windowDays: 14 });
   assert.deepEqual(getParticipationTier(1.9), { minimumRating: 0, limit: 1, windowDays: 30 });
   assert.equal(getParticipationTierForUser({ socialRating: 0, totalRatings: 0 }), NEW_PLAYER_TIER, 'unrated is not rated badly');
-  assert.deepEqual(getParticipationTierForUser({ socialRating: 1.9, totalRatings: 3 }), getParticipationTier(1.9));
+  assert.deepEqual(getParticipationTierForUser({ socialRating: 1.9, totalRatings: 3 }), NEW_PLAYER_TIER);
 
   // A brand-new account can create more than one session.
   const newcomer = await User.create({ name: 'Newcomer', email: emailFor('newcomer') });
   createdEmails.push(emailFor('newcomer'));
 
   const limitedCreate = await User.create({
-    name: 'Limited Creator', email: emailFor('limited-create'), socialRating: 3.0, ratingSum: 9, totalRatings: 3
+    name: 'Limited Creator', email: emailFor('limited-create'), socialRating: 3.0, ratingSum: 30, totalRatings: 10
   });
   createdEmails.push(emailFor('limited-create'));
   // The host is the signed-in user; sessions must start in the future.
@@ -321,7 +321,7 @@ try {
   }
 
   const limitedJoin = await User.create({
-    name: 'Limited Joiner', email: emailFor('limited-join'), socialRating: 3.0, ratingSum: 9, totalRatings: 3
+    name: 'Limited Joiner', email: emailFor('limited-join'), socialRating: 3.0, ratingSum: 30, totalRatings: 10
   });
   createdEmails.push(emailFor('limited-join'));
   const joinStartsAt = new Date(daysFromNow(5));
@@ -355,7 +355,7 @@ try {
   assert.equal(first.friendRequestsSent, 1);
   const guestAfter = first.updatedUsers.find((user) => user.id === ids.guest);
   assert.equal(guestAfter.totalRatings, 3);
-  assert.equal(guestAfter.socialRating, 4.3, '(8 + 5) / 3 rounded to one decimal');
+  assert.equal(guestAfter.socialRating, 4.9, 'fresh ratings have more weight than the all-time baseline');
   assert.equal(await Rating.countDocuments({ session: session._id, rater: host._id }), 2, 'each rating is stored');
   assert.deepEqual((await User.findById(guest._id)).friends.map(String), [], 'rating opt-in waits for acceptance');
   assert.deepEqual((await User.findById(host._id)).friends.map(String), []);

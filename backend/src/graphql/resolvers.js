@@ -557,7 +557,7 @@ function validateRatingSubmission(session, raterId, ratings) {
 
 // Rebuild the cached summary from the timestamped event history. The history
 // is authoritative because fresh and recent ratings have different weights.
-async function applyRatingToUser(userId) {
+async function applyRatingToUser(userId, value) {
   const { threshold, durationMs } = SOCIAL_RATING_COOLDOWN;
   const [user, ratings] = await Promise.all([
     User.findById(userId),
@@ -566,8 +566,10 @@ async function applyRatingToUser(userId) {
   if (!user) return null;
 
   const recordedSum = ratings.reduce((sum, rating) => sum + rating.value, 0);
-  const legacyCount = Math.max(0, user.totalRatings - ratings.length);
-  const legacySum = user.ratingSum - recordedSum;
+  // `user.totalRatings` is the count before the current event, while `ratings`
+  // already includes that newly inserted event.
+  const legacyCount = Math.max(0, user.totalRatings - (ratings.length - 1));
+  const legacySum = user.ratingSum - (recordedSum - value);
   const legacyRatings = legacyCount > 0
     ? Array.from({ length: legacyCount }, () => ({
       value: legacySum / legacyCount,
@@ -619,7 +621,7 @@ async function applyNoShowRatings(session, now = new Date()) {
       value: NO_SHOW_RATING,
       source: 'no_show'
     });
-    const result = await applyRatingToUser(userId);
+    const result = await applyRatingToUser(userId, NO_SHOW_RATING);
     await notifyRatingActivity(
       userId,
       'no_show_penalty',
@@ -1571,7 +1573,7 @@ const resolvers = {
       let friendsSent = 0;
 
       for (const { userId, rating, addFriend } of ratings) {
-        const result = await applyRatingToUser(userId);
+        const result = await applyRatingToUser(userId, rating);
         await notifyRatingActivity(
           userId,
           'rating_received',
