@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Slider from '@react-native-community/slider';
 import { Card, Pill, ScreenHeader, SportIcon } from '../components/ui';
 import { colors, sports } from '../theme';
 import { DEFAULT_DISCOVERY_FILTER, getDiscoveryOrigin, loadDiscoverySessions } from '../discovery';
+import { useDiscoveryRadius } from '../DiscoveryRadiusContext';
+import { DISCOVERY_RADIUS_MAX_MILES, DISCOVERY_RADIUS_MIN_MILES, DISCOVERY_RADIUS_STEP_MILES, normalizeDiscoveryRadius, withDiscoveryRadius } from '../discoveryFilters';
 import { formatSessionTime, playersLabel, skillLabel } from '../sessionInfo';
 import logger from '../../logger';
 
 const sportOptions = Object.keys(sports);
-const radiusOptions = [5, 10, 25, 50];
 const skillOptions = [
   { label: 'Any skill', min: undefined, max: undefined },
   { label: 'Beginner', min: 1, max: 2 },
@@ -22,6 +24,8 @@ export default function LiveExploreScreen({ navigation }) {
   const [locating, setLocating] = useState(true);
   const [origin, setOrigin] = useState(null);
   const [draft, setDraft] = useState(DEFAULT_DISCOVERY_FILTER);
+  const { radiusMiles, setRadiusMiles, resetRadiusMiles } = useDiscoveryRadius();
+  const initialRadiusMiles = useRef(radiusMiles);
   const load = useCallback(async (nextFilter) => {
     try { setSessions(await loadDiscoverySessions(nextFilter)); setError(''); }
     catch (err) { setError(err.message); }
@@ -30,13 +34,13 @@ export default function LiveExploreScreen({ navigation }) {
   useEffect(() => {
     getDiscoveryOrigin().then(async (location) => {
       setOrigin(location);
-      const next = { ...DEFAULT_DISCOVERY_FILTER, origin: location || undefined };
+      const next = withDiscoveryRadius(DEFAULT_DISCOVERY_FILTER, location, initialRadiusMiles.current);
       setDraft(next);
       await loadDiscoverySessions(next).then(setSessions);
     }).catch(async (error) => {
       logger.warn('Could not determine discovery location:', error);
       setOrigin(null);
-      const next = { ...DEFAULT_DISCOVERY_FILTER, origin: undefined };
+      const next = withDiscoveryRadius(DEFAULT_DISCOVERY_FILTER, null, initialRadiusMiles.current);
       setDraft(next);
       await loadDiscoverySessions(next).then(setSessions);
     }).finally(() => setLocating(false));
@@ -50,13 +54,16 @@ export default function LiveExploreScreen({ navigation }) {
   }));
 
   const applyFilters = () => {
-    const next = { ...draft, origin };
+    const next = withDiscoveryRadius(draft, draft.origin || origin, draft.maxDistanceMiles);
+    setRadiusMiles(next.maxDistanceMiles || radiusMiles);
+    setDraft(next);
     setShowFilters(false);
     load(next);
   };
 
   const clearFilters = () => {
-    const next = { ...DEFAULT_DISCOVERY_FILTER, origin };
+    const next = withDiscoveryRadius(DEFAULT_DISCOVERY_FILTER, origin, DEFAULT_DISCOVERY_FILTER.maxDistanceMiles);
+    resetRadiusMiles();
     setDraft(next);
     load(next);
   };
@@ -68,8 +75,22 @@ export default function LiveExploreScreen({ navigation }) {
       {!locating && !origin ? <Card><Text style={{ color: colors.text, fontWeight: '800' }}>Location unavailable</Text><Text style={{ color: colors.muted, marginTop: 4 }}>Enter a location below to enable distance filtering.</Text><View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}><TextInput keyboardType="numbers-and-punctuation" placeholder="Latitude" value={draft.origin?.latitude?.toString() || ''} onChangeText={(value) => setDraft((current) => ({ ...current, origin: { ...(current.origin || {}), latitude: Number(value) } }))} style={{ flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 10 }} /><TextInput keyboardType="numbers-and-punctuation" placeholder="Longitude" value={draft.origin?.longitude?.toString() || ''} onChangeText={(value) => setDraft((current) => ({ ...current, origin: { ...(current.origin || {}), longitude: Number(value) } }))} style={{ flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 10 }} /></View></Card> : null}
       {showFilters ? <Card style={{ gap: 12 }}>
         <Text style={{ color: colors.ink, fontSize: 18, fontWeight: '900' }}>Filter sessions</Text>
-        <Text style={{ color: colors.muted, fontWeight: '800' }}>Distance</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{radiusOptions.map((radius) => <Pill key={radius} label={`${radius} mi`} active={draft.maxDistanceMiles === radius} onPress={() => setDraft((current) => ({ ...current, maxDistanceMiles: radius }))} />)}</View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+          <Text style={{ color: colors.muted, fontWeight: '800' }}>Distance</Text>
+          <Text style={{ color: colors.purple, fontWeight: '900' }}>Within {normalizeDiscoveryRadius(draft.maxDistanceMiles)} mi</Text>
+        </View>
+        <Slider
+          value={normalizeDiscoveryRadius(draft.maxDistanceMiles)}
+          minimumValue={DISCOVERY_RADIUS_MIN_MILES}
+          maximumValue={DISCOVERY_RADIUS_MAX_MILES}
+          step={DISCOVERY_RADIUS_STEP_MILES}
+          minimumTrackTintColor={colors.purple}
+          maximumTrackTintColor={colors.line}
+          thumbTintColor={colors.purple}
+          onValueChange={(value) => setDraft((current) => ({ ...current, maxDistanceMiles: normalizeDiscoveryRadius(value) }))}
+          accessibilityLabel="Session search radius"
+          accessibilityValue={{ min: DISCOVERY_RADIUS_MIN_MILES, max: DISCOVERY_RADIUS_MAX_MILES, now: normalizeDiscoveryRadius(draft.maxDistanceMiles), text: `Within ${normalizeDiscoveryRadius(draft.maxDistanceMiles)} miles` }}
+        />
         <Text style={{ color: colors.muted, fontWeight: '800' }}>Sport</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{sportOptions.map((sport) => <Pill key={sport} label={sport} active={draft.sports.includes(sport)} color={sports[sport].color} onPress={() => toggleSport(sport)} />)}</View>
         <Text style={{ color: colors.muted, fontWeight: '800' }}>Skill</Text>

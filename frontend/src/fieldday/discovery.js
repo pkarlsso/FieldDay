@@ -1,8 +1,9 @@
 import * as Location from 'expo-location';
 import { graphql } from '../api';
+import { DEFAULT_DISCOVERY_RADIUS_MILES } from './discoveryFilters';
 
 export const DEFAULT_DISCOVERY_FILTER = {
-  maxDistanceMiles: 25,
+  maxDistanceMiles: DEFAULT_DISCOVERY_RADIUS_MILES,
   sports: [],
   minSkillLevel: undefined,
   maxSkillLevel: undefined,

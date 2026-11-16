@@ -3,6 +3,8 @@ import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-nativ
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import MapView, { Callout, Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { getDiscoveryOrigin, loadDiscoverySessions } from '../discovery';
+import { useDiscoveryRadius } from '../DiscoveryRadiusContext';
+import { isWithinDiscoveryRadius, withDiscoveryRadius } from '../discoveryFilters';
 import { formatSessionTime, playersLabel, skillLabel } from '../sessionInfo';
 import { colors, getSportConfig } from '../theme';
 import logger from '../../logger';
@@ -46,6 +48,9 @@ export default function MapScreen({ navigation }) {
   const [sessions, setSessions] = useState(DEMO_SESSIONS);
   const [selectedSessionId, setSelectedSessionId] = useState(null);
   const [origin, setOrigin] = useState(null);
+  const { radiusMiles } = useDiscoveryRadius();
+  const mapOrigin = origin || DEFAULT_REGION;
+  const visibleSessions = sessions.filter((session) => isWithinDiscoveryRadius(mapOrigin, session, radiusMiles));
 
   useEffect(() => {
     let mounted = true;
@@ -68,7 +73,8 @@ export default function MapScreen({ navigation }) {
 
   useEffect(() => {
     if (!useLiveData) return undefined;
-    loadDiscoverySessions({ origin }).then((data) => setSessions(data.filter(hasCoordinates).map((session) => ({
+    const filter = withDiscoveryRadius({}, origin, radiusMiles);
+    loadDiscoverySessions(filter).then((data) => setSessions(data.filter(hasCoordinates).map((session) => ({
       id: session.id,
       sport: session.sport,
       startsAt: session.startsAt,
@@ -81,7 +87,7 @@ export default function MapScreen({ navigation }) {
       longitude: session.locationPoint.coordinates[0],
     })))).catch((error) => logger.error('Could not load map sessions:', error));
     return undefined;
-  }, [origin]);
+  }, [origin, radiusMiles]);
 
   return (
     <View style={styles.container}>
@@ -92,7 +98,7 @@ export default function MapScreen({ navigation }) {
         showsUserLocation
         showsMyLocationButton
       >
-        {sessions.map((session) => (
+        {visibleSessions.map((session) => (
           <Marker
             key={session.id}
             coordinate={session}
@@ -122,6 +128,8 @@ export default function MapScreen({ navigation }) {
         ))}
       </MapView>
       {loading && <View style={styles.status}><ActivityIndicator /><Text>Finding your location</Text></View>}
+      <View style={styles.radiusStatus}><Text>Within {radiusMiles} mi</Text></View>
+      {!loading && !visibleSessions.length ? <View style={styles.emptyStatus}><Text>No sessions match this radius.</Text></View> : null}
     </View>
   );
 }
@@ -130,6 +138,8 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { flex: 1 },
   status: { position: 'absolute', top: 58, alignSelf: 'center', flexDirection: 'row', gap: 8, backgroundColor: '#fff', padding: 10, borderRadius: 8 },
+  radiusStatus: { position: 'absolute', top: 108, alignSelf: 'center', backgroundColor: '#fff', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8 },
+  emptyStatus: { position: 'absolute', bottom: 28, alignSelf: 'center', backgroundColor: '#fff', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8 },
   markerOuter: {
     width: 40,
     height: 40,

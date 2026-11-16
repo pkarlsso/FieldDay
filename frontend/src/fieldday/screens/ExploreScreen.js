@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react';
 import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import Slider from '@react-native-community/slider';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { Card, HeaderActionRow, IconButton, NotificationButton, Pill, ScreenHeader, SportIcon, StatusBadge } from '../components/ui';
+import { useDiscoveryRadius } from '../DiscoveryRadiusContext';
+import { DISCOVERY_RADIUS_MAX_MILES, DISCOVERY_RADIUS_MIN_MILES, DISCOVERY_RADIUS_STEP_MILES } from '../discoveryFilters';
 import { colors, getSportConfig, sports } from '../theme';
 import { sessions } from '../data/mockData';
 
@@ -38,11 +41,19 @@ export default function ExploreScreen({ navigation }) {
   const [activeFilter, setActiveFilter] = useState('All');
   const [selectedId, setSelectedId] = useState('s1');
   const [showFilters, setShowFilters] = useState(false);
+  const { radiusMiles, setRadiusMiles, resetRadiusMiles } = useDiscoveryRadius();
   const visibleSessions = useMemo(
-    () => sessions.filter((session) => activeFilter === 'All' || session.sport === activeFilter),
-    [activeFilter]
+    () => sessions.filter((session) => (activeFilter === 'All' || session.sport === activeFilter)
+      && Number.parseFloat(session.distance) <= radiusMiles),
+    [activeFilter, radiusMiles]
   );
-  const selected = sessions.find((session) => session.id === selectedId) || visibleSessions[0] || sessions[0];
+  const selected = visibleSessions.find((session) => session.id === selectedId) || visibleSessions[0];
+
+  const resetFilters = () => {
+    setActiveFilter('All');
+    resetRadiusMiles();
+    setSelectedId('s1');
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.page }}>
@@ -99,7 +110,7 @@ export default function ExploreScreen({ navigation }) {
             {visibleSessions.map((session) => (
               <MapPin key={session.id} session={session} selected={session.id === selected.id} onPress={() => setSelectedId(session.id)} />
             ))}
-            <Card style={{ position: 'absolute', left: 14, right: 14, bottom: 14, padding: 12 }}>
+            {selected ? <Card style={{ position: 'absolute', left: 14, right: 14, bottom: 14, padding: 12 }}>
               <TouchableOpacity activeOpacity={0.86} onPress={() => navigation.navigate('SessionDetails', { sessionId: selected.id })}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                   <SportIcon sport={selected.sport} size={50} />
@@ -110,25 +121,41 @@ export default function ExploreScreen({ navigation }) {
                   <StatusBadge label={selected.distance} icon="navigate" color={colors.green} />
                 </View>
               </TouchableOpacity>
-            </Card>
+            </Card> : <Card style={{ position: 'absolute', left: 14, right: 14, bottom: 14, padding: 12 }}><Text style={{ color: colors.muted, fontWeight: '800' }}>No sessions match these filters.</Text></Card>}
           </View>
         </Card>
 
         {showFilters ? (
           <Card style={{ gap: 12 }}>
             <Text style={{ fontSize: 18, fontWeight: '900', color: colors.ink }}>Filters</Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text style={{ color: colors.text }}>Distance</Text>
-              <Text style={{ color: colors.purple, fontWeight: '900' }}>Within 10 mi</Text>
+              <Text style={{ color: colors.purple, fontWeight: '900' }}>Within {radiusMiles} mi</Text>
             </View>
+            <Slider
+              value={radiusMiles}
+              minimumValue={DISCOVERY_RADIUS_MIN_MILES}
+              maximumValue={DISCOVERY_RADIUS_MAX_MILES}
+              step={DISCOVERY_RADIUS_STEP_MILES}
+              minimumTrackTintColor={colors.purple}
+              maximumTrackTintColor={colors.line}
+              thumbTintColor={colors.purple}
+              onValueChange={setRadiusMiles}
+              accessibilityLabel="Session search radius"
+              accessibilityValue={{ min: DISCOVERY_RADIUS_MIN_MILES, max: DISCOVERY_RADIUS_MAX_MILES, now: radiusMiles, text: `Within ${radiusMiles} miles` }}
+            />
             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
               <Text style={{ color: colors.text }}>Skill level</Text>
               <Text style={{ color: colors.purple, fontWeight: '900' }}>2.0 - 4.0</Text>
             </View>
+            <TouchableOpacity onPress={resetFilters} accessibilityRole="button" accessibilityLabel="Reset session filters">
+              <Text style={{ color: colors.purple, fontWeight: '900' }}>Reset filters</Text>
+            </TouchableOpacity>
           </Card>
         ) : null}
 
         <Text style={{ color: colors.ink, fontSize: 21, fontWeight: '900', marginTop: 4 }}>Nearby Sessions</Text>
+        {!visibleSessions.length ? <Text style={{ color: colors.muted }}>No sessions match these filters.</Text> : null}
         {visibleSessions.map((session) => (
           <TouchableOpacity key={session.id} activeOpacity={0.88} onPress={() => navigation.navigate('SessionDetails', { sessionId: session.id })}>
             <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 }}>
