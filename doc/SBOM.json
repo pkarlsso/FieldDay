@@ -119,7 +119,7 @@
     "supplier": {
       "name": "FieldDay"
     },
-    "timestamp": "2026-11-09T01:47:38.678Z"
+    "timestamp": "2026-11-16T01:57:36.237Z"
   },
   "components": [
     {
@@ -8933,8 +8933,8 @@
       "type": "library",
       "name": "env",
       "group": "@expo",
-      "version": "2.5.3",
-      "bom-ref": "FieldDay|@expo/env@2.5.3",
+      "version": "2.5.4",
+      "bom-ref": "FieldDay|@expo/env@2.5.4",
       "description": "hydrate environment variables from .env files into process.env",
       "licenses": [
         {
@@ -8944,15 +8944,15 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40expo/env@2.5.3",
+      "purl": "pkg:npm/%40expo/env@2.5.4",
       "externalReferences": [
         {
-          "url": "https://registry.npmjs.org/@expo/env/-/env-2.5.3.tgz",
+          "url": "https://registry.npmjs.org/@expo/env/-/env-2.5.4.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "7411aef0101fbd4717bc6e07bd8b61f8485c1c4b1d0befdf4fa1d31ffcc5befc1fa79d0b1babb3a734fc4d739bc04abfb7607faef00c5793a8971438e8b5971e"
+              "content": "0a3cee1315fc19e81c34ba4ec3c0433b5f51a732410f5c4208c49f44bd5e31f2068b0209f4406ed1c1378e7dde964eeb2af53942a1f5e71ef660b593cb118bda"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -13607,8 +13607,8 @@
       "type": "library",
       "name": "datetimepicker",
       "group": "@react-native-community",
-      "version": "9.2.2",
-      "bom-ref": "FieldDay|@react-native-community/datetimepicker@9.2.2",
+      "version": "9.3.0",
+      "bom-ref": "FieldDay|@react-native-community/datetimepicker@9.3.0",
       "author": "Martijn Swaagman",
       "description": "DateTimePicker component for React Native",
       "licenses": [
@@ -13619,15 +13619,15 @@
           }
         }
       ],
-      "purl": "pkg:npm/%40react-native-community/datetimepicker@9.2.2",
+      "purl": "pkg:npm/%40react-native-community/datetimepicker@9.3.0",
       "externalReferences": [
         {
-          "url": "https://registry.npmjs.org/@react-native-community/datetimepicker/-/datetimepicker-9.2.2.tgz",
+          "url": "https://registry.npmjs.org/@react-native-community/datetimepicker/-/datetimepicker-9.3.0.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "d1c646acaeb5519f15c6928a57f96e9ff2ff6f9c0abace79221beaa9d7b051ac87c0873bde5acb234979088947c3cb40d3fc901331c430476d1d0825003fa128"
+              "content": "e0cf3b841d716eac73c0e02dd0fe466725dfef05e3b29469948c1cb581c7e70e270d7e04d2b5883dd2646784baf73d09e6c970488757a47a3eb4358c0af84d4a"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -24581,8 +24581,8 @@
     {
       "type": "library",
       "name": "expo-auth-session",
-      "version": "58.0.16",
-      "bom-ref": "FieldDay|expo-auth-session@58.0.16",
+      "version": "58.0.17",
+      "bom-ref": "FieldDay|expo-auth-session@58.0.17",
       "author": "650 Industries, Inc.",
       "description": "Expo module for browser-based authentication",
       "licenses": [
@@ -24593,15 +24593,15 @@
           }
         }
       ],
-      "purl": "pkg:npm/expo-auth-session@58.0.16",
+      "purl": "pkg:npm/expo-auth-session@58.0.17",
       "externalReferences": [
         {
-          "url": "https://registry.npmjs.org/expo-auth-session/-/expo-auth-session-58.0.16.tgz",
+          "url": "https://registry.npmjs.org/expo-auth-session/-/expo-auth-session-58.0.17.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "f36b0b84d6b61a022aa633741a1319156705fb725e734cc7b8bb1d35cd2c3258df51bed89ee5d415d732db26b0a7dde9fcfecc07ef411bf5cc59227509f7d31d"
+              "content": "78223d9507ad7ee0ad0f5c6688f596581aaf27f6a6da17a525b859ca1ad5b71eea8e34cdf32017eaf1364d62d74868c346d058156cbd1fa8d9054d5544894ada"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -24836,8 +24836,8 @@
     {
       "type": "library",
       "name": "expo-constants",
-      "version": "58.0.14",
-      "bom-ref": "FieldDay|expo-constants@58.0.14",
+      "version": "58.0.15",
+      "bom-ref": "FieldDay|expo-constants@58.0.15",
       "author": "650 Industries, Inc.",
       "description": "Provides system information that remains constant throughout the lifetime of your app.",
       "licenses": [
@@ -24848,15 +24848,15 @@
           }
         }
       ],
-      "purl": "pkg:npm/expo-constants@58.0.14",
+      "purl": "pkg:npm/expo-constants@58.0.15",
       "externalReferences": [
         {
-          "url": "https://registry.npmjs.org/expo-constants/-/expo-constants-58.0.14.tgz",
+          "url": "https://registry.npmjs.org/expo-constants/-/expo-constants-58.0.15.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "a209ffef12e6be4115617e928a60e470d0e7fddf2a66909341d0563e7308f91cbb49f721d03cf61887307aa75d2b886b92fad2634d534b6d0165f3250a927be6"
+              "content": "ba8930cec61d8ccfd94c4bd024200d84fe1e2785c6191ea4789cbf01cf479ed2ec400453f28f98f274d501774c691bfa4f9c2ecc93a588998a5182650e56a676"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -25942,8 +25942,8 @@
     {
       "type": "library",
       "name": "expo-linking",
-      "version": "58.0.15",
-      "bom-ref": "FieldDay|expo-linking@58.0.15",
+      "version": "58.0.16",
+      "bom-ref": "FieldDay|expo-linking@58.0.16",
       "author": "650 Industries, Inc.",
       "description": "Create and open deep links universally",
       "licenses": [
@@ -25954,15 +25954,15 @@
           }
         }
       ],
-      "purl": "pkg:npm/expo-linking@58.0.15",
+      "purl": "pkg:npm/expo-linking@58.0.16",
       "externalReferences": [
         {
-          "url": "https://registry.npmjs.org/expo-linking/-/expo-linking-58.0.15.tgz",
+          "url": "https://registry.npmjs.org/expo-linking/-/expo-linking-58.0.16.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "37a8e678a46c30ef835e6007d409d2b551172b81692f77cccda9bd74958885dfc594cb7f0c23511949f672a33b90db033d21c66060483821acad6f80929d31c0"
+              "content": "c86cfbc389f24a4b6839b6bb7d2d3c0f3cd05df1202ddeb4db8f12cf7bb89bf5738bc48a842e710575a63f8b1c1a1d0495ef3d237e7493fbafa369a856699927"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -40933,8 +40933,8 @@
     {
       "type": "library",
       "name": "react-native-gesture-handler",
-      "version": "3.4.0",
-      "bom-ref": "FieldDay|react-native-gesture-handler@3.4.0",
+      "version": "3.5.0",
+      "bom-ref": "FieldDay|react-native-gesture-handler@3.5.0",
       "author": "Krzysztof Magiera",
       "description": "Declarative API exposing native platform touch and gesture system to React Native",
       "licenses": [
@@ -40945,15 +40945,15 @@
           }
         }
       ],
-      "purl": "pkg:npm/react-native-gesture-handler@3.4.0",
+      "purl": "pkg:npm/react-native-gesture-handler@3.5.0",
       "externalReferences": [
         {
-          "url": "https://registry.npmjs.org/react-native-gesture-handler/-/react-native-gesture-handler-3.4.0.tgz",
+          "url": "https://registry.npmjs.org/react-native-gesture-handler/-/react-native-gesture-handler-3.5.0.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "8c18386560ef7a079a678387abda3154e4bf41aea957e2e1b6c504c68b61ca15b1ab31b42e483b925db3b5e98f8ffa6727192af63ffeeb0030de3646c1db2cc3"
+              "content": "6e6f327a9c0c054844392794ed641b34daecb43d076efea2f97b00a4044125295bf96951bf2690b286e2fad679532af99035605f383a90f6fe09663dcefc9f13"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -51022,7 +51022,7 @@
         "FieldDay|@expo/config-plugins@58.0.11",
         "FieldDay|@expo/config@58.0.10",
         "FieldDay|@expo/devcert@1.2.2",
-        "FieldDay|@expo/env@2.5.3",
+        "FieldDay|@expo/env@2.5.4",
         "FieldDay|@expo/image-utils@0.12.6",
         "FieldDay|@expo/inline-modules@0.2.8",
         "FieldDay|@expo/json-file@11.2.1",
@@ -51084,7 +51084,7 @@
       "ref": "FieldDay|@expo/cli@58.1.18|@expo/router-server@58.0.20",
       "dependsOn": [
         "FieldDay|debug@4.4.3",
-        "FieldDay|expo-constants@58.0.14",
+        "FieldDay|expo-constants@58.0.15",
         "FieldDay|expo-font@58.0.11",
         "FieldDay|expo-server@58.0.6",
         "FieldDay|expo@58.0.22",
@@ -51177,7 +51177,7 @@
       ]
     },
     {
-      "ref": "FieldDay|@expo/env@2.5.3",
+      "ref": "FieldDay|@expo/env@2.5.4",
       "dependsOn": [
         "FieldDay|chalk@4.1.2",
         "FieldDay|debug@4.4.3",
@@ -51187,7 +51187,7 @@
     {
       "ref": "FieldDay|@expo/fingerprint@0.21.8",
       "dependsOn": [
-        "FieldDay|@expo/env@2.5.3",
+        "FieldDay|@expo/env@2.5.4",
         "FieldDay|@expo/fingerprint@0.21.8|minimatch@10.2.6",
         "FieldDay|@expo/fingerprint@0.21.8|resolve-from@5.0.0",
         "FieldDay|@expo/spawn-async@1.8.0",
@@ -51272,7 +51272,7 @@
         "FieldDay|@babel/core@7.29.7",
         "FieldDay|@babel/generator@7.29.12",
         "FieldDay|@expo/config@58.0.10",
-        "FieldDay|@expo/env@2.5.3",
+        "FieldDay|@expo/env@2.5.4",
         "FieldDay|@expo/json-file@11.2.1",
         "FieldDay|@expo/metro-config@58.0.20|resolve-from@5.0.0",
         "FieldDay|@expo/metro@58.0.0",
@@ -51765,7 +51765,7 @@
       "ref": "FieldDay|@protobufjs/utf8@1.1.2"
     },
     {
-      "ref": "FieldDay|@react-native-community/datetimepicker@9.2.2",
+      "ref": "FieldDay|@react-native-community/datetimepicker@9.3.0",
       "dependsOn": [
         "FieldDay|expo@58.0.22",
         "FieldDay|invariant@2.2.4",
@@ -51945,7 +51945,7 @@
         "FieldDay|@react-navigation/elements@2.9.45",
         "FieldDay|@react-navigation/native@7.5.1",
         "FieldDay|color@4.2.3",
-        "FieldDay|react-native-gesture-handler@3.4.0",
+        "FieldDay|react-native-gesture-handler@3.5.0",
         "FieldDay|react-native-safe-area-context@5.11.0",
         "FieldDay|react-native-screens@4.30.1",
         "FieldDay|react-native@0.88.1",
@@ -52778,19 +52778,19 @@
       "ref": "FieldDay|expo-asset@58.0.19",
       "dependsOn": [
         "FieldDay|@expo/image-utils@0.12.6",
-        "FieldDay|expo-constants@58.0.14",
+        "FieldDay|expo-constants@58.0.15",
         "FieldDay|expo@58.0.22",
         "FieldDay|react-native@0.88.1",
         "FieldDay|react@19.3.1"
       ]
     },
     {
-      "ref": "FieldDay|expo-auth-session@58.0.16",
+      "ref": "FieldDay|expo-auth-session@58.0.17",
       "dependsOn": [
         "FieldDay|expo-application@58.1.2",
-        "FieldDay|expo-constants@58.0.14",
+        "FieldDay|expo-constants@58.0.15",
         "FieldDay|expo-crypto@58.0.7",
-        "FieldDay|expo-linking@58.0.15",
+        "FieldDay|expo-linking@58.0.16",
         "FieldDay|expo-web-browser@58.0.7",
         "FieldDay|invariant@2.2.4",
         "FieldDay|react-native@0.88.1",
@@ -52818,9 +52818,9 @@
       ]
     },
     {
-      "ref": "FieldDay|expo-constants@58.0.14",
+      "ref": "FieldDay|expo-constants@58.0.15",
       "dependsOn": [
-        "FieldDay|@expo/env@2.5.3",
+        "FieldDay|@expo/env@2.5.4",
         "FieldDay|@expo/require-utils@58.0.5",
         "FieldDay|expo@58.0.22",
         "FieldDay|react-native@0.88.1"
@@ -52938,9 +52938,9 @@
       ]
     },
     {
-      "ref": "FieldDay|expo-linking@58.0.15",
+      "ref": "FieldDay|expo-linking@58.0.16",
       "dependsOn": [
-        "FieldDay|expo-constants@58.0.14",
+        "FieldDay|expo-constants@58.0.15",
         "FieldDay|expo@58.0.22",
         "FieldDay|invariant@2.2.4",
         "FieldDay|react-native@0.88.1",
@@ -53009,7 +53009,7 @@
         "FieldDay|abort-controller@3.0.0",
         "FieldDay|badgin@1.2.3",
         "FieldDay|expo-application@58.1.2",
-        "FieldDay|expo-constants@58.0.14",
+        "FieldDay|expo-constants@58.0.15",
         "FieldDay|expo@58.0.22",
         "FieldDay|react-native@0.88.1",
         "FieldDay|react@19.3.1"
@@ -53072,7 +53072,7 @@
         "FieldDay|@ungap/structured-clone@1.4.0",
         "FieldDay|babel-preset-expo@58.0.23",
         "FieldDay|expo-asset@58.0.19",
-        "FieldDay|expo-constants@58.0.14",
+        "FieldDay|expo-constants@58.0.15",
         "FieldDay|expo-file-system@58.0.13",
         "FieldDay|expo-font@58.0.11",
         "FieldDay|expo-keep-awake@58.0.3",
@@ -53289,16 +53289,16 @@
         "FieldDay|@apollo/client@4.3.5",
         "FieldDay|@expo/vector-icons@15.1.1",
         "FieldDay|@fieldday/apple-search-completer@1.0.0",
-        "FieldDay|@react-native-community/datetimepicker@9.2.2",
+        "FieldDay|@react-native-community/datetimepicker@9.3.0",
         "FieldDay|@react-native-community/slider@5.2.2",
         "FieldDay|@react-native-google-signin/google-signin@17.0.0",
         "FieldDay|@react-navigation/bottom-tabs@7.21.0",
         "FieldDay|@react-navigation/native@7.5.1",
         "FieldDay|@react-navigation/stack@7.12.1",
-        "FieldDay|expo-auth-session@58.0.16",
+        "FieldDay|expo-auth-session@58.0.17",
         "FieldDay|expo-build-properties@58.0.12",
         "FieldDay|expo-clipboard@58.0.4",
-        "FieldDay|expo-constants@58.0.14",
+        "FieldDay|expo-constants@58.0.15",
         "FieldDay|expo-crypto@58.0.7",
         "FieldDay|expo-dev-client@58.0.18",
         "FieldDay|expo-device-hub@0.19.1",
@@ -53314,7 +53314,7 @@
         "FieldDay|expo@58.0.22",
         "FieldDay|graphql@16.14.2",
         "FieldDay|react-dom@19.3.0",
-        "FieldDay|react-native-gesture-handler@3.4.0",
+        "FieldDay|react-native-gesture-handler@3.5.0",
         "FieldDay|react-native-maps@1.29.11",
         "FieldDay|react-native-safe-area-context@5.11.0",
         "FieldDay|react-native-screens@4.30.1",
@@ -54395,7 +54395,7 @@
       "ref": "FieldDay|react-is@19.3.1"
     },
     {
-      "ref": "FieldDay|react-native-gesture-handler@3.4.0",
+      "ref": "FieldDay|react-native-gesture-handler@3.5.0",
       "dependsOn": [
         "FieldDay|@types/react-test-renderer@19.3.0",
         "FieldDay|invariant@2.2.4",
