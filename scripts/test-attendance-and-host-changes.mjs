@@ -94,11 +94,11 @@ try {
   const [host, a, b, c, outsider] = await Promise.all(
     ['host', 'a', 'b', 'c', 'outsider'].map((name) => {
       createdEmails.push(emailFor(name));
-      // A top rating (from at least one rating, so they aren't new players)
-      // has no participation limit, so the many creates and joins here aren't
-      // capped. The resolvers read it from these signed-in objects, so ratings
-      // applied in the database below don't change it.
-      return User.create({ name, email: emailFor(name), socialRating: 5, totalRatings: 1, ratingSum: 5 });
+      // A fully warmed-up top rating has no participation limit, so the many
+      // creates and joins here aren't capped. The resolvers read it from these
+      // signed-in objects, so ratings applied in the database below don't
+      // change it.
+      return User.create({ name, email: emailFor(name), socialRating: 5, totalRatings: 10, ratingSum: 50 });
     })
   );
   const newSession = async (overrides) => (await ok(CREATE, { input: validInput(overrides) }, host)).createSession.id;
