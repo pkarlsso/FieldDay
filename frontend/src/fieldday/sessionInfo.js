@@ -39,7 +39,7 @@ export function changesFrozen(session, now = new Date()) {
 export function commitmentWarning({ startsAt, fullOnly, maxParticipants, hosting = false }) {
   const start = new Date(startsAt).getTime();
   const freezeAt = formatSessionTime(new Date(start - CHANGE_FREEZE_MS));
-  const noShow = 'Players who don\'t come can be reported as no-shows, which gives them a rating of 1.';
+  const noShow = 'Missing a session can be reported as a no-show and gives you a 1/5 rating. Ratings affect how many sessions you can register for, and repeated low ratings can pause creating and joining sessions.';
   const exit = hosting
     ? `You can edit or cancel it until ${freezeAt}, 5 minutes before it starts.`
     : `You can leave until ${freezeAt}, 5 minutes before it starts.`;

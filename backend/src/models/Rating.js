@@ -5,8 +5,11 @@ import mongoose from 'mongoose';
 // two submissions race each other.
 const ratingSchema = new mongoose.Schema({
   session: { type: mongoose.Schema.Types.ObjectId, ref: 'Session', required: true },
-  rater: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  // System-generated no-show penalties have no rater, but remain part of the
+  // same timestamped history used to calculate social rating.
+  rater: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   ratee: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  source: { type: String, enum: ['participant', 'no_show'], default: 'participant' },
   value: {
     type: Number,
     required: true,

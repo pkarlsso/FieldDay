@@ -71,10 +71,15 @@ export default function ProfileScreen({ navigation }) {
             <Text style={{ color: colors.muted, marginTop: 6, textAlign: 'center', lineHeight: 20 }}>{user.bio}</Text>
           ) : null}
           <View style={{ flexDirection: 'row', alignSelf: 'stretch', borderTopWidth: 1, borderTopColor: colors.line, marginTop: 18, paddingTop: 16 }}>
-            <Stat value={user.socialRating > 0 ? user.socialRating.toFixed(1) : '—'} label="social rating" color={colors.purple} />
+            <Stat value={user.socialRating > 0 ? user.socialRating.toFixed(1) : '—'} label="weighted rating" color={colors.purple} />
             <Stat value={user.totalRatings || 0} label="ratings" color={colors.green} />
             <Stat value={sportSkills.length} label="sports" color={colors.blue} />
           </View>
+          {(user.totalRatings || 0) < 10 ? (
+            <Text style={{ color: colors.muted, marginTop: 8 }}>
+              Your rating is still warming up. You need {10 - (user.totalRatings || 0)} more rating{10 - (user.totalRatings || 0) === 1 ? '' : 's'} before it affects session access.
+            </Text>
+          ) : null}
           <View style={{ alignSelf: 'stretch', marginTop: 18 }}>
             <PrimaryButton label="Edit Profile" icon="create-outline" variant="secondary" onPress={() => navigation.navigate('EditProfile')} />
           </View>

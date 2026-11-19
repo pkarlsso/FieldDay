@@ -88,10 +88,14 @@ const withinSeconds = (actual, expected, seconds = 60) => Math.abs(actual - expe
 
 try {
   await mongoose.connect(getConfig().mongoUri);
-  const [rater, other, target] = await Promise.all([makeUser('rater'), makeUser('other'), makeUser('target')]);
+  const [rater, other, target] = await Promise.all([
+    makeUser('rater'),
+    makeUser('other'),
+    makeUser('target', { totalRatings: 9, ratingSum: 9, socialRating: 1 })
+  ]);
   const openSession = (await ok(CREATE, { input: input() }, other)).createSession.id;
 
-  // ---- a low rating starts a 2-day cooldown -----------------------------
+  // ---- the tenth low rating starts a 2-day cooldown ----------------------
   const rated = await rate(rater, target, 1);
   assert.equal(rated.socialRating, 1);
   assert.ok(rated.cooldownUntil, 'a rating below 2 starts a cooldown');
@@ -142,18 +146,17 @@ try {
   assert.ok(lowered.cooldownUntil > new Date(), 'a new drop starts a new cooldown');
   console.log('✓ After expiry, only a rating that lowers the average again restarts the cooldown');
 
-  // ---- the threshold, as the rating is shown (one decimal) ---------------
+  // ---- the warm-up threshold ---------------------------------------------
   async function startsCooldown(name, ratingSum, totalRatings, value) {
     const socialRating = totalRatings ? Math.round((ratingSum / totalRatings) * 10) / 10 : 0;
     const user = await makeUser(name, { ratingSum, totalRatings, socialRating });
     const after = await rate(rater, user, value);
     return { rating: after.socialRating, cooldown: Boolean(after.cooldownUntil) };
   }
-  assert.deepEqual(await startsCooldown('exactly2', 5, 2, 1), { rating: 2, cooldown: false }, '2.0 is not below 2');
-  assert.deepEqual(await startsCooldown('rounds-to-2', 48, 24, 1), { rating: 2, cooldown: false }, '1.96 shows as 2.0');
-  assert.deepEqual(await startsCooldown('just-under', 96, 49, 1), { rating: 1.9, cooldown: true }, '1.94 shows as 1.9');
-  assert.deepEqual(await startsCooldown('first-rating-2', 0, 0, 2), { rating: 2, cooldown: false });
-  console.log('✓ The cooldown starts below 2.0 as shown in the app, not at it');
+  assert.deepEqual(await startsCooldown('before-warmup', 0, 0, 1), { rating: 1, cooldown: false }, 'the first rating does not start a cooldown');
+  assert.deepEqual(await startsCooldown('ninth-rating', 8, 8, 1), { rating: 1, cooldown: false }, 'nine ratings do not start a cooldown');
+  assert.deepEqual(await startsCooldown('tenth-rating', 9, 9, 1), { rating: 1, cooldown: true }, 'the tenth low rating starts a cooldown');
+  console.log('✓ Low ratings do not affect cooldown access until the tenth rating');
 
   console.log('Cooldown tests passed');
 } catch (error) {

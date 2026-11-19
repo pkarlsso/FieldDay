@@ -41,6 +41,7 @@ import mailer from '../utils/mailer.js';
 import googleAuth from '../utils/googleAuth.js';
 import logger from '../utils/logger.js';
 import { publishSessionUpdate } from '../realtime.js';
+import { calculateSocialRating, ratingCount, SOCIAL_RATING_POLICY } from '../utils/socialRating.mjs';
 
 const PROFILE_LIMITS = { name: 50, bio: 300, hometown: 80, sport: 30, sportCount: 10, pictureChars: 200000 };
 const MESSAGE_MAX_LENGTH = 2000;
@@ -141,6 +142,21 @@ async function notifyFriendActivity(recipient, title, body) {
     });
   } catch (err) {
     logger.error(err, { context: 'Friend request notification failed', recipientId: String(recipient) });
+  }
+}
+
+async function notifyRatingActivity(recipient, type, title, body, params = {}) {
+  try {
+    await createNotification({
+      recipient,
+      type,
+      category: 'ratings',
+      title,
+      body,
+      target: { version: 1, screen: 'Notifications', params }
+    });
+  } catch (err) {
+    logger.error(err, { context: 'Rating notification failed', recipientId: String(recipient), type });
   }
 }
 
@@ -539,39 +555,45 @@ function validateRatingSubmission(session, raterId, ratings) {
   }
 }
 
-// Atomically folds a new rating into the user's running average, so
-// concurrent submissions can't overwrite each other's counts. Mongoose 9
-// rejects update pipelines unless updatePipeline is set explicitly.
-//
-// The same update starts a cooldown when this rating pulls the average (rounded,
-// as the app shows it) below the threshold. A rating that raises the average
-// never starts one and an active cooldown is not extended, so once a cooldown
-// ends the user is free until another rating drags them down again.
-function applyRatingToUser(userId, value) {
+// Rebuild the cached summary from the timestamped event history. The history
+// is authoritative because fresh and recent ratings have different weights.
+async function applyRatingToUser(userId, value) {
   const { threshold, durationMs } = SOCIAL_RATING_COOLDOWN;
-  const newRating = {
-    $round: [{ $divide: [{ $add: ['$ratingSum', value] }, { $add: ['$totalRatings', 1] }] }, 1]
-  };
-  const lowersAverage = {
-    $or: [{ $eq: ['$totalRatings', 0] }, { $lt: [{ $multiply: [value, '$totalRatings'] }, '$ratingSum'] }]
-  };
-  const inCooldown = { $gt: [{ $ifNull: ['$cooldownUntil', null] }, '$$NOW'] };
-  return User.updateOne({ _id: userId }, [
-    {
-      $set: {
-        ratingSum: { $add: ['$ratingSum', value] },
-        totalRatings: { $add: ['$totalRatings', 1] },
-        cooldownUntil: {
-          $cond: [
-            { $and: [{ $lt: [newRating, threshold] }, lowersAverage, { $not: [inCooldown] }] },
-            { $add: ['$$NOW', durationMs] },
-            { $ifNull: ['$cooldownUntil', null] }
-          ]
-        }
-      }
-    },
-    { $set: { socialRating: { $round: [{ $divide: ['$ratingSum', '$totalRatings'] }, 1] } } }
-  ], { updatePipeline: true });
+  const [user, ratings] = await Promise.all([
+    User.findById(userId),
+    Rating.find({ ratee: userId }).select('value createdAt').lean()
+  ]);
+  if (!user) return null;
+
+  const recordedSum = ratings.reduce((sum, rating) => sum + rating.value, 0);
+  // `user.totalRatings` is the count before the current event, while `ratings`
+  // already includes that newly inserted event.
+  const legacyCount = Math.max(0, user.totalRatings - (ratings.length - 1));
+  const legacySum = user.ratingSum - (recordedSum - value);
+  const legacyRatings = legacyCount > 0
+    ? Array.from({ length: legacyCount }, () => ({
+      value: legacySum / legacyCount,
+      createdAt: new Date(0)
+    }))
+    : [];
+  const effectiveRatings = [...ratings, ...legacyRatings];
+  const totalRatings = ratingCount(effectiveRatings);
+  const socialRating = calculateSocialRating(effectiveRatings);
+  const shouldStartCooldown = totalRatings >= SOCIAL_RATING_POLICY.warmupRatings
+    && socialRating < threshold
+    && (user.totalRatings < SOCIAL_RATING_POLICY.warmupRatings || socialRating < user.socialRating)
+    && !activeCooldownUntil(user);
+  const registrationRestrictionStarted = totalRatings >= SOCIAL_RATING_POLICY.warmupRatings
+    && socialRating < SOCIAL_RATING_POLICY.unlimitedRating
+    && (user.totalRatings < SOCIAL_RATING_POLICY.warmupRatings
+      || user.socialRating >= SOCIAL_RATING_POLICY.unlimitedRating);
+
+  user.ratingSum = effectiveRatings.reduce((sum, rating) => sum + rating.value, 0);
+  user.totalRatings = totalRatings;
+  user.socialRating = socialRating;
+  if (shouldStartCooldown) user.cooldownUntil = new Date(Date.now() + durationMs);
+  await user.save();
+  return { user, cooldownStarted: shouldStartCooldown, registrationRestrictionStarted };
 }
 
 // Gives each confirmed no-show one rating of 1, once attendance is final. The
@@ -592,7 +614,36 @@ async function applyNoShowRatings(session, now = new Date()) {
       { _id: session._id, noShowRated: { $ne: userId } },
       { $addToSet: { noShowRated: userId } }
     );
-    if (claimed.modifiedCount === 1) await applyRatingToUser(userId, NO_SHOW_RATING);
+    if (claimed.modifiedCount !== 1) continue;
+    await Rating.create({
+      session: session._id,
+      ratee: userId,
+      value: NO_SHOW_RATING,
+      source: 'no_show'
+    });
+    const result = await applyRatingToUser(userId, NO_SHOW_RATING);
+    await notifyRatingActivity(
+      userId,
+      'no_show_penalty',
+      'Attendance rating applied',
+      `A missed session was recorded as a rating of ${NO_SHOW_RATING}/5. Missed sessions can limit your ability to register for future sessions.`
+    );
+    if (result?.cooldownStarted) {
+      await notifyRatingActivity(
+        userId,
+        'rating_restriction',
+        'Session access is temporarily restricted',
+        `Your social rating is below ${SOCIAL_RATING_COOLDOWN.threshold}/5, so creating and joining sessions is paused for 2 days.`
+      );
+    }
+    if (result?.registrationRestrictionStarted && !result.cooldownStarted) {
+      await notifyRatingActivity(
+        userId,
+        'rating_restriction',
+        'Your session registration limit changed',
+        'Your weighted social rating is below 4.5/5, so the number of new sessions you can register for is now limited.'
+      );
+    }
   }
   await Session.updateOne({ _id: session._id }, { $set: { noShowRatingsSettled: true } });
 }
@@ -1522,7 +1573,29 @@ const resolvers = {
       let friendsSent = 0;
 
       for (const { userId, rating, addFriend } of ratings) {
-        await applyRatingToUser(userId, rating);
+        const result = await applyRatingToUser(userId, rating);
+        await notifyRatingActivity(
+          userId,
+          'rating_received',
+          'You received a session rating',
+          'A player rated you after a completed session. Your social rating helps determine how many sessions you can register for.'
+        );
+        if (result?.cooldownStarted) {
+          await notifyRatingActivity(
+            userId,
+            'rating_restriction',
+            'Session access is temporarily restricted',
+            `Your social rating is below ${SOCIAL_RATING_COOLDOWN.threshold}/5, so creating and joining sessions is paused for 2 days.`
+          );
+        }
+        if (result?.registrationRestrictionStarted && !result.cooldownStarted) {
+          await notifyRatingActivity(
+            userId,
+            'rating_restriction',
+            'Your session registration limit changed',
+            'Your weighted social rating is below 4.5/5, so the number of new sessions you can register for is now limited.'
+          );
+        }
         totalGiven += rating;
 
         if (addFriend) {
