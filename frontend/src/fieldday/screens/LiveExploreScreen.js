@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Card, Pill, ScreenHeader, SportIcon } from '../components/ui';
+import * as Location from 'expo-location';
+import { Card, Pill, PrimaryButton, ScreenHeader, SportIcon } from '../components/ui';
+import { firstGeocodedLocation, validateAddressQuery } from '../addressSearch';
 import { colors, sports } from '../theme';
 import { DEFAULT_DISCOVERY_FILTER, getDiscoveryOrigin, loadDiscoverySessions } from '../discovery';
 import { formatSessionTime, playersLabel, skillLabel } from '../sessionInfo';
@@ -21,6 +23,10 @@ export default function LiveExploreScreen({ navigation }) {
   const [showFilters, setShowFilters] = useState(false);
   const [locating, setLocating] = useState(true);
   const [origin, setOrigin] = useState(null);
+  const [addressOrigin, setAddressOrigin] = useState(null);
+  const [address, setAddress] = useState('');
+  const [addressError, setAddressError] = useState('');
+  const [searchingAddress, setSearchingAddress] = useState(false);
   const [draft, setDraft] = useState(DEFAULT_DISCOVERY_FILTER);
   const load = useCallback(async (nextFilter) => {
     try { setSessions(await loadDiscoverySessions(nextFilter)); setError(''); }
@@ -49,14 +55,45 @@ export default function LiveExploreScreen({ navigation }) {
       : [...current.sports, sport],
   }));
 
+  const activeOrigin = origin || addressOrigin;
+
+  const findAddress = async () => {
+    const validationError = validateAddressQuery(address);
+    if (validationError) {
+      setAddressError(validationError);
+      return;
+    }
+    setSearchingAddress(true);
+    setAddressError('');
+    try {
+      const location = firstGeocodedLocation(await Location.geocodeAsync(address.trim()));
+      if (!location) throw new Error('No matching address or venue was found. Try a more specific search.');
+      const next = { ...draft, origin: location };
+      setAddressOrigin(location);
+      setDraft(next);
+      await load(next);
+    } catch (searchError) {
+      logger.warn('Could not find Explore location:', searchError);
+      setAddressError(searchError.message || 'Could not search for that address or venue.');
+    } finally {
+      setSearchingAddress(false);
+    }
+  };
+
+  const changeAddress = (value) => {
+    setAddress(value);
+    setAddressOrigin(null);
+    setAddressError('');
+  };
+
   const applyFilters = () => {
-    const next = { ...draft, origin };
+    const next = { ...draft, origin: activeOrigin || undefined };
     setShowFilters(false);
     load(next);
   };
 
   const clearFilters = () => {
-    const next = { ...DEFAULT_DISCOVERY_FILTER, origin };
+    const next = { ...DEFAULT_DISCOVERY_FILTER, origin: activeOrigin || undefined };
     setDraft(next);
     load(next);
   };
@@ -65,7 +102,23 @@ export default function LiveExploreScreen({ navigation }) {
     <ScreenHeader title="Explore" right={<TouchableOpacity onPress={() => setShowFilters((value) => !value)}><Text style={{ color: colors.purple, fontWeight: '900' }}>{showFilters ? 'Close' : 'Filters'}</Text></TouchableOpacity>} />
     <ScrollView contentContainerStyle={{ padding: 18, gap: 12 }}>
       {locating ? <Text style={{ color: colors.muted }}>Finding sessions near you...</Text> : null}
-      {!locating && !origin ? <Card><Text style={{ color: colors.text, fontWeight: '800' }}>Location unavailable</Text><Text style={{ color: colors.muted, marginTop: 4 }}>Enter a location below to enable distance filtering.</Text><View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}><TextInput keyboardType="numbers-and-punctuation" placeholder="Latitude" value={draft.origin?.latitude?.toString() || ''} onChangeText={(value) => setDraft((current) => ({ ...current, origin: { ...(current.origin || {}), latitude: Number(value) } }))} style={{ flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 10 }} /><TextInput keyboardType="numbers-and-punctuation" placeholder="Longitude" value={draft.origin?.longitude?.toString() || ''} onChangeText={(value) => setDraft((current) => ({ ...current, origin: { ...(current.origin || {}), longitude: Number(value) } }))} style={{ flex: 1, borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 10 }} /></View></Card> : null}
+      {!locating && !origin ? <Card style={{ gap: 10 }}>
+        <Text style={{ color: colors.text, fontWeight: '800' }}>Location unavailable</Text>
+        <Text style={{ color: colors.muted }}>Search for an address or venue to enable distance filtering.</Text>
+        <TextInput
+          value={address}
+          onChangeText={changeAddress}
+          onSubmitEditing={findAddress}
+          placeholder="Search an address or venue"
+          placeholderTextColor={colors.muted}
+          returnKeyType="search"
+          accessibilityLabel="Address or venue search"
+          style={{ borderWidth: 1, borderColor: colors.line, borderRadius: 10, padding: 10, color: colors.ink }}
+        />
+        <PrimaryButton label={searchingAddress ? 'Finding address...' : 'Find address'} onPress={findAddress} disabled={searchingAddress} variant="secondary" />
+        {addressOrigin ? <Text style={{ color: colors.text, fontWeight: '700' }}>Using: {address.trim()}</Text> : null}
+        {addressError ? <Text style={{ color: colors.coral }}>{addressError}</Text> : null}
+      </Card> : null}
       {showFilters ? <Card style={{ gap: 12 }}>
         <Text style={{ color: colors.ink, fontSize: 18, fontWeight: '900' }}>Filter sessions</Text>
         <Text style={{ color: colors.muted, fontWeight: '800' }}>Distance</Text>
