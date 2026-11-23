@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Card, Pill, ScreenHeader, SportIcon } from '../components/ui';
+import { ActivityIndicator, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Card, Pill, PrimaryButton, ScreenHeader, SportIcon } from '../components/ui';
 import { colors, sports } from '../theme';
 import { DEFAULT_DISCOVERY_FILTER, getDiscoveryOrigin, loadDiscoverySessions } from '../discovery';
+import { buildExploreRequest, exploreFeedbackState } from '../exploreDiscoveryState';
 import { formatSessionTime, playersLabel, skillLabel } from '../sessionInfo';
 import logger from '../../logger';
 
@@ -18,27 +19,32 @@ const skillOptions = [
 export default function LiveExploreScreen({ navigation }) {
   const [sessions, setSessions] = useState([]);
   const [error, setError] = useState('');
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [lastRequestedFilter, setLastRequestedFilter] = useState(null);
   const [showFilters, setShowFilters] = useState(false);
   const [locating, setLocating] = useState(true);
   const [origin, setOrigin] = useState(null);
   const [draft, setDraft] = useState(DEFAULT_DISCOVERY_FILTER);
   const load = useCallback(async (nextFilter) => {
+    setLoadingSessions(true);
+    setLastRequestedFilter(nextFilter);
     try { setSessions(await loadDiscoverySessions(nextFilter)); setError(''); }
-    catch (err) { setError(err.message); }
+    catch (err) { setError(err.message || 'Could not load sessions.'); }
+    finally { setLoadingSessions(false); }
   }, []);
 
   useEffect(() => {
     getDiscoveryOrigin().then(async (location) => {
       setOrigin(location);
-      const next = { ...DEFAULT_DISCOVERY_FILTER, origin: location || undefined };
+      const next = buildExploreRequest(DEFAULT_DISCOVERY_FILTER, location);
       setDraft(next);
-      await loadDiscoverySessions(next).then(setSessions);
+      await load(next);
     }).catch(async (error) => {
       logger.warn('Could not determine discovery location:', error);
       setOrigin(null);
-      const next = { ...DEFAULT_DISCOVERY_FILTER, origin: undefined };
+      const next = buildExploreRequest(DEFAULT_DISCOVERY_FILTER, null);
       setDraft(next);
-      await loadDiscoverySessions(next).then(setSessions);
+      await load(next);
     }).finally(() => setLocating(false));
   }, [load]);
 
@@ -50,16 +56,19 @@ export default function LiveExploreScreen({ navigation }) {
   }));
 
   const applyFilters = () => {
-    const next = { ...draft, origin };
+    const next = buildExploreRequest(draft, origin);
+    setDraft(next);
     setShowFilters(false);
     load(next);
   };
 
   const clearFilters = () => {
-    const next = { ...DEFAULT_DISCOVERY_FILTER, origin };
+    const next = buildExploreRequest(DEFAULT_DISCOVERY_FILTER, origin);
     setDraft(next);
     load(next);
   };
+
+  const feedback = exploreFeedbackState({ loading: loadingSessions, error, sessions });
 
   return <View style={{ flex: 1, backgroundColor: colors.page }}>
     <ScreenHeader title="Explore" right={<TouchableOpacity onPress={() => setShowFilters((value) => !value)}><Text style={{ color: colors.purple, fontWeight: '900' }}>{showFilters ? 'Close' : 'Filters'}</Text></TouchableOpacity>} />
@@ -76,9 +85,10 @@ export default function LiveExploreScreen({ navigation }) {
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{skillOptions.map((skill) => <Pill key={skill.label} label={skill.label} active={draft.minSkillLevel === skill.min && draft.maxSkillLevel === skill.max} onPress={() => setDraft((current) => ({ ...current, minSkillLevel: skill.min, maxSkillLevel: skill.max }))} />)}</View>
         <View style={{ flexDirection: 'row', gap: 10 }}><TouchableOpacity onPress={clearFilters} style={{ flex: 1, padding: 12, alignItems: 'center' }}><Text style={{ color: colors.muted, fontWeight: '900' }}>Clear</Text></TouchableOpacity><TouchableOpacity onPress={applyFilters} style={{ flex: 1, backgroundColor: colors.purple, borderRadius: 12, padding: 12, alignItems: 'center' }}><Text style={{ color: colors.card, fontWeight: '900' }}>Apply</Text></TouchableOpacity></View>
       </Card> : null}
-      {error ? <Text style={{ color: colors.coral }}>{error}</Text> : null}
-      {!sessions.length && !error && !locating ? <Text style={{ color: colors.muted }}>No sessions match these filters.</Text> : null}
-      {sessions.map((session) => <TouchableOpacity key={session.id} onPress={() => navigation.navigate('SessionDetails', { sessionId: session.id })}>
+      {feedback === 'loading' ? <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}><ActivityIndicator color={colors.purple} /><Text style={{ color: colors.muted }}>Loading sessions...</Text></Card> : null}
+      {feedback === 'error' ? <Card style={{ gap: 10 }}><Text style={{ color: colors.coral }}>Could not load sessions.</Text><Text style={{ color: colors.muted }}>{error}</Text><PrimaryButton label="Retry" icon="refresh-outline" onPress={() => lastRequestedFilter && load(lastRequestedFilter)} disabled={!lastRequestedFilter || loadingSessions} /></Card> : null}
+      {feedback === 'empty' && !locating ? <Card><Text style={{ color: colors.muted }}>No sessions match these filters.</Text></Card> : null}
+      {feedback === 'results' ? sessions.map((session) => <TouchableOpacity key={session.id} onPress={() => navigation.navigate('SessionDetails', { sessionId: session.id })}>
         <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <SportIcon sport={session.sport} size={48} />
           <View style={{ flex: 1 }}>
@@ -87,7 +97,7 @@ export default function LiveExploreScreen({ navigation }) {
             <Text style={{ color: colors.text, marginTop: 4, fontWeight: '700' }}>{playersLabel(session)} • {skillLabel(session)}</Text>
           </View>
         </Card>
-      </TouchableOpacity>)}
+      </TouchableOpacity>) : null}
     </ScrollView>
   </View>;
 }
